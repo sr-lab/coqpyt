@@ -301,7 +301,7 @@ class SymbolInformation(object):
     """
     Represents information about programming constructs like variables, classes, interfaces etc.
     """
-    def __init__(self, name, kind, location, containerName=None, deprecated=False):
+    def __init__(self, name, kind, detail=None, range=None, selectionRange=None, location=None, containerName=None, deprecated=False):
         """
         Constructs a new SymbolInformation instance.
 
@@ -323,9 +323,12 @@ class SymbolInformation(object):
         :param bool deprecated: Indicates if this symbol is deprecated.
         """
         self.name = name
+        self.detail = detail
         self.kind = SymbolKind(kind)
+        self.range = range
+        self.selectionRange = selectionRange
         self.deprecated = deprecated
-        self.location = to_type(location, Location)
+        # self.location = to_type(location, Location)
         self.containerName = containerName
 
 

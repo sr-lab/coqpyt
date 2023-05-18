@@ -1,6 +1,6 @@
 import os
 import subprocess
-from pylspclient.lsp_structs import TextDocumentItem
+from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier, ResponseError
 from pylspclient.json_rpc_endpoint import JsonRpcEndpoint
 from pylspclient.lsp_client import LspClient
 from pylspclient.lsp_endpoint import LspEndpoint
@@ -27,10 +27,14 @@ version = 1
 lsp_client.didOpen(TextDocumentItem(uri, languageId, version, text))
 
 try:
-    symbols = lsp_client.documentSymbol(pylspclient.lsp_structs.TextDocumentIdentifier(uri))
+    symbols = lsp_client.documentSymbol(TextDocumentIdentifier(uri))
     for symbol in symbols:
         print(symbol.name)
-except pylspclient.lsp_structs.ResponseError:
+        print(symbol.kind)
+        print(symbol.detail)
+        print(symbol.range)
+        print(symbol.selectionRange)
+except ResponseError:
     # documentSymbol is supported from version 8.
     print("Failed to document symbols")
 

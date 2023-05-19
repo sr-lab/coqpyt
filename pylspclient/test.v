@@ -3,18 +3,18 @@
 Require Import Coq.Unicode.Utf8.
 
 Theorem plus_O_n : forall n:nat, 0 + n = n.
-Proof. 
+Proof.
   intros n.
   Print plus.
-  Print Nat.add. 
-  simpl. 
-  reflexivity. 
+  Print Nat.add.
+  simpl.
+  reflexivity.
 Qed.
 
 Check plus_O_n.
 
 Theorem plus_1_l : ∀ n:nat, 1 + n = S n.
-Proof. 
+Proof.
   intros n.
   simpl.
   reflexivity.
@@ -61,7 +61,8 @@ Theorem mult_0_plus : ∀ n m : nat,
 Proof.
   intros n m.
   rewrite -> plus_O_n.
-  reflexivity. Qed.
+  reflexivity.
+Qed.
 
 
 Theorem mult_0_0_plus : ∀ n m : nat,
@@ -84,7 +85,7 @@ Theorem plus_1_neq_0_firsttry : ∀ n : nat,
   beq_nat (n + 1) 0 = false.
 Proof.
   intros n.
-  destruct n as [| n']. 
+  destruct n as [| n'].
   (* two cases: n=0 and n=S n'*)
   - reflexivity.
   - reflexivity.
@@ -96,7 +97,7 @@ Proof.
   intros b.
   destruct b.
   - reflexivity.
-  - reflexivity. 
+  - reflexivity.
 Qed.
 
 
@@ -137,7 +138,7 @@ Proof.
   intros b c.
   destruct c.
   - reflexivity.
-  - destruct b; simpl; intros H; assumption. 
+  - destruct b; simpl; intros H; assumption.
       (*rewrite H. reflexivity.*)
 Qed.
 

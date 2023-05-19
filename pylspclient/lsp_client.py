@@ -213,7 +213,7 @@ class LspClient(object):
         result_dict["textDocument"] = lsp_structs.VersionedTextDocumentIdentifier(**result_dict["textDocument"])
         result_dict["position"] = lsp_structs.Position(result_dict["position"]["line"], result_dict["position"]["character"])
 
-        if "goals" in result_dict:
+        if result_dict["goals"] is not None:
             goal_config = result_dict["goals"]
             goals = parse_goals(goal_config["goals"])
             stack = [(parse_goals(t[0]), parse_goals(t[1])) for t in goal_config["stack"]]

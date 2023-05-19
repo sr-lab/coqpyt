@@ -4,6 +4,7 @@ from pylspclient.lsp_structs import Position, TextDocumentItem, TextDocumentIden
 from pylspclient.json_rpc_endpoint import JsonRpcEndpoint
 from pylspclient.lsp_client import LspClient
 from pylspclient.lsp_endpoint import LspEndpoint
+from pylspclient.proof_state import ProofState
 
 
 root_path = os.getcwd()
@@ -33,7 +34,14 @@ try:
         print(symbol.range)
         print(symbol.selectionRange)
         print()
-    print(lsp_client.proof_goals(TextDocumentIdentifier(uri), Position(8, 18)))
+    
+    state = ProofState(text)
+    state.exec(31)
+    goals = lsp_client.proof_goals(TextDocumentIdentifier(uri), state.pos)
+
+    print((state.pos.line, state.pos.character))
+    print(str(goals.goals.goals[0].hyps[0].names) + ": " + str(goals.goals.goals[0].hyps[0].ty))
+    print(goals.goals.goals[0].ty)
 except ResponseError:
     # documentSymbol is supported from version 8.
     print("Failed to document symbols")

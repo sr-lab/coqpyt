@@ -29,11 +29,10 @@ lsp_client.didOpen(TextDocumentItem(uri, languageId, version, text))
 try:
     symbols = lsp_client.documentSymbol(TextDocumentIdentifier(uri))
     for symbol in symbols:
-        print(symbol.name)
-        print(symbol.kind)
-        print(symbol.detail)
+        print(symbol.detail + ": " + symbol.name + " (" + str(symbol.kind) + ")")
         print(symbol.range)
         print(symbol.selectionRange)
+        print()
 except ResponseError:
     # documentSymbol is supported from version 8.
     print("Failed to document symbols")

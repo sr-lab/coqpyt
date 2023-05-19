@@ -1,6 +1,6 @@
 import os
 import subprocess
-from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier, ResponseError
+from pylspclient.lsp_structs import Position, TextDocumentItem, TextDocumentIdentifier, ResponseError
 from pylspclient.json_rpc_endpoint import JsonRpcEndpoint
 from pylspclient.lsp_client import LspClient
 from pylspclient.lsp_endpoint import LspEndpoint
@@ -33,6 +33,7 @@ try:
         print(symbol.range)
         print(symbol.selectionRange)
         print()
+    print(lsp_client.proof_goals(TextDocumentIdentifier(uri), Position(8, 18)))
 except ResponseError:
     # documentSymbol is supported from version 8.
     print("Failed to document symbols")

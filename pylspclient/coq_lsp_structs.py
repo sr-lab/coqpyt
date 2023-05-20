@@ -35,3 +35,20 @@ class GoalAnswer(object):
         self.goals = goals
         self.error = error
         self.program = program
+
+    def __repr__(self):
+        def recursive_vars(obj):
+            if obj is None or isinstance(obj, int) or isinstance(obj, str):
+                return obj
+            elif isinstance(obj, list):
+                res = []
+                for v in obj:
+                    res.append(recursive_vars(v))
+                return res
+            else:
+                res = dict(vars(obj))
+                for key, v in res.items():
+                    res[key] = recursive_vars(v)
+                return res
+            
+        return str(recursive_vars(self))

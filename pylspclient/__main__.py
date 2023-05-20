@@ -38,6 +38,7 @@ try:
     state = ProofState(text)
     state.exec(31)
     goals = lsp_client.proof_goals(TextDocumentIdentifier(uri), state.pos)
+    print(goals)
 
     print((state.pos.line, state.pos.character))
     print(str(goals.goals.goals[0].hyps[0].names) + ": " + str(goals.goals.goals[0].hyps[0].ty))

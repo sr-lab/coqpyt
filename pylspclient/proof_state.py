@@ -7,17 +7,21 @@ class ProofState(object):
         self.pos = Position(0, 0)
     
     def exec(self, steps=1):
+        lines = self.text.split('\n')
         for _ in range(steps):
-            while True:
-                if self.text[self.i] == '\n':
-                    self.pos.line += 1
-                    self.pos.character = 0
-                    self.i += 1
-                else:
+            found_dot = False
+            for line in lines[self.pos.line:]:
+                for char in line[self.pos.character:]:
+                    if found_dot:
+                        if char.isspace(): break
+                        else: found_dot = False
+
+                    if char == '.': found_dot = True
                     self.pos.character += 1
-                    self.i += 1
-                    if self.text[self.i-1] == '.' and self.text[self.i].isspace():
-                        break
+
+                if found_dot: break
+                self.pos.line += 1
+                self.pos.character = 0
 
 
     def is_in_proof(self):

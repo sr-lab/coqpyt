@@ -49,6 +49,9 @@ try:
     print(goals)
     [print(step, end='') for step in state.next_steps()]
     print()
+
+    print(state.proof_steps(symbols[8])) # Definition
+    print(state.proof_steps(symbols[-1])) # Theorem
 except ResponseError:
     # documentSymbol is supported from version 8.
     print("Failed to document symbols")

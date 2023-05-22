@@ -21,7 +21,6 @@ class ProofState(object):
                 self.pos.line += 1
                 self.pos.character = 0
 
-
     def is_in_proof(self):
         prev_text = '\n'.join(self.lines[:self.pos.line])
         prev_text += '\n' + self.lines[self.pos.line][:self.pos.character]
@@ -57,3 +56,13 @@ class ProofState(object):
                     break
 
         return next_steps
+    
+    def proof_steps(self, symbol):
+        if symbol.detail not in ['Theorem', 'Lemma']:
+            return None
+        
+        line = symbol.range['start']['line']
+        self.pos = Position(line, 0)
+        self.exec(2) # Theorem. and Proof.
+
+        return self.next_steps()

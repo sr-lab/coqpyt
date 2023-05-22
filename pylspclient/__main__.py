@@ -34,16 +34,21 @@ try:
         print(symbol.range)
         print(symbol.selectionRange)
         print()
-    
+
     state = ProofState(text)
-    state.exec(31)
+    state.exec(55)
+    print((state.pos.line, state.pos.character))
+    state.exec()
+    print((state.pos.line, state.pos.character))
+    state.exec()
+    print((state.pos.line, state.pos.character))
+
+    state.exec(4)
+    print((state.pos.line, state.pos.character))
     goals = lsp_client.proof_goals(TextDocumentIdentifier(uri), state.pos)
     print(goals)
-    print(state.next_steps())
-
-    print((state.pos.line, state.pos.character))
-    print(str(goals.goals.goals[0].hyps[0].names) + ": " + str(goals.goals.goals[0].hyps[0].ty))
-    print(goals.goals.goals[0].ty)
+    [print(step, end='') for step in state.next_steps()]
+    print()
 except ResponseError:
     # documentSymbol is supported from version 8.
     print("Failed to document symbols")

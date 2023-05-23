@@ -16,7 +16,7 @@ json_rpc_endpoint = JsonRpcEndpoint(proc.stdin, proc.stdout)
 lsp_endpoint = LspEndpoint(json_rpc_endpoint)
 lsp_client = LspClient(lsp_endpoint)
 workspaces = [{'name': 'coq-lsp', 'uri': root_uri}]
-lsp_client.initialize(proc.pid, '', root_uri, {}, {}, 'off', workspaces)
+lsp_client.initialize(proc.pid, '', root_uri, { "show_coq_info_messages": True }, {}, 'off', workspaces)
 lsp_client.initialized()
 
 # Open file

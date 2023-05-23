@@ -15,6 +15,7 @@ class LspEndpoint(threading.Thread):
         self.next_id = 0
         self._timeout = timeout
         self.shutdown_flag = False
+        self.diagnostics = []
 
 
     def handle_result(self, rpc_id, result, error):
@@ -54,6 +55,9 @@ class LspEndpoint(threading.Thread):
                         if method not in self.notify_callbacks:
                             # Default method
                             print("received message:", params)
+                            if 'diagnostics' in params:
+                                for diagnostic in params['diagnostics']:
+                                    self.diagnostics.append(lsp_structs.Diagnostic(**diagnostic))
                         else:
                             self.notify_callbacks[method](params)
                 else:

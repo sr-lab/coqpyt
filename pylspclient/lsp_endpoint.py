@@ -15,7 +15,7 @@ class LspEndpoint(threading.Thread):
         self.next_id = 0
         self._timeout = timeout
         self.shutdown_flag = False
-        self.diagnostics = []
+        self.diagnostics = {}
 
 
     def handle_result(self, rpc_id, result, error):
@@ -57,7 +57,9 @@ class LspEndpoint(threading.Thread):
                             print("received message:", params)
                             if 'diagnostics' in params:
                                 for diagnostic in params['diagnostics']:
-                                    self.diagnostics.append(lsp_structs.Diagnostic(**diagnostic))
+                                    if params['uri'] not in self.diagnostics:
+                                        self.diagnostics[params['uri']] = []
+                                    self.diagnostics[params['uri']].append(lsp_structs.Diagnostic(**diagnostic))
                         else:
                             self.notify_callbacks[method](params)
                 else:

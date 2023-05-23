@@ -229,3 +229,36 @@ class LspClient(object):
                   result_dict["messages"][i] = coq_lsp_structs.Message(**message)
 
         return coq_lsp_structs.GoalAnswer(**result_dict)
+    
+    def get_searches(self, textDocument):
+        uri = textDocument.uri
+        if textDocument.uri.startswith('file://'):
+             uri = uri[7:]
+
+        with open(uri, 'r') as doc:
+            if textDocument.uri not in self.lsp_endpoint.diagnostics:
+                return []
+            lines = doc.readlines()
+            diagnostics = self.lsp_endpoint.diagnostics[textDocument.uri]
+            searches = {}
+
+            for diagnostic in diagnostics:
+                command = lines[diagnostic.range["start"]["line"]:diagnostic.range["end"]["line"] + 1]
+                if len(command) == 1:
+                    command[0] = command[0][diagnostic.range["start"]["character"]:diagnostic.range["end"]["character"] + 1]
+                else:
+                    command[0] = command[0][diagnostic.range["start"]["character"]:]
+                    command[-1] = command[-1][:diagnostic.range["end"]["character"] + 1]
+                command = ''.join(command).strip()
+
+                if command.startswith('Search'):
+                    query = command[7:-1]
+                    if query not in searches:
+                         searches[query] = []
+                    searches[query].append(diagnostic.message)
+
+            res = []
+            for query, results in searches.items():
+                res.append(coq_lsp_structs.Search(query, results))
+
+        return res

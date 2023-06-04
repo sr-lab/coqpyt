@@ -1,3 +1,4 @@
+import time
 from pylspclient.lsp_client import LspClient
 from pylspclient import lsp_structs
 from pylspclient import coq_lsp_structs
@@ -5,6 +6,11 @@ from pylspclient import coq_lsp_structs
 class CoqLspClient(LspClient):
     def __init__(self, lsp_endpoint):
         super().__init__(lsp_endpoint)
+
+    def didOpen(self, textDocument: lsp_structs.TextDocumentItem):
+        super().didOpen(textDocument)
+        while self.lsp_endpoint.completed_operation != True:
+            time.sleep(1)
 
     def proof_goals(self, textDocument, position):
         def parse_goal(goal):
@@ -40,7 +46,10 @@ class CoqLspClient(LspClient):
 
         return coq_lsp_structs.GoalAnswer(**result_dict)
     
-    def get_searches(self, textDocument):
+    def get_queries(self, textDocument, keyword):
+        '''
+        keyword might be Search, Print, Check, etc...
+        '''
         uri = textDocument.uri
         if textDocument.uri.startswith('file://'):
              uri = uri[7:]
@@ -61,15 +70,15 @@ class CoqLspClient(LspClient):
                     command[-1] = command[-1][:diagnostic.range["end"]["character"] + 1]
                 command = ''.join(command).strip()
 
-                if command.startswith('Search'):
-                    query = command[7:-1]
+                if command.startswith(keyword):
+                    query = command[len(keyword) + 1:-1]
                     if query not in searches:
                          searches[query] = []
                     searches[query].append(diagnostic.message)
 
             res = []
             for query, results in searches.items():
-                res.append(coq_lsp_structs.Search(query, results))
+                res.append(coq_lsp_structs.Query(query, results))
 
         return res
     

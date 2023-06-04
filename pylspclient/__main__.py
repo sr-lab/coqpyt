@@ -34,30 +34,33 @@ try:
         print(symbol.range)
         print(symbol.selectionRange)
         print()
+    ast = lsp_client.get_document(TextDocumentIdentifier(uri))
 
-    state = ProofState(text)
-    state.exec(55)
-    print((state.pos.line, state.pos.character))
+    state = ProofState(lsp_client, file_path, ast)
     state.exec()
-    print((state.pos.line, state.pos.character))
     state.exec()
-    print((state.pos.line, state.pos.character))
+    print(state.get_new_theorem_or_lemma())
 
-    state.exec(4)
-    print((state.pos.line, state.pos.character))
-    goals = lsp_client.proof_goals(TextDocumentIdentifier(uri), state.pos)
-    print(goals)
-    [print(step, end='') for step in state.next_steps()]
-    print()
+    # state.exec(55)
+    # print((state.pos.line, state.pos.character))
+    # state.exec()
+    # print((state.pos.line, state.pos.character))
+    # state.exec()
+    # print((state.pos.line, state.pos.character))
 
-    print(state.proof_steps(symbols[8])) # Definition
-    print(state.proof_steps(symbols[-1])) # Theorem
+    # state.exec(4)
+    # print((state.pos.line, state.pos.character))
+    # goals = lsp_client.proof_goals(TextDocumentIdentifier(uri), state.pos)
+    # print(goals)
+    # [print(step, end='') for step in state.next_steps()]
+    # print()
 
-    searches = lsp_client.get_searches(TextDocumentIdentifier(uri))
-    print(searches[0].query)
-    print(searches[0].results)
+    # print(state.proof_steps(symbols[8])) # Definition
+    # print(state.proof_steps(symbols[-1])) # Theorem
 
-    print(lsp_client.get_document(TextDocumentIdentifier(uri)))
+    # searches = lsp_client.get_searches(TextDocumentIdentifier(uri))
+    # print(searches[0].query)
+    # print(searches[0].results)
 except ResponseError:
     # documentSymbol is supported from version 8.
     print("Failed to document symbols")

@@ -11,8 +11,6 @@ Proof.
   reflexivity.
 Qed.
 
-Check plus_O_n.
-
 Theorem plus_1_l : ∀ n:nat, 1 + n = S n.
 Proof.
   intros n.
@@ -166,19 +164,3 @@ Proof.
   - reflexivity.
   - simpl. rewrite <- IHn. reflexivity.
 Qed.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  

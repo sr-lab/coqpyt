@@ -67,6 +67,8 @@ class LspClient(object):
         """
         self.lsp_endpoint.send_notification("exit")
 
+    def didClose(self, textDocument: lsp_structs.TextDocumentIdentifier):
+        return self.lsp_endpoint.send_notification("textDocument/didClose", textDocument=textDocument)
 
     def didOpen(self, textDocument):
         """

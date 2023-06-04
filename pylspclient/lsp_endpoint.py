@@ -13,6 +13,7 @@ class LspEndpoint(threading.Thread):
         self.event_dict = {}
         self.response_dict = {}
         self.next_id = 0
+        self.completed_operation = False
         self._timeout = timeout
         self.shutdown_flag = False
         self.diagnostics = {}
@@ -55,6 +56,10 @@ class LspEndpoint(threading.Thread):
                         if method not in self.notify_callbacks:
                             # Default method
                             print("received message:", params)
+                            if 'message' in params:
+                                # Checks if didOpen operation was completed
+                                if params['message'].startswith('[check]: done'):
+                                    self.completed_operation = True
                             if 'diagnostics' in params:
                                 for diagnostic in params['diagnostics']:
                                     if params['uri'] not in self.diagnostics:
@@ -112,4 +117,5 @@ class LspEndpoint(threading.Thread):
 
 
     def send_notification(self, method_name, **kwargs):
+        self.completed_operation = False
         self.send_message(method_name, kwargs)

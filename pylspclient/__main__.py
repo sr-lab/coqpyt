@@ -1,8 +1,8 @@
 import os
 import subprocess
-from pylspclient.lsp_structs import Position, TextDocumentItem, TextDocumentIdentifier, ResponseError
+from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier, ResponseError
 from pylspclient.json_rpc_endpoint import JsonRpcEndpoint
-from pylspclient.lsp_client import LspClient
+from pylspclient.coq_lsp_client import CoqLspClient
 from pylspclient.lsp_endpoint import LspEndpoint
 from pylspclient.proof_state import ProofState
 
@@ -14,7 +14,7 @@ root_uri = 'file://' + root_path
 proc = subprocess.Popen('coq-lsp', stdout=subprocess.PIPE, stdin=subprocess.PIPE)
 json_rpc_endpoint = JsonRpcEndpoint(proc.stdin, proc.stdout)
 lsp_endpoint = LspEndpoint(json_rpc_endpoint)
-lsp_client = LspClient(lsp_endpoint)
+lsp_client = CoqLspClient(lsp_endpoint)
 workspaces = [{'name': 'coq-lsp', 'uri': root_uri}]
 lsp_client.initialize(proc.pid, '', root_uri, { "show_coq_info_messages": True, "eager_diagnostics": False }, {}, 'off', workspaces)
 lsp_client.initialized()
@@ -56,6 +56,8 @@ try:
     searches = lsp_client.get_searches(TextDocumentIdentifier(uri))
     print(searches[0].query)
     print(searches[0].results)
+
+    print(lsp_client.get_document(TextDocumentIdentifier(uri)))
 except ResponseError:
     # documentSymbol is supported from version 8.
     print("Failed to document symbols")

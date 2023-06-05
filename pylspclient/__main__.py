@@ -28,12 +28,12 @@ version = 1
 lsp_client.didOpen(TextDocumentItem(uri, languageId, version, text))
 
 try:
-    symbols = lsp_client.documentSymbol(TextDocumentIdentifier(uri))
-    for symbol in symbols:
-        print(symbol.detail + ": " + symbol.name + " (" + str(symbol.kind) + ")")
-        print(symbol.range)
-        print(symbol.selectionRange)
-        print()
+    # symbols = lsp_client.documentSymbol(TextDocumentIdentifier(uri))
+    # for symbol in symbols:
+    #     print(symbol.detail + ": " + symbol.name + " (" + str(symbol.kind) + ")")
+    #     print(symbol.range)
+    #     print(symbol.selectionRange)
+    #     print()
     ast = lsp_client.get_document(TextDocumentIdentifier(uri))
     print(ast['spans'][0]['span']['v']['expr'])
 
@@ -96,6 +96,14 @@ try:
     print("SEQUENCE")
     [print(i) for i in expr[:-1]]
     [print(i) for i in expr[-1]]
+    print()
+
+    state.exec() # Qed
+    state.jump_to_proof()
+    print(state.current_step['range'])
+    expr = state.current_step['span']['v']['expr']
+    print("JUMP")
+    [print(i) for i in expr]
     print()
 
     # state.exec(55)

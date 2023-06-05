@@ -77,3 +77,6 @@ class ProofState(object):
             return None
         name = self.__get_theorem_name(expr)
         return self.__check(name)
+    
+    def jump_to_proof(self):
+        while not self.in_proof: self.exec()

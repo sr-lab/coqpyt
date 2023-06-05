@@ -35,11 +35,68 @@ try:
         print(symbol.selectionRange)
         print()
     ast = lsp_client.get_document(TextDocumentIdentifier(uri))
+    print(ast['spans'][0]['span']['v']['expr'])
 
     state = ProofState(lsp_client, file_path, ast)
     state.exec()
     state.exec()
     print(state.get_new_theorem_or_lemma())
+
+    state.exec(2)
+    expr = state.current_step['span']['v']['expr']
+    print("INTROS")
+    [print(i) for i in expr[:-1]]
+    [print(i) for i in expr[-1]]
+    print()
+
+    state.exec()
+    expr = state.current_step['span']['v']['expr']
+    print("PRINT")
+    [print(i) for i in expr[:-1]]
+    [print(i) for i in expr[-1]]
+    print()
+
+    state.exec()
+    expr = state.current_step['span']['v']['expr']
+    print("PRINT DOT")
+    [print(i) for i in expr[:-1]]
+    [print(i) for i in expr[-1]]
+    print()
+
+    state.exec(19)
+    expr = state.current_step['span']['v']['expr']
+    print("REWRITE HYP")
+    [print(i) for i in expr[:-1]]
+    [print(i) for i in expr[-1]]
+    print()
+
+    state.exec(7)
+    expr = state.current_step['span']['v']['expr']
+    print("REWRITE 2 HYPS")
+    [print(i) for i in expr[:-1]]
+    [print(i) for i in expr[-1]]
+    print()
+
+    state.exec(12)
+    expr = state.current_step['span']['v']['expr']
+    print("REWRITE ARROW")
+    [print(i) for i in expr[:-1]]
+    [print(i) for i in expr[-1]]
+    print()
+
+    state.exec(6)
+    expr = state.current_step['span']['v']['expr']
+    print("REWRITE")
+    [print(i) for i in expr[:-1]]
+    [print(i) for i in expr[-1]]
+    print()
+
+    state.exec(61)
+    expr = state.current_step['span']['v']['expr']
+    print("SEQUENCE")
+    [print(i) for i in expr[:-1]]
+    [print(i) for i in expr[-1]]
+    print()
 
     # state.exec(55)
     # print((state.pos.line, state.pos.character))

@@ -12,7 +12,6 @@ class ProofState(object):
         self.coq_lsp_client = coq_lsp_client
         self.current_step = None
         self.in_proof = False
-        self.pos = Position(0, 0)
     
     def __get_expr(self, ast_step):
         return ast_step['span']['v']['expr']
@@ -44,19 +43,6 @@ class ProofState(object):
 
     def exec(self, steps=1):
         for _ in range(steps):
-            found_dot = False
-            for line in self.lines[self.pos.line:]:
-                for char in line[self.pos.character:]:
-                    if found_dot:
-                        if char.isspace(): break
-                        else: found_dot = False
-
-                    if char == '.': found_dot = True
-                    self.pos.character += 1
-
-                if found_dot: break
-                self.pos.line += 1
-                self.pos.character = 0
             self.current_step = self.ast.pop(0)
 
             if self.__get_expr(self.current_step)[0] == 'VernacProof':
@@ -68,8 +54,10 @@ class ProofState(object):
         if not self.in_proof:
             return None
 
-        curr_text = '\n'.join(self.lines[self.pos.line:])
-        curr_text = curr_text[self.pos.character:]
+        line = self.current_step['range']['end']['line']
+        character = self.current_step['range']['end']['character']
+        curr_text = '\n'.join(self.lines[line:])
+        curr_text = curr_text[character:]
         words = curr_text.split('.')
         next_steps = []
 
@@ -89,13 +77,3 @@ class ProofState(object):
             return None
         name = self.__get_theorem_name(expr)
         return self.__check(name)
-    
-    def proof_steps(self, symbol):
-        if symbol.detail not in ['Theorem', 'Lemma']:
-            return None
-        
-        line = symbol.range['start']['line']
-        self.pos = Position(line, 0)
-        self.exec(2) # Theorem. and Proof.
-
-        return self.next_steps()

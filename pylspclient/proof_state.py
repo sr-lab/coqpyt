@@ -90,8 +90,9 @@ class ProofState(object):
                     res.extend(transverse_ast(k))
                     res.extend(transverse_ast(v))
                 return res
-            elif isinstance(el, list) and len(el) == 2 and el[0] == 'Id':
-                return [self.__check(el[1])]
+            elif isinstance(el, list) and len(el) == 3 and el[0] == 'Ser_Qualid':
+                id = '.'.join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
+                return [self.__check(id)]
             elif isinstance(el, list):
                 res = []
                 for v in el:

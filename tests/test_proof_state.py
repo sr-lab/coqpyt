@@ -50,4 +50,4 @@ def test_proof_context(setup, teardown):
 
     proof_context = state.get_proof_context()
     assert len(proof_context) == 1
-    assert proof_context[0] == 'plus_O_n\n     : ∀ n : nat, 0 + n = n'
+    assert proof_context[0] == 'Out.In.plus_O_n\n     : ∀ n : nat, 0 + n = n'

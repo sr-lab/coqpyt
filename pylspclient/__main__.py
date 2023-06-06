@@ -11,13 +11,7 @@ root_path = os.getcwd()
 root_uri = 'file://' + root_path
 
 # Initialize client
-proc = subprocess.Popen('coq-lsp', stdout=subprocess.PIPE, stdin=subprocess.PIPE)
-json_rpc_endpoint = JsonRpcEndpoint(proc.stdin, proc.stdout)
-lsp_endpoint = LspEndpoint(json_rpc_endpoint)
-lsp_client = CoqLspClient(lsp_endpoint)
-workspaces = [{'name': 'coq-lsp', 'uri': root_uri}]
-lsp_client.initialize(proc.pid, '', root_uri, { "show_coq_info_messages": True, "eager_diagnostics": False }, {}, 'off', workspaces)
-lsp_client.initialized()
+lsp_client = CoqLspClient(root_uri)
 
 # Open file
 file_path = os.path.join(root_path, 'test.v')
@@ -40,7 +34,7 @@ try:
     state = ProofState(lsp_client, file_path, ast)
     state.exec()
     state.exec()
-    print(state.get_new_theorem_or_lemma())
+    print(state.get_current_theorem())
 
     state.exec(2)
     expr = state.current_step['span']['v']['expr']

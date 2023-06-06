@@ -1,7 +1,5 @@
 import os
-import shutil
 from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier
-from pylspclient.lsp_structs import Position
 
 class ProofState(object):
     def __init__(self, coq_lsp_client, file_path, ast):
@@ -54,29 +52,33 @@ class ProofState(object):
         if not self.in_proof:
             return None
 
-        line = self.current_step['range']['end']['line']
-        character = self.current_step['range']['end']['character']
-        curr_text = '\n'.join(self.lines[line:])
-        curr_text = curr_text[character:]
-        words = curr_text.split('.')
-        next_steps = []
+        start_line = self.current_step['range']['end']['line']
+        start_character = self.current_step['range']['end']['character']
 
-        for word in words:
-            if not word[0].isspace():
-                next_steps[-1] += word + '.'
-            else:
-                next_steps.append(word + '.')
-                if "Qed" in word:
-                    break
+        for step in self.ast:
+            if self.__get_expr(step)[0] == 'VernacEndProof':
+                break
 
-        return next_steps
+        end_line = step['range']['end']['line']
+        end_character = step['range']['end']['character']
+
+        curr_text = self.lines[start_line:end_line + 1]
+        curr_text[0] = curr_text[0][start_character:]
+        curr_text[-1] = curr_text[-1][:end_character + 1]
+
+        return '\n'.join(curr_text)
     
-    def get_new_theorem_or_lemma(self):
+    def get_current_theorem(self):
         expr = self.__get_expr(self.current_step)
         if expr[0] != 'VernacStartTheoremProof':
             return None
         name = self.__get_theorem_name(expr)
         return self.__check(name)
     
+    def jump_to_theorem(self):
+        while self.__get_expr(self.current_step)[0] != 'VernacStartTheoremProof': 
+            self.exec()
+        return self.get_current_theorem()
+
     def jump_to_proof(self):
         while not self.in_proof: self.exec()

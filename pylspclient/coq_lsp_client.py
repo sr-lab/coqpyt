@@ -1,11 +1,25 @@
 import time
+import subprocess
+from pylspclient.json_rpc_endpoint import JsonRpcEndpoint
+from pylspclient.lsp_endpoint import LspEndpoint
 from pylspclient.lsp_client import LspClient
 from pylspclient import lsp_structs
 from pylspclient import coq_lsp_structs
 
 class CoqLspClient(LspClient):
-    def __init__(self, lsp_endpoint):
+    def __init__(self, root_uri):
+        proc = subprocess.Popen('coq-lsp', stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+        json_rpc_endpoint = JsonRpcEndpoint(proc.stdin, proc.stdout)
+        lsp_endpoint = LspEndpoint(json_rpc_endpoint)
         super().__init__(lsp_endpoint)
+        workspaces = [{'name': 'coq-lsp', 'uri': root_uri}]
+        self.initialize(
+            proc.pid, '', 
+            root_uri, 
+            { "show_coq_info_messages": True, "eager_diagnostics": False }, 
+            {}, 'off', workspaces
+        )
+        self.initialized()
 
     def didOpen(self, textDocument: lsp_structs.TextDocumentItem):
         super().didOpen(textDocument)

@@ -49,5 +49,7 @@ def test_proof_context(setup, teardown):
     state.jump_to_proof()
 
     proof_context = state.get_proof_context()
-    assert len(proof_context) == 1
-    assert proof_context[0] == 'Out.In.plus_O_n\n     : ∀ n : nat, 0 + n = n'
+    assert len(proof_context) == 3
+    assert 'Out.In.plus_O_n\n     : ∀ n : nat, 0 + n = n' in proof_context
+    assert 'Notation "x * y" := (Nat.mul x y) : nat_scope' in proof_context
+    assert 'Notation "A /\\ B" := (and A B) : type_scope' in proof_context

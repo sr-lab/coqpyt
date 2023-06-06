@@ -18,7 +18,7 @@ class ProofState(object):
     def __get_theorem_name(self, expr):
         return expr[2][0][0][0]['v'][1]
     
-    def __check(self, search):
+    def __search(self, keyword, search, delims):
         dir = os.path.dirname(self.path)
         new_base_name = os.path.basename(self.path).split('.')
         new_base_name = new_base_name[0] + \
@@ -26,7 +26,8 @@ class ProofState(object):
         new_path = os.path.join(dir, new_base_name)
         with open(new_path, 'w') as f:
             with open(self.path, 'r') as original:
-                f.write(original.read() + f"\nCheck ({search}).")
+                fmt = f"\n{keyword} {delims[0]}{search}{delims[1]}."
+                f.write(original.read() + fmt)
 
         check = None
         with open(new_path, 'r') as f:
@@ -35,13 +36,22 @@ class ProofState(object):
             # In that way we can use a single file
             self.coq_lsp_client.didOpen(TextDocumentItem(uri, 'coq', 1, f.read()))
 
-            for query in self.coq_lsp_client.get_queries(TextDocumentIdentifier(uri), "Check"):
-                if query.query == '(' + search + ')':
+            for query in self.coq_lsp_client.get_queries(TextDocumentIdentifier(uri), keyword):
+                if query.query == f"{delims[0]}{search}{delims[1]}":
                     check = query.results[0]
             self.coq_lsp_client.didClose(TextDocumentIdentifier(uri))
         
         os.remove(new_path)
         return check
+    
+    def __print(self, search):
+        return self.__search("Print", search, ('(', ')'))
+    
+    def __check(self, search):
+        return self.__search("Check", search, ('(', ')'))
+    
+    def __locate(self, search):
+        return self.__search("Locate", search, ('"', '"'))
 
     def exec(self, steps=1):
         for _ in range(steps):
@@ -81,7 +91,6 @@ class ProofState(object):
         name = self.__get_theorem_name(expr)
         return self.__check(name)
     
-    # FIXME consider notations
     def get_proof_context(self):
         def transverse_ast(el):
             if isinstance(el, dict):
@@ -91,8 +100,20 @@ class ProofState(object):
                     res.extend(transverse_ast(v))
                 return res
             elif isinstance(el, list) and len(el) == 3 and el[0] == 'Ser_Qualid':
+                # FIXME: Differentiate between Theorems and Definitions; ignore rest
                 id = '.'.join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
                 return [self.__check(id)]
+            elif isinstance(el, list) and len(el) == 4 and el[0] == 'CNotation':
+                notations = self.__locate(el[2][1]).split('\n')
+                default = None
+                if len(notations) == 1:
+                    if notations[0][-25:] == " (default interpretation)":
+                        default = notations[0][:-25]
+                    else: default = notations[0]
+                else:
+                    fun = lambda x: x[-25:] == " (default interpretation)"
+                    default = list(filter(fun, notations))[0][:-25]
+                return [default]
             elif isinstance(el, list):
                 res = []
                 for v in el:

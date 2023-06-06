@@ -1,5 +1,3 @@
-(* Lecture 6 *)
-
 Require Import Coq.Unicode.Utf8.
 
 Theorem plus_O_n : forall n:nat, 0 + n = n.

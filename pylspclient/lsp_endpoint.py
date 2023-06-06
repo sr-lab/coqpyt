@@ -1,5 +1,6 @@
 from __future__ import print_function
 import threading
+import logging
 import collections
 from pylspclient import lsp_structs
 
@@ -55,7 +56,7 @@ class LspEndpoint(threading.Thread):
                         # a call for notify
                         if method not in self.notify_callbacks:
                             # Default method
-                            print("received message:", params)
+                            logging.debug("received message:", params)
                             if 'message' in params:
                                 # Checks if didOpen operation was completed
                                 if params['message'].startswith('[check]: done'):

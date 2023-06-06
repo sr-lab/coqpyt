@@ -1,4 +1,5 @@
 import os
+import uuid
 from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier
 
 class ProofState(object):
@@ -20,7 +21,8 @@ class ProofState(object):
     def __check(self, search):
         dir = os.path.dirname(self.path)
         new_base_name = os.path.basename(self.path).split('.')
-        new_base_name = new_base_name[0] + "new." + new_base_name[1]
+        new_base_name = new_base_name[0] + \
+            f"new{str(uuid.uuid4()).replace('-', '')}." + new_base_name[1]
         new_path = os.path.join(dir, new_base_name)
         with open(new_path, 'w') as f:
             with open(self.path, 'r') as original:
@@ -29,6 +31,8 @@ class ProofState(object):
         check = None
         with open(new_path, 'r') as f:
             uri = "file://" + new_path
+            # FIXME probably we have to change this to a didChange
+            # In that way we can use a single file
             self.coq_lsp_client.didOpen(TextDocumentItem(uri, 'coq', 1, f.read()))
 
             for query in self.coq_lsp_client.get_queries(TextDocumentIdentifier(uri), "Check"):
@@ -52,10 +56,12 @@ class ProofState(object):
         if not self.in_proof:
             return None
 
+        steps = []
         start_line = self.current_step['range']['end']['line']
         start_character = self.current_step['range']['end']['character']
 
         for step in self.ast:
+            steps.append(step)
             if self.__get_expr(step)[0] == 'VernacEndProof':
                 break
 
@@ -66,7 +72,7 @@ class ProofState(object):
         curr_text[0] = curr_text[0][start_character:]
         curr_text[-1] = curr_text[-1][:end_character + 1]
 
-        return '\n'.join(curr_text)
+        return '\n'.join(curr_text), steps
     
     def get_current_theorem(self):
         expr = self.__get_expr(self.current_step)
@@ -74,6 +80,30 @@ class ProofState(object):
             return None
         name = self.__get_theorem_name(expr)
         return self.__check(name)
+    
+    # FIXME consider notations
+    def get_proof_context(self):
+        def transverse_ast(el):
+            if isinstance(el, dict):
+                res = []
+                for k, v in el.items():
+                    res.extend(transverse_ast(k))
+                    res.extend(transverse_ast(v))
+                return res
+            elif isinstance(el, list) and len(el) == 2 and el[0] == 'Id':
+                return [self.__check(el[1])]
+            elif isinstance(el, list):
+                res = []
+                for v in el:
+                    res.extend(transverse_ast(v))
+                return res
+            
+            return []
+
+        if self.in_proof:
+            return list(filter(lambda x: x is not None, set(transverse_ast(self.next_steps()[1]))))
+        else:
+            return None
     
     def jump_to_theorem(self):
         while self.__get_expr(self.current_step)[0] != 'VernacStartTheoremProof': 

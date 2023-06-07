@@ -18,7 +18,7 @@ class ProofState(object):
     def __get_theorem_name(self, expr):
         return expr[2][0][0][0]['v'][1]
     
-    def __search(self, keyword, search, delims):
+    def __search(self, keywords, search):
         dir = os.path.dirname(self.path)
         new_base_name = os.path.basename(self.path).split('.')
         new_base_name = new_base_name[0] + \
@@ -26,37 +26,49 @@ class ProofState(object):
         new_path = os.path.join(dir, new_base_name)
         with open(new_path, 'w') as f:
             with open(self.path, 'r') as original:
-                fmt = f"\n{keyword} {delims[0]}{search}{delims[1]}."
+                fmt = ''
+                for kw in keywords: fmt += f"\n{kw} {search}."
                 f.write(original.read() + fmt)
 
-        check = None
+        res = {}
         with open(new_path, 'r') as f:
             uri = "file://" + new_path
             # FIXME probably we have to change this to a didChange
             # In that way we can use a single file
             self.coq_lsp_client.didOpen(TextDocumentItem(uri, 'coq', 1, f.read()))
 
-            for query in self.coq_lsp_client.get_queries(TextDocumentIdentifier(uri), keyword):
-                if query.query == f"{delims[0]}{search}{delims[1]}":
-                    check = query.results[0]
+            for kw in keywords:
+                queries = self.coq_lsp_client.get_queries(TextDocumentIdentifier(uri), kw)
+                for query in queries:
+                    if query.query == f"{search}":
+                        res[kw] = query.results[0]
             self.coq_lsp_client.didClose(TextDocumentIdentifier(uri))
         
         os.remove(new_path)
-        return check
+        return res
     
     def __print(self, search):
-        return self.__search("Print", search, ('(', ')'))
-    
-    def __check(self, search):
-        return self.__search("Check", search, ('(', ')'))
+        res = self.__search(['Compute', 'Print'], f"{search}")
+        if 'Compute' not in res.keys():
+            return None
+        
+        theorem, definition = res['Compute'].split(), res['Print'].split()
+        if theorem[1] == search and definition[1] != search:
+            return ' '.join(theorem[1:])
+        
+        return ' '.join(definition)
     
     def __locate(self, search):
-        return self.__search("Locate", search, ('"', '"'))
+        nots = self.__search(['Locate'], f"\"{search}\"")['Locate'].split('\n')
+        fun = lambda x: x.endswith("(default interpretation)")
+        if len(nots) == 1:
+            if fun(nots[0]): return nots[0][:-25]
+            else: return nots[0]
+        else: return list(filter(fun, nots))[0][:-25]
 
     def exec(self, steps=1):
         for _ in range(steps):
             self.current_step = self.ast.pop(0)
-
             if self.__get_expr(self.current_step)[0] == 'VernacProof':
                 self.in_proof = True
             elif self.__get_expr(self.current_step)[0] == 'VernacEndProof':
@@ -89,7 +101,7 @@ class ProofState(object):
         if expr[0] != 'VernacStartTheoremProof':
             return None
         name = self.__get_theorem_name(expr)
-        return self.__check(name)
+        return self.__print(name)
     
     def get_proof_context(self):
         def transverse_ast(el):
@@ -100,20 +112,11 @@ class ProofState(object):
                     res.extend(transverse_ast(v))
                 return res
             elif isinstance(el, list) and len(el) == 3 and el[0] == 'Ser_Qualid':
-                # FIXME: Differentiate between Theorems and Definitions; ignore rest
                 id = '.'.join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
-                return [self.__check(id)]
+                search = self.__print(id)
+                return [search] if search else []
             elif isinstance(el, list) and len(el) == 4 and el[0] == 'CNotation':
-                notations = self.__locate(el[2][1]).split('\n')
-                default = None
-                if len(notations) == 1:
-                    if notations[0][-25:] == " (default interpretation)":
-                        default = notations[0][:-25]
-                    else: default = notations[0]
-                else:
-                    fun = lambda x: x[-25:] == " (default interpretation)"
-                    default = list(filter(fun, notations))[0][:-25]
-                return [default]
+                return [self.__locate(el[2][1])] + transverse_ast(el[1:])
             elif isinstance(el, list):
                 res = []
                 for v in el:
@@ -123,7 +126,7 @@ class ProofState(object):
             return []
 
         if self.in_proof:
-            return list(filter(lambda x: x is not None, set(transverse_ast(self.next_steps()[1]))))
+            return transverse_ast(self.next_steps()[1])
         else:
             return None
     

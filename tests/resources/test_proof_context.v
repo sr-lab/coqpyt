@@ -16,10 +16,10 @@ End Out.
 Check Out.In.plus_O_n.
 
 Theorem mult_0_plus : ∀ n m : nat,
-  0 + (n * m) = n * m.
+  0 + (S n * m) = S n * m.
 Proof.
   intros n m.
-  rewrite -> (Out.In.plus_O_n (n * m)).
+  rewrite -> (Out.In.plus_O_n (S n * m)).
   Compute (True /\ True).
   reflexivity.
 Qed.

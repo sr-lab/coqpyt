@@ -49,7 +49,11 @@ def test_proof_context(setup, teardown):
     state.jump_to_proof()
 
     proof_context = state.get_proof_context()
-    assert len(proof_context) == 3
-    assert 'Out.In.plus_O_n\n     : ∀ n : nat, 0 + n = n' in proof_context
-    assert 'Notation "x * y" := (Nat.mul x y) : nat_scope' in proof_context
-    assert 'Notation "A /\\ B" := (and A B) : type_scope' in proof_context
+    assert proof_context == [
+        'Out.In.plus_O_n : ∀ n : nat, 0 + n = n',
+        'Notation "x * y" := (Nat.mul x y) : nat_scope',
+        'Inductive nat : Set := O : nat | S : nat → nat. Arguments S _%nat_scope',
+        'Notation "A /\\ B" := (and A B) : type_scope',
+        'Inductive True : Prop := I : True.',
+        'Inductive True : Prop := I : True.'
+    ]

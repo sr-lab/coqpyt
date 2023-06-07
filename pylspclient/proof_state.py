@@ -61,8 +61,8 @@ class ProofState(object):
     def __locate(self, search):
         nots = self.__search(['Locate'], f"\"{search}\"")['Locate'].split('\n')
         fun = lambda x: x.endswith("(default interpretation)")
-        if len(nots) == 1: return nots[0][:-25] if fun(nots[0]) else nots[0]
-        else: return list(filter(fun, nots))[0][:-25]
+        if len(nots) > 1: return list(filter(fun, nots))[0][:-25]
+        else: return nots[0][:-25] if fun(nots[0]) else nots[0]
 
     def exec(self, steps=1):
         for _ in range(steps):

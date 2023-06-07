@@ -47,7 +47,7 @@ class ProofState(object):
         os.remove(new_path)
         return res
     
-    def __print(self, search):
+    def __compute(self, search):
         res = self.__search(['Compute', 'Print'], f"{search}")
         if 'Compute' not in res.keys():
             return None
@@ -61,9 +61,7 @@ class ProofState(object):
     def __locate(self, search):
         nots = self.__search(['Locate'], f"\"{search}\"")['Locate'].split('\n')
         fun = lambda x: x.endswith("(default interpretation)")
-        if len(nots) == 1:
-            if fun(nots[0]): return nots[0][:-25]
-            else: return nots[0]
+        if len(nots) == 1: return nots[0][:-25] if fun(nots[0]) else nots[0]
         else: return list(filter(fun, nots))[0][:-25]
 
     def exec(self, steps=1):
@@ -101,7 +99,7 @@ class ProofState(object):
         if expr[0] != 'VernacStartTheoremProof':
             return None
         name = self.__get_theorem_name(expr)
-        return self.__print(name)
+        return self.__compute(name)
     
     def get_proof_context(self):
         def transverse_ast(el):
@@ -113,7 +111,7 @@ class ProofState(object):
                 return res
             elif isinstance(el, list) and len(el) == 3 and el[0] == 'Ser_Qualid':
                 id = '.'.join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
-                search = self.__print(id)
+                search = self.__compute(id)
                 return [search] if search else []
             elif isinstance(el, list) and len(el) == 4 and el[0] == 'CNotation':
                 return [self.__locate(el[2][1])] + transverse_ast(el[1:])

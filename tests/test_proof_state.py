@@ -5,32 +5,22 @@ from pylspclient.coq_lsp_structs import *
 from pylspclient.coq_lsp_client import CoqLspClient
 from pylspclient.proof_state import ProofState
 
-root_path: str = None
-root_uri: str = None
-lsp_client: CoqLspClient = None
+versionId: VersionedTextDocumentIdentifier = None
 state: ProofState = None
 
 @pytest.fixture
 def setup(request):
-    global root_path, root_uri, lsp_client, state, versionId
-    root_path = "tests/resources"
-    root_uri = 'file://' + root_path
-    lsp_client = CoqLspClient(root_uri)
-
-    file_path = os.path.join(root_path, request.param)
+    global lsp_client, state, versionId
+    file_path = os.path.join("tests/resources", request.param)
     uri = "file://" + file_path
-    text = open(file_path, "r").read()
-    lsp_client.didOpen(TextDocumentItem(uri, 'coq', 1, text))
-    ast = lsp_client.get_document(TextDocumentIdentifier(uri))
-    state = ProofState(lsp_client, file_path, ast)
+    state = ProofState(file_path)
     versionId = VersionedTextDocumentIdentifier(uri, 1)
     yield
 
 @pytest.fixture
 def teardown():
     yield
-    lsp_client.shutdown()
-    lsp_client.exit()
+    state.close()
 
 @pytest.mark.parametrize('setup', ['test_next_steps.v'], indirect=True)
 def test_next_steps(setup, teardown):

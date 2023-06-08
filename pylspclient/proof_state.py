@@ -2,14 +2,19 @@ import os
 import uuid
 from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier, Position
 from pylspclient.coq_lsp_structs import Step
+from pylspclient.coq_lsp_client import CoqLspClient
 
 class ProofState(object):
-    def __init__(self, coq_lsp_client, file_path, ast):
-        self.path = file_path
-        with open(file_path, "r") as f:
+    def __init__(self, file_path):
+        dir_uri = f"file://{os.path.dirname(file_path)}"
+        file_uri = f"file://{file_path}"
+        self.coq_lsp_client = CoqLspClient(dir_uri)
+        with open(file_path, 'r') as f:
             self.lines = f.read().split('\n')
-        self.ast = ast['spans']
-        self.coq_lsp_client = coq_lsp_client
+            self.coq_lsp_client.didOpen(TextDocumentItem(file_uri, 'coq', 1, '\n'.join(self.lines)))
+        self.path = file_path
+        self.ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(file_uri))
+        self.ast = self.ast['spans']
         self.current_step = None
         self.in_proof = False
     
@@ -110,7 +115,6 @@ class ProofState(object):
         lines[-1] = lines[-1][:end_character + 1]
         return '\n'.join(lines)
 
-
     def exec(self, steps=1):
         for _ in range(steps):
             self.current_step = self.ast.pop(0)
@@ -149,3 +153,7 @@ class ProofState(object):
 
     def jump_to_proof(self):
         while not self.in_proof: self.exec()
+
+    def close(self):
+        self.coq_lsp_client.shutdown()
+        self.coq_lsp_client.exit()

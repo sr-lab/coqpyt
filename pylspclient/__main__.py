@@ -1,25 +1,8 @@
 import os
-import subprocess
-from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier, ResponseError
-from pylspclient.json_rpc_endpoint import JsonRpcEndpoint
-from pylspclient.coq_lsp_client import CoqLspClient
-from pylspclient.lsp_endpoint import LspEndpoint
+from pylspclient.lsp_structs import ResponseError
 from pylspclient.proof_state import ProofState
 
-
-root_path = os.getcwd()
-root_uri = 'file://' + root_path
-
-# Initialize client
-lsp_client = CoqLspClient(root_uri)
-
-# Open file
-file_path = os.path.join(root_path, 'test.v')
-uri = "file://" + file_path
-text = open(file_path, "r").read()
-languageId = 'coq'
-version = 1
-lsp_client.didOpen(TextDocumentItem(uri, languageId, version, text))
+file_path = os.path.join(os.getcwd(), 'test.v')
 
 try:
     # symbols = lsp_client.documentSymbol(TextDocumentIdentifier(uri))
@@ -28,10 +11,7 @@ try:
     #     print(symbol.range)
     #     print(symbol.selectionRange)
     #     print()
-    ast = lsp_client.get_document(TextDocumentIdentifier(uri))
-    print(ast['spans'][0]['span']['v']['expr'])
-
-    state = ProofState(lsp_client, file_path, ast)
+    state = ProofState(file_path)
     state.exec()
     state.exec()
     print(state.get_current_theorem())
@@ -120,10 +100,7 @@ try:
     # searches = lsp_client.get_searches(TextDocumentIdentifier(uri))
     # print(searches[0].query)
     # print(searches[0].results)
+    state.close()
 except ResponseError:
     # documentSymbol is supported from version 8.
     print("Failed to document symbols")
-
-# Shutdown
-lsp_client.shutdown()
-lsp_client.exit()

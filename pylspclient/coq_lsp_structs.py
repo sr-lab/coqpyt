@@ -1,8 +1,8 @@
 class Hyp(object):
     def __init__(self, names, ty, definition=None):
         self.names = names
-        self.definition = definition
         self.ty = ty
+        self.definition = definition
 
 
 class Goal(object):
@@ -58,3 +58,9 @@ class Query(object):
     def __init__(self, query, results):
         self.query = query
         self.results = results
+
+class Step(object):
+    def __init__(self, text, goals, context):
+        self.text = text
+        self.goals = goals
+        self.context = context

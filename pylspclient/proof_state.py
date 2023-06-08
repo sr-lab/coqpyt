@@ -48,18 +48,19 @@ class ProofState(object):
         return res
     
     def __compute(self, search):
-        res = self.__search(['Compute', 'Print'], f"{search}")
-        if 'Compute' not in res.keys():
-            return None
-        
-        theorem, definition = res['Compute'].split(), res['Print'].split()
+        res = self.__search(('Print', 'Compute'), f"{search}")
+
+        if 'Print' not in res.keys(): return None
+        definition = res['Print'].split()
+        if 'Compute' not in res.keys(): return ' '.join(definition)
+        theorem = res['Compute'].split()
         if theorem[1] == search and definition[1] != search:
             return ' '.join(theorem[1:])
         
         return ' '.join(definition)
     
     def __locate(self, search):
-        nots = self.__search(['Locate'], f"\"{search}\"")['Locate'].split('\n')
+        nots = self.__search(('Locate',), f"\"{search}\"")['Locate'].split('\n')
         fun = lambda x: x.endswith("(default interpretation)")
         if len(nots) > 1: return list(filter(fun, nots))[0][:-25]
         else: return nots[0][:-25] if fun(nots[0]) else nots[0]

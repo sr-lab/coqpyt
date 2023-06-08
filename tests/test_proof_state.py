@@ -55,5 +55,6 @@ def test_proof_context(setup, teardown):
         'Inductive nat : Set := O : nat | S : nat → nat. Arguments S _%nat_scope',
         'Notation "A /\\ B" := (and A B) : type_scope',
         'Inductive True : Prop := I : True.',
-        'Inductive True : Prop := I : True.'
+        'Inductive True : Prop := I : True.',
+        'Ltac reduce_eq := simpl; reflexivity'
     ]

@@ -118,9 +118,10 @@ class ProofState(object):
     def exec(self, steps=1):
         for _ in range(steps):
             self.current_step = self.ast.pop(0)
-            if self.__get_expr(self.current_step)[0] == 'VernacProof':
+            expr = self.__get_expr(self.current_step)
+            if expr[0] == 'VernacProof' or (expr[0] == 'VernacExtend' and expr[1][0] == 'Obligations'):
                 self.in_proof = True
-            elif self.__get_expr(self.current_step)[0] == 'VernacEndProof':
+            elif expr[0] == 'VernacEndProof':
                 self.in_proof = False
 
     def next_steps(self):
@@ -153,6 +154,13 @@ class ProofState(object):
 
     def jump_to_proof(self):
         while not self.in_proof: self.exec()
+
+    def proof_steps(self):
+        res = []
+        while len(self.ast) > 0:
+            self.jump_to_proof()
+            res.extend(self.next_steps())
+        return res
 
     def close(self):
         self.coq_lsp_client.shutdown()

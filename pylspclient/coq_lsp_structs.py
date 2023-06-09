@@ -59,6 +59,7 @@ class Query(object):
         self.query = query
         self.results = results
 
+
 class Step(object):
     def __init__(self, text, goals, context):
         self.text = text

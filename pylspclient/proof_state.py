@@ -1,6 +1,7 @@
 import os
 import uuid
-from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier, Position
+from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier, VersionedTextDocumentIdentifier
+from pylspclient.lsp_structs import TextDocumentContentChangeEvent, Position, Range
 from pylspclient.coq_lsp_structs import Step
 from pylspclient.coq_lsp_client import CoqLspClient
 
@@ -17,56 +18,78 @@ class ProofState(object):
         self.ast = self.ast['spans']
         self.current_step = None
         self.in_proof = False
-    
+        self.__init_aux_file()
+
+    def __init_aux_file(self):
+        dir = os.path.dirname(self.path)
+        new_base_name = os.path.basename(self.path).split('.')
+        new_base_name = new_base_name[0] + \
+            f"new{str(uuid.uuid4()).replace('-', '')}." + new_base_name[1]
+        self.aux_path = os.path.join(dir, new_base_name)
+        self.aux_file_text = ''
+        self.aux_file_version = 1
+        with open(self.aux_path, 'w'):
+            # Create empty file
+            pass
+        self.coq_lsp_client.didOpen(TextDocumentItem(f"file://{self.aux_path}", 'coq', 1, ''))
+
     def __get_expr(self, ast_step):
         return ast_step['span']['v']['expr']
     
     def __get_theorem_name(self, expr):
         return expr[2][0][0][0]['v'][1]
     
-    def __search(self, keywords, search):
-        dir = os.path.dirname(self.path)
-        new_base_name = os.path.basename(self.path).split('.')
-        new_base_name = new_base_name[0] + \
-            f"new{str(uuid.uuid4()).replace('-', '')}." + new_base_name[1]
-        new_path = os.path.join(dir, new_base_name)
-        with open(new_path, 'w') as f:
-            with open(self.path, 'r') as original:
-                fmt = ''
-                for kw in keywords: fmt += f"\n{kw} {search}."
-                f.write(original.read() + fmt)
+    def __get_aux_file_position(self):
+        aux_lines = self.aux_file_text.split('\n')
+        line, col = len(aux_lines) - 1, len(aux_lines[-1])
+        return Position(line, col)
 
-        res = {}
-        with open(new_path, 'r') as f:
-            uri = "file://" + new_path
-            # FIXME probably we have to change this to a didChange
-            # In that way we can use a single file
-            self.coq_lsp_client.didOpen(TextDocumentItem(uri, 'coq', 1, f.read()))
+    def __write_on_aux_file(self, text):
+        uri = f"file://{self.aux_path}"
+        self.aux_file_version += 1
+        last_position = self.__get_aux_file_position()
+        self.aux_file_text += text
+        current_position = self.__get_aux_file_position()
+        range = Range(last_position, current_position)
+        # FIXME coq-lsp does not support SyncKind parcial yet
 
-            for kw in keywords:
-                queries = self.coq_lsp_client.get_queries(TextDocumentIdentifier(uri), kw)
-                for query in queries:
-                    if query.query == f"{search}":
-                        res[kw] = query.results[0]
-            self.coq_lsp_client.didClose(TextDocumentIdentifier(uri))
+        with open(self.aux_path, 'a') as f:
+            f.write(text)
         
-        os.remove(new_path)
+        self.coq_lsp_client.didChange(VersionedTextDocumentIdentifier(uri, self.aux_file_version), 
+                                      [TextDocumentContentChangeEvent(None, None, self.aux_file_text)])
+
+    def __command(self, keyword, search):
+        res = None
+        uri = f"file://{self.aux_path}"
+
+        command = f'\n{keyword} {search}.'
+        self.__write_on_aux_file(command)
+
+        # FIXME consider position
+        queries = self.coq_lsp_client.get_queries(TextDocumentIdentifier(uri), keyword)
+        for query in queries:
+            if query.query == f"{search}":
+                res = query.results[0]
+                break
+
         return res
     
     def __compute(self, search):
-        res = self.__search(('Print', 'Compute'), f"{search}")
+        res_print = self.__command('Print', f"{search}")
+        res_compute = self.__command('Compute', f"{search}")
 
-        if 'Print' not in res.keys(): return None
-        definition = res['Print'].split()
-        if 'Compute' not in res.keys(): return ' '.join(definition)
-        theorem = res['Compute'].split()
+        if res_print is None: return None
+        definition = res_print.split()
+        if res_compute is None: return ' '.join(definition)
+        theorem = res_compute.split()
         if theorem[1] == search and definition[1] != search:
             return ' '.join(theorem[1:])
         
         return ' '.join(definition)
     
     def __locate(self, search):
-        nots = self.__search(('Locate',), f"\"{search}\"")['Locate'].split('\n')
+        nots = self.__command('Locate', f"\"{search}\"").split('\n')
         fun = lambda x: x.endswith("(default interpretation)")
         if len(nots) > 1: return list(filter(fun, nots))[0][:-25]
         else: return nots[0][:-25] if fun(nots[0]) else nots[0]
@@ -117,8 +140,16 @@ class ProofState(object):
 
     def exec(self, steps=1):
         for _ in range(steps):
+            if self.current_step != None:
+                end_previous = (self.current_step['range']['end']['line'], 
+                         self.current_step['range']['end']['character'])
+            else:
+                end_previous = (0, 0)
             self.current_step = self.ast.pop(0)
             if self.current_step is None: break
+
+            text = self.__step_text(end_previous[0], end_previous[1])
+            self.__write_on_aux_file(text)
 
             expr = self.__get_expr(self.current_step)
             if expr[0] == 'VernacProof' or (expr[0] == 'VernacExtend' and expr[1][0] == 'Obligations'):
@@ -169,3 +200,4 @@ class ProofState(object):
     def close(self):
         self.coq_lsp_client.shutdown()
         self.coq_lsp_client.exit()
+        os.remove(self.aux_path)

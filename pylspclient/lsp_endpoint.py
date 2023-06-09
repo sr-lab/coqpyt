@@ -1,7 +1,6 @@
 from __future__ import print_function
 import threading
 import logging
-import collections
 from pylspclient import lsp_structs
 
 

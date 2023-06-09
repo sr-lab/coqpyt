@@ -24,7 +24,13 @@ class CoqLspClient(LspClient):
     def didOpen(self, textDocument: lsp_structs.TextDocumentItem):
         super().didOpen(textDocument)
         while self.lsp_endpoint.completed_operation != True:
-            time.sleep(1)
+            time.sleep(0.1)
+
+    def didChange(self, textDocument: lsp_structs.VersionedTextDocumentIdentifier, 
+                  contentChanges: list[lsp_structs.TextDocumentContentChangeEvent]):
+        super().didChange(textDocument, contentChanges)
+        while self.lsp_endpoint.completed_operation != True:
+            time.sleep(0.1)
 
     def proof_goals(self, textDocument, position):
         def parse_goal(goal):

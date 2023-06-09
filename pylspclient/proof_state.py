@@ -93,12 +93,12 @@ class ProofState(object):
             
             return []
 
-        if self.in_proof:
-            res, transversed = [], transverse_ast(self.current_step)
-            [res.append(x) for x in transversed if x not in res]
-            return res
-        else:
+        if not self.in_proof:
             return None
+
+        res, transversed = [], transverse_ast(self.current_step)
+        [res.append(x) for x in transversed if x not in res]
+        return res
 
     def __step_goals(self):
         uri =  "file://" + self.path
@@ -118,6 +118,8 @@ class ProofState(object):
     def exec(self, steps=1):
         for _ in range(steps):
             self.current_step = self.ast.pop(0)
+            if self.current_step is None: break
+
             expr = self.__get_expr(self.current_step)
             if expr[0] == 'VernacProof' or (expr[0] == 'VernacExtend' and expr[1][0] == 'Obligations'):
                 self.in_proof = True
@@ -158,8 +160,9 @@ class ProofState(object):
     def proof_steps(self):
         res = []
         while len(self.ast) > 0:
-            self.jump_to_proof()
-            res.extend(self.next_steps())
+            self.exec()
+            if self.in_proof:
+                res.extend(self.next_steps())
         return res
 
     def close(self):

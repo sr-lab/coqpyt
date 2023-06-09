@@ -155,7 +155,8 @@ class ProofState(object):
         return self.get_current_theorem()
 
     def jump_to_proof(self):
-        while not self.in_proof: self.exec()
+        while not self.in_proof and len(self.ast) > 0:
+            self.exec()
 
     def proof_steps(self):
         res = []

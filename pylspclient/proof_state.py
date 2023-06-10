@@ -38,46 +38,41 @@ class ProofState(object):
     
     def __get_theorem_name(self, expr):
         return expr[2][0][0][0]['v'][1]
-    
-    def __get_aux_file_position(self):
-        aux_lines = self.aux_file_text.split('\n')
-        line, col = len(aux_lines) - 1, len(aux_lines[-1])
-        return Position(line, col)
 
     def __write_on_aux_file(self, text):
-        uri = f"file://{self.aux_path}"
-        self.aux_file_version += 1
-        last_position = self.__get_aux_file_position()
         self.aux_file_text += text
-        current_position = self.__get_aux_file_position()
-        range = Range(last_position, current_position)
-        # FIXME coq-lsp does not support SyncKind parcial yet
-
         with open(self.aux_path, 'a') as f:
             f.write(text)
-        
+    
+    def __call_didChange(self):
+        self.aux_file_version += 1
+        uri = f"file://{self.aux_path}"
         self.coq_lsp_client.didChange(VersionedTextDocumentIdentifier(uri, self.aux_file_version), 
                                       [TextDocumentContentChangeEvent(None, None, self.aux_file_text)])
 
-    def __command(self, keyword, search):
-        res = None
+    def __command(self, keywords, search):
+        res = []
         uri = f"file://{self.aux_path}"
 
-        command = f'\n{keyword} {search}.'
-        self.__write_on_aux_file(command)
+        for keyword in keywords:
+            command = f'\n{keyword} {search}.'
+            self.__write_on_aux_file(command)
+        self.__call_didChange()
 
         # FIXME consider position
-        queries = self.coq_lsp_client.get_queries(TextDocumentIdentifier(uri), keyword)
-        for query in queries:
-            if query.query == f"{search}":
-                res = query.results[0]
-                break
+        for keyword in keywords:
+            kw_res = None
+            queries = self.coq_lsp_client.get_queries(TextDocumentIdentifier(uri), keyword)
+            for query in queries:
+                if query.query == f"{search}":
+                    kw_res = query.results[0]
+                    break
+            res.append(kw_res)
 
-        return res
+        return tuple(res)
     
     def __compute(self, search):
-        res_print = self.__command('Print', f"{search}")
-        res_compute = self.__command('Compute', f"{search}")
+        res_print, res_compute = self.__command(('Print', 'Compute'), f"{search}")
 
         if res_print is None: return None
         definition = res_print.split()
@@ -89,7 +84,7 @@ class ProofState(object):
         return ' '.join(definition)
     
     def __locate(self, search):
-        nots = self.__command('Locate', f"\"{search}\"").split('\n')
+        nots = self.__command(('Locate',), f"\"{search}\"")[0].split('\n')
         fun = lambda x: x.endswith("(default interpretation)")
         if len(nots) > 1: return list(filter(fun, nots))[0][:-25]
         else: return nots[0][:-25] if fun(nots[0]) else nots[0]

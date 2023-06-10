@@ -51,14 +51,14 @@ class ProofState(object):
                                       [TextDocumentContentChangeEvent(None, None, self.aux_file_text)])
 
     def __command(self, keywords, search):
-        res = []
-        uri = f"file://{self.aux_path}"
-
         for keyword in keywords:
             command = f'\n{keyword} {search}.'
             self.__write_on_aux_file(command)
-        self.__call_didChange()
 
+    def __get_diagnostics(self, keywords, search):
+        res = []
+        uri = f"file://{self.aux_path}"
+    
         # FIXME consider position
         for keyword in keywords:
             kw_res = None
@@ -72,7 +72,7 @@ class ProofState(object):
         return tuple(res)
     
     def __compute(self, search):
-        res_print, res_compute = self.__command(('Print', 'Compute'), f"{search}")
+        res_print, res_compute = self.__get_diagnostics(('Print', 'Compute'), f"{search}")
 
         if res_print is None: return None
         definition = res_print.split()
@@ -84,7 +84,7 @@ class ProofState(object):
         return ' '.join(definition)
     
     def __locate(self, search):
-        nots = self.__command(('Locate',), f"\"{search}\"")[0].split('\n')
+        nots = self.__get_diagnostics(('Locate',), f"\"{search}\"")[0].split('\n')
         fun = lambda x: x.endswith("(default interpretation)")
         if len(nots) > 1: return list(filter(fun, nots))[0][:-25]
         else: return nots[0][:-25] if fun(nots[0]) else nots[0]
@@ -99,10 +99,11 @@ class ProofState(object):
                 return res
             elif isinstance(el, list) and len(el) == 3 and el[0] == 'Ser_Qualid':
                 id = '.'.join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
-                search = self.__compute(id)
-                return [search] if search else []
+                self.__command(("Print", "Compute"), id)
+                return [(self.__compute, id)]
             elif isinstance(el, list) and len(el) == 4 and el[0] == 'CNotation':
-                return [self.__locate(el[2][1])] + transverse_ast(el[1:])
+                self.__command(("Locate",), f"\"{el[2][1]}\"")
+                return [(self.__locate, el[2][1])] + transverse_ast(el[1:])
             elif isinstance(el, list):
                 res = []
                 for v in el:
@@ -157,15 +158,29 @@ class ProofState(object):
             return None
 
         steps = []
+        aux_steps = []
         while self.in_proof:
             goals = self.__step_goals()
             line = self.current_step['range']['end']['line']
             character = self.current_step['range']['end']['character']
 
             self.exec()
-            context = self.__step_context()
+            context_calls = self.__step_context()
             text = self.__step_text(line, character)
-            steps.append(Step(text, goals, context))
+            aux_steps.append((text, goals, context_calls))
+
+        self.__call_didChange()
+        for aux_step in aux_steps:
+            context = []
+            if aux_step[2] is None:
+                context = None
+            else:
+                for context_call in aux_step[2]:
+                    context.append(context_call[0](*context_call[1:]))
+                filtered, context = filter(lambda x: x is not None, context), []
+                [context.append(x) for x in filtered if x not in context]
+            steps.append(Step(aux_step[0], aux_step[1], context))
+        
         return steps
     
     def get_current_theorem(self):

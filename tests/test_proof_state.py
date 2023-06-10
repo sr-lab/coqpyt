@@ -24,7 +24,7 @@ def teardown():
 @pytest.mark.parametrize('setup', ['test_proof_steps.v'], indirect=True)
 def test_proof_steps(setup, teardown):
     proof_steps = state.proof_steps()
-    assert len(proof_steps) == 10
+    assert len(proof_steps) == 2
 
     texts = [
         '\n      intros n.',
@@ -49,9 +49,9 @@ def test_proof_steps(setup, teardown):
     ]
     
     for i in range(5):
-        assert proof_steps[i].text == texts[i]
-        assert str(proof_steps[i].goals) == str(goals[i])
-        assert proof_steps[i].context == contexts[i]
+        assert proof_steps[0][i].text == texts[i]
+        assert str(proof_steps[0][i].goals) == str(goals[i])
+        assert proof_steps[0][i].context == contexts[i]
 
     texts = [
         '\n  intros n m.',
@@ -75,7 +75,7 @@ def test_proof_steps(setup, teardown):
         None
     ]
 
-    for i in range(5, 10):
-        assert proof_steps[i].text == texts[i - 5]
-        assert str(proof_steps[i].goals) == str(goals[i - 5])
-        assert proof_steps[i].context == contexts[i - 5]
+    for i in range(5):
+        assert proof_steps[1][i].text == texts[i]
+        assert str(proof_steps[1][i].goals) == str(goals[i])
+        assert proof_steps[1][i].context == contexts[i]

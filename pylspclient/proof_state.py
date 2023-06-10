@@ -188,26 +188,29 @@ class ProofState(object):
             self.exec()
 
     def proof_steps(self):
-        aux_steps = []
+        aux_proofs = []
         while len(self.ast) > 0:
             self.exec()
             if self.in_proof:
-                aux_steps.extend(self.__next_steps())
+                aux_proofs.append(self.__next_steps())
         
-        steps = []
+        proofs = []
         self.__call_didChange()
-        for aux_step in aux_steps:
-            context = []
-            if aux_step[2] is None:
-                context = None
-            else:
-                for context_call in aux_step[2]:
-                    context.append(context_call[0](*context_call[1:]))
-                filtered, context = filter(lambda x: x is not None, context), []
-                [context.append(x) for x in filtered if x not in context]
-            steps.append(Step(aux_step[0], aux_step[1], context))
+        for aux_proof_steps in aux_proofs:
+            proof_steps = []
+            for step in aux_proof_steps:
+                context = []
+                if step[2] is None:
+                    context = None
+                else:
+                    for context_call in step[2]:
+                        context.append(context_call[0](*context_call[1:]))
+                    filtered, context = filter(lambda x: x is not None, context), []
+                    [context.append(x) for x in filtered if x not in context]
+                proof_steps.append(Step(step[0], step[1], context))
+            proofs.append(proof_steps)
         
-        return steps
+        return proofs
 
     def close(self):
         self.coq_lsp_client.shutdown()

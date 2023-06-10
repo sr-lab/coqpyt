@@ -2,7 +2,6 @@ import os
 import pytest
 from pylspclient.lsp_structs import *
 from pylspclient.coq_lsp_structs import *
-from pylspclient.coq_lsp_client import CoqLspClient
 from pylspclient.proof_state import ProofState
 
 versionId: VersionedTextDocumentIdentifier = None
@@ -22,8 +21,11 @@ def teardown():
     yield
     state.close()
 
-@pytest.mark.parametrize('setup', ['test_next_steps.v'], indirect=True)
-def test_next_steps(setup, teardown):
+@pytest.mark.parametrize('setup', ['test_proof_steps.v'], indirect=True)
+def test_proof_steps(setup, teardown):
+    proof_steps = state.proof_steps()
+    assert len(proof_steps) == 10
+
     texts = [
         '\n      intros n.',
         '\n      Print plus.',
@@ -46,14 +48,10 @@ def test_next_steps(setup, teardown):
         None
     ]
     
-    state.jump_to_proof()
-    next_steps = state.next_steps()
-    assert len(next_steps) == 5
     for i in range(5):
-        assert next_steps[i].text == texts[i]
-        assert str(next_steps[i].goals) == str(goals[i])
-        assert next_steps[i].context == contexts[i]
-
+        assert proof_steps[i].text == texts[i]
+        assert str(proof_steps[i].goals) == str(goals[i])
+        assert proof_steps[i].context == contexts[i]
 
     texts = [
         '\n  intros n m.',
@@ -77,10 +75,7 @@ def test_next_steps(setup, teardown):
         None
     ]
 
-    state.jump_to_proof()
-    next_steps = state.next_steps()
-    assert len(next_steps) == 5
-    for i in range(5):
-        assert next_steps[i].text == texts[i]
-        assert str(next_steps[i].goals) == str(goals[i])
-        assert next_steps[i].context == contexts[i]
+    for i in range(5, 10):
+        assert proof_steps[i].text == texts[i - 5]
+        assert str(proof_steps[i].goals) == str(goals[i - 5])
+        assert proof_steps[i].context == contexts[i - 5]

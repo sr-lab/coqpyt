@@ -34,6 +34,7 @@ class ProofState(object):
         self.coq_lsp_client.didOpen(TextDocumentItem(f"file://{self.aux_path}", 'coq', 1, ''))
 
     def __get_expr(self, ast_step):
+        if 'span' not in ast_step: return [None]
         return ast_step['span']['v']['expr']
     
     def __get_theorem_name(self, expr):
@@ -153,11 +154,10 @@ class ProofState(object):
             elif expr[0] == 'VernacEndProof':
                 self.in_proof = False
 
-    def next_steps(self):
+    def __next_steps(self):
         if not self.in_proof:
             return None
 
-        steps = []
         aux_steps = []
         while self.in_proof:
             goals = self.__step_goals()
@@ -169,20 +169,8 @@ class ProofState(object):
             text = self.__step_text(line, character)
             aux_steps.append((text, goals, context_calls))
 
-        self.__call_didChange()
-        for aux_step in aux_steps:
-            context = []
-            if aux_step[2] is None:
-                context = None
-            else:
-                for context_call in aux_step[2]:
-                    context.append(context_call[0](*context_call[1:]))
-                filtered, context = filter(lambda x: x is not None, context), []
-                [context.append(x) for x in filtered if x not in context]
-            steps.append(Step(aux_step[0], aux_step[1], context))
-        
-        return steps
-    
+        return aux_steps
+
     def get_current_theorem(self):
         expr = self.__get_expr(self.current_step)
         if expr[0] != 'VernacStartTheoremProof':
@@ -200,12 +188,26 @@ class ProofState(object):
             self.exec()
 
     def proof_steps(self):
-        res = []
+        aux_steps = []
         while len(self.ast) > 0:
             self.exec()
             if self.in_proof:
-                res.extend(self.next_steps())
-        return res
+                aux_steps.extend(self.__next_steps())
+        
+        steps = []
+        self.__call_didChange()
+        for aux_step in aux_steps:
+            context = []
+            if aux_step[2] is None:
+                context = None
+            else:
+                for context_call in aux_step[2]:
+                    context.append(context_call[0](*context_call[1:]))
+                filtered, context = filter(lambda x: x is not None, context), []
+                [context.append(x) for x in filtered if x not in context]
+            steps.append(Step(aux_step[0], aux_step[1], context))
+        
+        return steps
 
     def close(self):
         self.coq_lsp_client.shutdown()

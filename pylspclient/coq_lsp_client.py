@@ -102,6 +102,20 @@ class CoqLspClient(LspClient):
 
         return res
     
+    def has_error(self, textDocument):
+        uri = textDocument.uri
+        if textDocument.uri.startswith('file://'):
+             uri = uri[7:]
+
+        if textDocument.uri not in self.lsp_endpoint.diagnostics:
+            return False
+
+        diagnostics = self.lsp_endpoint.diagnostics[textDocument.uri]
+        for diagnostic in diagnostics:
+            if diagnostic.severity == 1:
+                return True
+        return False
+
     def get_document(self, textDocument):
         result_dict = self.lsp_endpoint.call_method("coq/getDocument", textDocument=textDocument)
         return result_dict

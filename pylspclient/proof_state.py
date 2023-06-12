@@ -217,6 +217,10 @@ class ProofState(object):
         
         return proofs
 
+    def is_invalid(self):
+        uri = f"file://{self.path}"
+        return self.coq_lsp_client.has_error(TextDocumentIdentifier(uri))
+
     def close(self):
         self.coq_lsp_client.shutdown()
         self.coq_lsp_client.exit()

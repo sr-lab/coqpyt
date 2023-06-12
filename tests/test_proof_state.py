@@ -133,3 +133,18 @@ def test_proof_steps(setup, teardown):
         assert proof_steps[3][i].text == texts[i]
         assert str(proof_steps[3][i].goals) == str(goals[i])
         assert proof_steps[3][i].context == contexts[i]
+
+@pytest.mark.parametrize('setup', ['test_is_invalid_1.v'], indirect=True)
+def test_is_invalid_1(setup, teardown):
+    found_error = state.is_invalid()
+    assert found_error == True
+
+@pytest.mark.parametrize('setup', ['test_is_invalid_2.v'], indirect=True)
+def test_is_invalid_2(setup, teardown):
+    found_error = state.is_invalid()
+    assert found_error == True
+
+@pytest.mark.parametrize('setup', ['test_is_valid.v'], indirect=True)
+def test_is_valid(setup, teardown):
+    found_error = state.is_invalid()
+    assert found_error == False

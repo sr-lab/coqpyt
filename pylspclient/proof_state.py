@@ -103,12 +103,12 @@ class ProofState(object):
                 return res
             elif isinstance(el, list) and len(el) == 3 and el[0] == 'Ser_Qualid':
                 id = '.'.join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
+                first_line = len(self.aux_file_text.split('\n'))
                 self.__command(("Print", "Compute"), id)
-                first_line = len(self.aux_file_text.split('\n')) - 2
                 return [(self.__compute, id, first_line)]
             elif isinstance(el, list) and len(el) == 4 and el[0] == 'CNotation':
+                line = len(self.aux_file_text.split('\n'))
                 self.__command(("Locate",), f"\"{el[2][1]}\"")
-                line = len(self.aux_file_text.split('\n')) - 1
                 return [(self.__locate, el[2][1], line)] + transverse_ast(el[1:])
             elif isinstance(el, list):
                 res = []

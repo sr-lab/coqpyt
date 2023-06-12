@@ -56,24 +56,27 @@ class ProofState(object):
             command = f'\n{keyword} {search}.'
             self.__write_on_aux_file(command)
 
-    def __get_diagnostics(self, keywords, search):
+    def __get_diagnostics(self, keywords, search, line):
         res = []
         uri = f"file://{self.aux_path}"
     
-        # FIXME consider position
         for keyword in keywords:
             kw_res = None
             queries = self.coq_lsp_client.get_queries(TextDocumentIdentifier(uri), keyword)
             for query in queries:
                 if query.query == f"{search}":
-                    kw_res = query.results[0]
+                    for result in query.results:
+                        if result.range['start']['line'] == line:
+                            kw_res = result.message
+                            break
                     break
             res.append(kw_res)
+            line += 1
 
         return tuple(res)
     
-    def __compute(self, search):
-        res_print, res_compute = self.__get_diagnostics(('Print', 'Compute'), f"{search}")
+    def __compute(self, search, line):
+        res_print, res_compute = self.__get_diagnostics(('Print', 'Compute'), f"{search}", line)
 
         if res_print is None: return None
         definition = res_print.split()
@@ -84,8 +87,8 @@ class ProofState(object):
         
         return ' '.join(definition)
     
-    def __locate(self, search):
-        nots = self.__get_diagnostics(('Locate',), f"\"{search}\"")[0].split('\n')
+    def __locate(self, search, line):
+        nots = self.__get_diagnostics(('Locate',), f"\"{search}\"", line)[0].split('\n')
         fun = lambda x: x.endswith("(default interpretation)")
         if len(nots) > 1: return list(filter(fun, nots))[0][:-25]
         else: return nots[0][:-25] if fun(nots[0]) else nots[0]
@@ -101,10 +104,12 @@ class ProofState(object):
             elif isinstance(el, list) and len(el) == 3 and el[0] == 'Ser_Qualid':
                 id = '.'.join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
                 self.__command(("Print", "Compute"), id)
-                return [(self.__compute, id)]
+                first_line = len(self.aux_file_text.split('\n')) - 2
+                return [(self.__compute, id, first_line)]
             elif isinstance(el, list) and len(el) == 4 and el[0] == 'CNotation':
                 self.__command(("Locate",), f"\"{el[2][1]}\"")
-                return [(self.__locate, el[2][1])] + transverse_ast(el[1:])
+                line = len(self.aux_file_text.split('\n')) - 1
+                return [(self.__locate, el[2][1], line)] + transverse_ast(el[1:])
             elif isinstance(el, list):
                 res = []
                 for v in el:

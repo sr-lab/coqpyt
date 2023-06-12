@@ -94,7 +94,7 @@ class CoqLspClient(LspClient):
                     query = command[len(keyword) + 1:-1]
                     if query not in searches:
                          searches[query] = []
-                    searches[query].append(diagnostic.message)
+                    searches[query].append(coq_lsp_structs.Result(diagnostic.range, diagnostic.message))
 
             res = []
             for query, results in searches.items():

@@ -54,6 +54,12 @@ class GoalAnswer(object):
         return str(recursive_vars(self))
     
 
+class Result(object):
+    def __init__(self, range, message):
+        self.range = range
+        self.message = message
+    
+
 class Query(object):
     def __init__(self, query, results):
         self.query = query

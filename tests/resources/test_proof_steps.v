@@ -24,11 +24,13 @@ Proof.
 Qed.
 
 Module Extra.
+  Record example := mk_example { fst : nat; snd : nat }.
+
   Theorem plus_O_n : forall n:nat, n = 0 + n.
   Proof.
     intros n.
-    Print plus.
-    Print Nat.add.
+    Compute mk_example n n.
+    Compute {| fst := n; snd := n |}.
     reduce_eq.
   Qed.
 
@@ -37,7 +39,7 @@ Module Extra.
   Proof.
     intros n m.
     rewrite <- (plus_O_n (S n * m)).
-    Compute True /\ True.
+    Compute Out.In.plus_O_n.
     reflexivity.
   Qed.
 End Extra.

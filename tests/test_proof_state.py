@@ -82,22 +82,22 @@ def test_proof_steps(setup, teardown):
 
     texts = [
         '\n    intros n.',
-        '\n    Print plus.',
-        '\n    Print Nat.add.',
+        '\n    Compute mk_example n n.',
+        '\n    Compute {| fst := n; snd := n |}.',
         '\n    reduce_eq.',
         '\n  Qed.'
     ]
     goals = [
-        GoalAnswer(versionId, Position(27, 8), [], GoalConfig([Goal([], '∀ n : nat, n = 0 + n')], [], [], [], None)),
-        GoalAnswer(versionId, Position(28, 13), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
-        GoalAnswer(versionId, Position(29, 15), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
-        GoalAnswer(versionId, Position(30, 18), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
-        GoalAnswer(versionId, Position(31, 14), [], GoalConfig([], [], [], [], None))
+        GoalAnswer(versionId, Position(29, 8), [], GoalConfig([Goal([], '∀ n : nat, n = 0 + n')], [], [], [], None)),
+        GoalAnswer(versionId, Position(30, 13), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
+        GoalAnswer(versionId, Position(31, 27), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
+        GoalAnswer(versionId, Position(32, 37), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
+        GoalAnswer(versionId, Position(33, 14), [], GoalConfig([], [], [], [], None))
     ]
     contexts = [
         [],
-        ['Notation plus := Nat.add'],
-        ['Nat.add = fix add (n m : nat) {struct n} : nat := match n with | 0 => m | S p => S (add p m) end : nat → nat → nat Arguments Nat.add (n m)%nat_scope'],
+        ['Record example : Set := mk_example { fst : nat; snd : nat }. Arguments mk_example (fst snd)%nat_scope'],
+        ['fst = λ e : example, let (fst, _) := e in fst : example → nat Arguments fst e', 'snd = λ e : example, let (_, snd) := e in snd : example → nat Arguments snd e'],
         ['Ltac reduce_eq := simpl; reflexivity'],
         None
     ]
@@ -110,21 +110,21 @@ def test_proof_steps(setup, teardown):
     texts = [
         '\n    intros n m.',
         '\n    rewrite <- (plus_O_n (S n * m)).',
-        '\n    Compute True /\\ True.',
+        '\n    Compute Out.In.plus_O_n.',
         '\n    reflexivity.',
         '\n  Qed.'
     ]
     goals = [
-        GoalAnswer(versionId, Position(36, 8), [], GoalConfig([Goal([], '∀ n m : nat, S n * m = 0 + S n * m')], [], [], [], None)),
-        GoalAnswer(versionId, Position(37, 15), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], 'S n * m = 0 + S n * m')], [], [], [], None)),
-        GoalAnswer(versionId, Position(38, 36), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], 'S n * m = S n * m')], [], [], [], None)),
-        GoalAnswer(versionId, Position(39, 25), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], 'S n * m = S n * m')], [], [], [], None)),
-        GoalAnswer(versionId, Position(40, 16), [], GoalConfig([], [], [], [], None))
+        GoalAnswer(versionId, Position(38, 8), [], GoalConfig([Goal([], '∀ n m : nat, S n * m = 0 + S n * m')], [], [], [], None)),
+        GoalAnswer(versionId, Position(39, 15), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], 'S n * m = 0 + S n * m')], [], [], [], None)),
+        GoalAnswer(versionId, Position(40, 36), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], 'S n * m = S n * m')], [], [], [], None)),
+        GoalAnswer(versionId, Position(41, 28), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], 'S n * m = S n * m')], [], [], [], None)),
+        GoalAnswer(versionId, Position(42, 16), [], GoalConfig([], [], [], [], None))
     ]
     contexts = [
         [],
         ['plus_O_n : ∀ n : nat, n = 0 + n', 'Notation "x * y" := (Nat.mul x y) : nat_scope', 'Inductive nat : Set := O : nat | S : nat → nat. Arguments S _%nat_scope'],
-        ['Notation "A /\\ B" := (and A B) : type_scope', 'Inductive True : Prop := I : True.'],
+        ['Out.In.plus_O_n : ∀ n : nat, 0 + n = n'],
         ['Ltac reflexivity := <coq-core.plugins.ltac::reflexivity@0>'],
         None
     ]

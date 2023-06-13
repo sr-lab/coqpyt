@@ -10,15 +10,20 @@ class ProofState(object):
         dir_uri = f"file://{os.path.dirname(file_path)}"
         file_uri = f"file://{file_path}"
         self.coq_lsp_client = CoqLspClient(dir_uri)
-        with open(file_path, 'r') as f:
-            self.lines = f.read().split('\n')
-            self.coq_lsp_client.didOpen(TextDocumentItem(file_uri, 'coq', 1, '\n'.join(self.lines)))
-        self.path = file_path
-        self.ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(file_uri))
-        self.ast = self.ast['spans']
-        self.current_step = None
-        self.in_proof = False
-        self.__init_aux_file()
+        try:
+            with open(file_path, 'r') as f:
+                self.lines = f.read().split('\n')
+                self.coq_lsp_client.didOpen(TextDocumentItem(file_uri, 'coq', 1, '\n'.join(self.lines)))
+            self.path = file_path
+            self.ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(file_uri))
+            self.ast = self.ast['spans']
+            self.current_step = None
+            self.in_proof = False
+            self.__init_aux_file()
+        except Exception as e:
+            self.coq_lsp_client.shutdown()
+            self.coq_lsp_client.exit()
+            raise e
 
     def __init_aux_file(self):
         dir = os.path.dirname(self.path)

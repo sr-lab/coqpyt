@@ -119,3 +119,10 @@ class CoqLspClient(LspClient):
     def get_document(self, textDocument):
         result_dict = self.lsp_endpoint.call_method("coq/getDocument", textDocument=textDocument)
         return result_dict
+    
+    def save_vo(self, textDocument):
+        """
+        The uri in the textDocument should contain an absolute path.
+        """
+        result_dict = self.lsp_endpoint.call_method("coq/saveVo", textDocument=textDocument)
+        return result_dict

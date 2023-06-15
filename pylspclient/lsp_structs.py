@@ -557,6 +557,8 @@ class ErrorCodes(enum.Enum):
 
 class ResponseError(Exception):
     def __init__(self, code, message, data = None):
+        if isinstance(code, ErrorCodes):
+            code = code.value
         self.code = code
         self.message = message
         if data:

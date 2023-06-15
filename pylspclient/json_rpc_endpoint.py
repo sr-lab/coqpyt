@@ -29,7 +29,8 @@ class JsonRpcEndpoint(object):
         self.stdin = stdin
         self.stdout = stdout
         self.read_lock = threading.Lock() 
-        self.write_lock = threading.Lock() 
+        self.write_lock = threading.Lock()
+        self.message_size = None
 
     @staticmethod
     def __add_header(json_string):
@@ -62,7 +63,11 @@ class JsonRpcEndpoint(object):
         :return: a message
         '''
         with self.read_lock:
-            message_size = None
+            if self.message_size:
+                if self.message_size.isdigit():
+                    self.message_size = int(self.message_size)
+                else:
+                    raise lsp_structs.ResponseError(lsp_structs.ErrorCodes.ParseError, "Bad header: size is not int")
             while True:
                 #read header
                 line = self.stdout.readline()
@@ -81,14 +86,17 @@ class JsonRpcEndpoint(object):
                     line = line[len(LEN_HEADER):]
                     if not line.isdigit():
                         raise lsp_structs.ResponseError(lsp_structs.ErrorCodes.ParseError, "Bad header: size is not int")
-                    message_size = int(line)
+                    self.message_size = int(line)
                 elif line.startswith(TYPE_HEADER):
                     # nothing todo with type for now.
                     pass
                 else:
+                    line = line.split(LEN_HEADER)
+                    if len(line) == 2: self.message_size = line[1]
                     raise lsp_structs.ResponseError(lsp_structs.ErrorCodes.ParseError, "Bad header: unkown header")
-            if not message_size:
+            if not self.message_size:
                 raise lsp_structs.ResponseError(lsp_structs.ErrorCodes.ParseError, "Bad header: missing size")
 
-            jsonrpc_res = self.stdout.read(message_size).decode("utf-8")
+            jsonrpc_res = self.stdout.read(self.message_size).decode("utf-8")
+            self.message_size = None
             return json.loads(jsonrpc_res)

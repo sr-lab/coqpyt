@@ -1,7 +1,7 @@
 import os
 import uuid
 from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier, VersionedTextDocumentIdentifier
-from pylspclient.lsp_structs import TextDocumentContentChangeEvent, Position, Range
+from pylspclient.lsp_structs import TextDocumentContentChangeEvent, Position, ResponseError, ErrorCodes
 from pylspclient.coq_lsp_structs import Step
 from pylspclient.coq_lsp_client import CoqLspClient
 
@@ -22,8 +22,9 @@ class ProofState(object):
             self.in_proof = False
             self.__init_aux_file()
         except Exception as e:
-            self.coq_lsp_client.shutdown()
-            self.coq_lsp_client.exit()
+            if not isinstance(e, ResponseError) or e.code != ErrorCodes.ServerQuit.value:
+                self.coq_lsp_client.shutdown()
+                self.coq_lsp_client.exit()
             raise e
 
     def __init_aux_file(self):

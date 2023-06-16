@@ -58,7 +58,7 @@ class JsonRpcEndpoint(object):
 
     def recv_response(self):
         '''        
-        Recives a message.
+        Receives a message.
 
         :return: a message
         '''
@@ -93,7 +93,7 @@ class JsonRpcEndpoint(object):
                 else:
                     line = line.split(LEN_HEADER)
                     if len(line) == 2: self.message_size = line[1]
-                    raise lsp_structs.ResponseError(lsp_structs.ErrorCodes.ParseError, "Bad header: unkown header")
+                    raise lsp_structs.ResponseError(lsp_structs.ErrorCodes.ParseError, "Bad header: unknown header")
             if not self.message_size:
                 raise lsp_structs.ResponseError(lsp_structs.ErrorCodes.ParseError, "Bad header: missing size")
 

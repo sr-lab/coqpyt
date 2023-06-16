@@ -1,5 +1,6 @@
 import time
 import subprocess
+import sys
 from pylspclient.json_rpc_endpoint import JsonRpcEndpoint
 from pylspclient.lsp_endpoint import LspEndpoint
 from pylspclient.lsp_client import LspClient
@@ -23,7 +24,10 @@ class CoqLspClient(LspClient):
 
     def didOpen(self, textDocument: lsp_structs.TextDocumentItem):
         super().didOpen(textDocument)
-        while self.lsp_endpoint.completed_operation != True:
+        while not self.lsp_endpoint.completed_operation:
+            if self.lsp_endpoint.shutdown_flag:
+                # FIXME: Maybe raise an exception instead?
+                sys.exit(-1)
             time.sleep(0.1)
 
     def didChange(self, textDocument: lsp_structs.VersionedTextDocumentIdentifier, 

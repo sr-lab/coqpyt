@@ -37,6 +37,7 @@ class LspEndpoint(threading.Thread):
                 jsonrpc_message = self.json_rpc_endpoint.recv_response()
                 if jsonrpc_message is None:
                     print("server quit")
+                    self.shutdown_flag = True
                     break
                 method = jsonrpc_message.get("method")
                 result = jsonrpc_message.get("result")

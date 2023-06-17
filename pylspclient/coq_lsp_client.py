@@ -23,10 +23,17 @@ class CoqLspClient(LspClient):
 
     def didOpen(self, textDocument: lsp_structs.TextDocumentItem):
         super().didOpen(textDocument)
-        while not self.lsp_endpoint.completed_operation:
+        timeout = self.lsp_endpoint.timeout
+        while not self.lsp_endpoint.completed_operation and timeout > 0:
             if self.lsp_endpoint.shutdown_flag:
                 raise lsp_structs.ResponseError(lsp_structs.ErrorCodes.ServerQuit, "Server quit")
             time.sleep(0.1)
+            timeout -= 0.1
+
+        if timeout <= 0:
+            self.shutdown()
+            self.exit()
+            raise lsp_structs.ResponseError(lsp_structs.ErrorCodes.ServerQuit, "Server quit")
 
     def didChange(self, textDocument: lsp_structs.VersionedTextDocumentIdentifier, 
                   contentChanges: list[lsp_structs.TextDocumentContentChangeEvent]):

@@ -14,7 +14,7 @@ class LspEndpoint(threading.Thread):
         self.response_dict = {}
         self.next_id = 0
         self.completed_operation = False
-        self._timeout = timeout
+        self.timeout = timeout
         self.shutdown_flag = False
         self.diagnostics = {}
 
@@ -105,8 +105,7 @@ class LspEndpoint(threading.Thread):
         self.send_message(method_name, kwargs, current_id)
         if self.shutdown_flag:
             return None
-
-        if not cond.wait(timeout=self._timeout):
+        if not cond.wait(timeout=self.timeout):
             raise TimeoutError()
         cond.release()
 

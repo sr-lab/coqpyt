@@ -22,7 +22,7 @@ class MyEncoder(json.JSONEncoder):
 
 class JsonRpcEndpoint(object):
     '''
-    Thread safe JSON RPC endpoint implementation. Responsible to recieve and send JSON RPC messages, as described in the
+    Thread safe JSON RPC endpoint implementation. Responsible to receive and send JSON RPC messages, as described in the
     protocol. More information can be found: https://www.jsonrpc.org/
     '''
     def __init__(self, stdin, stdout):

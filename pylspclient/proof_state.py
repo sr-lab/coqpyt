@@ -7,9 +7,8 @@ from pylspclient.coq_lsp_client import CoqLspClient
 
 class ProofState(object):
     def __init__(self, file_path, timeout=2):
-        dir_uri = f"file://{os.path.dirname(file_path)}"
         file_uri = f"file://{file_path}"
-        self.coq_lsp_client = CoqLspClient(dir_uri)
+        self.coq_lsp_client = CoqLspClient(file_uri)
         self.coq_lsp_client.lsp_endpoint.timeout = timeout
         try:
             with open(file_path, 'r') as f:

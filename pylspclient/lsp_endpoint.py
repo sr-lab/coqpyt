@@ -57,15 +57,13 @@ class LspEndpoint(threading.Thread):
                         if method not in self.notify_callbacks:
                             # Default method
                             logging.debug("received message:", params)
-                            if 'message' in params:
-                                # Checks if didOpen operation was completed
-                                if params['message'].startswith('[check]: done'):
-                                    self.completed_operation = True
                             if 'diagnostics' in params:
                                 for diagnostic in params['diagnostics']:
                                     if params['uri'] not in self.diagnostics:
                                         self.diagnostics[params['uri']] = []
                                     self.diagnostics[params['uri']].append(lsp_structs.Diagnostic(**diagnostic))
+                                # Marks didOpen operation as completed
+                                self.completed_operation = True
                         else:
                             self.notify_callbacks[method](params)
                 else:

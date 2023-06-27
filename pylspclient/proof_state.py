@@ -138,8 +138,8 @@ class ProofState(object):
         end_line = self.current_step['range']['end']['line']
         end_character = self.current_step['range']['end']['character']
         lines = self.lines[start_line:end_line + 1]
-        lines[0] = lines[0][start_character:]
         lines[-1] = lines[-1][:end_character + 1]
+        lines[0] = lines[0][start_character:]
         return '\n'.join(lines)
 
     def exec(self, steps=1):

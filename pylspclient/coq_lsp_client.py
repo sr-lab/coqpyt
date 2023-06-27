@@ -16,7 +16,11 @@ class CoqLspClient(LspClient):
         self.initialize(
             proc.pid, '', 
             root_uri, 
-            { "show_coq_info_messages": True, "eager_diagnostics": False }, 
+            { 
+                "max_errors": 120000000,
+                "show_coq_info_messages": True,
+                "eager_diagnostics": False 
+            }, 
             {}, 'off', workspaces
         )
         self.initialized()

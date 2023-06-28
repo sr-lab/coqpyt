@@ -8,7 +8,7 @@ from pylspclient import coq_lsp_structs
 
 class CoqLspClient(LspClient):
     def __init__(self, root_uri):
-        proc = subprocess.Popen('coq-lsp', stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+        proc = subprocess.Popen('ulimit -v 2097152; coq-lsp', stdout=subprocess.PIPE, stdin=subprocess.PIPE)
         json_rpc_endpoint = JsonRpcEndpoint(proc.stdin, proc.stdout)
         lsp_endpoint = LspEndpoint(json_rpc_endpoint)
         super().__init__(lsp_endpoint)

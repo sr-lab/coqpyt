@@ -149,8 +149,11 @@ class ProofState(object):
                          self.current_step['range']['end']['character'])
             else:
                 end_previous = (0, 0)
+
+            if len(self.ast) == 0: 
+                self.in_proof = False
+                break
             self.current_step = self.ast.pop(0)
-            if self.current_step is None: break
 
             text = self.__step_text(end_previous[0], end_previous[1])
             self.__write_on_aux_file(text)

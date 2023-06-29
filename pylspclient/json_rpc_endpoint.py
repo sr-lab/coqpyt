@@ -1,6 +1,6 @@
 from __future__ import print_function
 import json
-import re
+import logging
 from pylspclient import lsp_structs
 import threading
 
@@ -49,11 +49,14 @@ class JsonRpcEndpoint(object):
 
         :param dict message: The message to send.            
         '''
-        json_string = json.dumps(message, cls=MyEncoder)
-        jsonrpc_req = self.__add_header(json_string)
-        with self.write_lock:
-            self.stdin.write(jsonrpc_req.encode())
-            self.stdin.flush()
+        try:
+            json_string = json.dumps(message, cls=MyEncoder)
+            jsonrpc_req = self.__add_header(json_string)
+            with self.write_lock:
+                self.stdin.write(jsonrpc_req.encode())
+                self.stdin.flush()
+        except BrokenPipeError as e:
+            logging.error(e)
 
 
     def recv_response(self):

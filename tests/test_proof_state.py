@@ -42,8 +42,8 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
-        ['Notation plus := Nat.add'],
-        ['Nat.add = fix add (n m : nat) {struct n} : nat := match n with | 0 => m | S p => S (add p m) end : nat → nat → nat Arguments Nat.add (n m)%nat_scope'],
+        [],
+        [],
         ['Ltac reduce_eq := simpl; reflexivity'],
         None
     ]
@@ -69,9 +69,9 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
-        ['plus_O_n : ∀ n : nat, 0 + n = n', 'Notation "x * y" := (Nat.mul x y) : nat_scope', 'Inductive nat : Set := O : nat | S : nat → nat. Arguments S _%nat_scope'],
-        ['Notation "A /\\ B" := (and A B) : type_scope', 'Inductive True : Prop := I : True.'],
-        ['Ltac reflexivity := <coq-core.plugins.ltac::reflexivity@0>'],
+        ['Notation "x * y" := (Nat.mul x y) : nat_scope'],
+        ['Notation "A /\\ B" := (and A B) : type_scope'],
+        [],
         None
     ]
 
@@ -123,9 +123,9 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
-        ['plus_O_n : ∀ n : nat, n = 0 + n', 'Notation "x * y" := (Nat.mul x y) : nat_scope', 'Inductive nat : Set := O : nat | S : nat → nat. Arguments S _%nat_scope'],
+        ['plus_O_n : ∀ n : nat, n = 0 + n', 'Notation "x * y" := (Nat.mul x y) : nat_scope'],
         ['Out.In.plus_O_n : ∀ n : nat, 0 + n = n'],
-        ['Ltac reflexivity := <coq-core.plugins.ltac::reflexivity@0>'],
+        [],
         None
     ]
 

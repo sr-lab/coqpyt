@@ -78,16 +78,17 @@ class ProofState(object):
         return tuple(res)
     
     def __compute(self, search, line):
-        res_print, res_compute = self.__get_diagnostics(('Print', 'Compute'), f"{search}", line)
+        res = self.__get_diagnostics(('Locate', 'Print', 'Compute'), f"{search}", line)
+        if res[0].split()[1].startswith('Coq.Init.'): return None
 
-        if res_print is None: return None
-        definition = res_print.split()
-        if res_compute is None: return ' '.join(definition)
-        theorem = res_compute.split()
-        if theorem[1] == search and definition[1] != search:
-            return ' '.join(theorem[1:])
+        if res[1] is None: return None
+        res_print = res[1].split()
+        if res[2] is None: return ' '.join(res_print)
+        res_compute = res[2].split()
+        if res_compute[1] == search and res_print[1] != search:
+            return ' '.join(res_compute[1:])
         
-        return ' '.join(definition)
+        return ' '.join(res_print)
     
     def __locate(self, search, line):
         nots = self.__get_diagnostics(('Locate',), f"\"{search}\"", line)[0].split('\n')
@@ -106,7 +107,7 @@ class ProofState(object):
             elif isinstance(el, list) and len(el) == 3 and el[0] == 'Ser_Qualid':
                 id = '.'.join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
                 first_line = len(self.aux_file_text.split('\n'))
-                self.__command(("Print", "Compute"), id)
+                self.__command(("Locate", "Print", "Compute"), id)
                 return [(self.__compute, id, first_line)]
             elif isinstance(el, list) and len(el) == 4 and el[0] == 'CNotation':
                 line = len(self.aux_file_text.split('\n'))

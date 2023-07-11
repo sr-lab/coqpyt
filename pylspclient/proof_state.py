@@ -33,6 +33,7 @@ class ProofState(object):
             f"new{str(uuid.uuid4()).replace('-', '')}." + new_base_name[1]
         self.aux_path = os.path.join(dir, new_base_name)
         self.aux_file_text = ''
+        self.aux_file_version = 1
         with open(self.aux_path, 'w'):
             # Create empty file
             pass
@@ -52,6 +53,12 @@ class ProofState(object):
     def __call_didOpen(self):
         uri = f"file://{self.aux_path}"
         self.coq_lsp_client.didOpen(TextDocumentItem(uri, 'coq', 1, self.aux_file_text))
+
+    def __call_didChange(self):
+        self.aux_file_version += 1
+        uri = f"file://{self.aux_path}"
+        self.coq_lsp_client.didChange(VersionedTextDocumentIdentifier(uri, self.aux_file_version), 
+                                      [TextDocumentContentChangeEvent(None, None, self.aux_file_text)])
 
     def __command(self, keywords, search):
         for keyword in keywords:
@@ -204,9 +211,22 @@ class ProofState(object):
             self.exec()
             if self.in_proof:
                 aux_proofs.append(self.__next_steps())
-        
-        proofs = []
+        self.__write_on_aux_file('\nPrint Libraries.')
         self.__call_didOpen()
+
+        last_line = len(self.aux_file_text.split('\n')) - 1
+        libraries = self.__get_diagnostics(('Print Libraries',), 
+                                           '', 
+                                           last_line)[0]
+        libraries = list(map(lambda line: line.strip(), libraries.split('\n')[1:-1]))
+        for library in libraries:
+            self.__write_on_aux_file(f'\nLocate Library {library}.')
+        self.__call_didChange()
+        for i, library in enumerate(libraries):
+            v_file = self.__get_diagnostics(('Locate Library',), library, last_line + i + 1)[0]
+            v_file = v_file.split('\n')[-1][:-1]
+
+        proofs = []
         for aux_proof_steps in aux_proofs:
             proof_steps = []
             for step in aux_proof_steps:

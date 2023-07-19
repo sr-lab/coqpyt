@@ -1,5 +1,7 @@
 import os
+import shutil
 import uuid
+import tempfile
 from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier, VersionedTextDocumentIdentifier
 from pylspclient.lsp_structs import TextDocumentContentChangeEvent, Position, ResponseError, ErrorCodes
 from pylspclient.coq_lsp_structs import Step
@@ -39,8 +41,16 @@ class ProofState(object):
             pass
 
     def __get_expr(self, ast_step):
-        if 'span' not in ast_step: return [None]
-        return ast_step['span']['v']['expr']
+        if (
+            isinstance(ast_step, dict)
+            and 'span' in ast_step
+            and isinstance(ast_step['span'], dict)
+            and 'v' in ast_step['span']
+            and isinstance(ast_step['span']['v'], dict)
+            and 'expr' in ast_step['span']['v']
+        ):
+            return ast_step['span']['v']['expr']
+        return [None]
     
     def __get_theorem_name(self, expr):
         return expr[2][0][0][0]['v'][1]
@@ -205,6 +215,37 @@ class ProofState(object):
         while not self.in_proof and len(self.ast) > 0:
             self.exec()
 
+    def __get_symbols_library(self, file_path):
+        temp_dir = tempfile.gettempdir()
+        new_path = os.path.join(temp_dir, "aux_" + str(uuid.uuid4()).replace('-', '') + ".v")
+        shutil.copyfile(file_path, new_path)
+
+        file_uri = f"file://{new_path}"
+        coq_lsp_client = CoqLspClient(file_uri)
+        coq_lsp_client.lsp_endpoint.timeout = self.coq_lsp_client.lsp_endpoint.timeout
+        try:
+
+            with open(new_path, 'r') as f:
+                lines = f.read().split('\n')
+                coq_lsp_client.didOpen(TextDocumentItem(file_uri, 'coq', 1, '\n'.join(lines)))
+            ast = coq_lsp_client.get_document(TextDocumentIdentifier(file_uri))
+            for step in ast['spans']:
+                expr = self.__get_expr(step)
+                if expr == [None]:
+                    continue
+                if (
+                    len(expr) >= 2 
+                    and isinstance(expr[1], list) 
+                    and len(expr[1]) == 2 
+                    and expr[1][0] == "VernacDeclareTacticDefinition"
+                ):
+                    name = expr[2][0][2][0][1][0][1][1]
+                    print(name)
+        finally:
+            os.remove(new_path)
+            coq_lsp_client.shutdown()
+            coq_lsp_client.exit()
+
     def proof_steps(self):
         aux_proofs = []
         while len(self.ast) > 0:
@@ -225,6 +266,7 @@ class ProofState(object):
         for i, library in enumerate(libraries):
             v_file = self.__get_diagnostics(('Locate Library',), library, last_line + i + 1)[0]
             v_file = v_file.split('\n')[-1][:-1]
+            self.__get_symbols_library(v_file)
 
         proofs = []
         for aux_proof_steps in aux_proofs:

@@ -229,6 +229,7 @@ class ProofState(object):
                 lines = f.read().split('\n')
                 coq_lsp_client.didOpen(TextDocumentItem(file_uri, 'coq', 1, '\n'.join(lines)))
             ast = coq_lsp_client.get_document(TextDocumentIdentifier(file_uri))
+            module_path = []
             for step in ast['spans']:
                 expr = self.__get_expr(step)
                 if expr == [None]:
@@ -240,7 +241,13 @@ class ProofState(object):
                     and expr[1][0] == "VernacDeclareTacticDefinition"
                 ):
                     name = expr[2][0][2][0][1][0][1][1]
-                    print(name)
+                    print("TACTIC:", name)
+                elif expr[0] == 'VernacDefineModule':
+                    module_path.append(expr[2]['v'][1])
+                    print("PUSH:", module_path)
+                elif expr[0] == 'VernacEndSegment' and [expr[1]['v'][1]] == module_path[-1:]:
+                    module_path.pop()
+                    print("POP:", module_path)
         finally:
             os.remove(new_path)
             coq_lsp_client.shutdown()

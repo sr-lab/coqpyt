@@ -88,11 +88,11 @@ def test_proof_steps(setup, teardown):
         '\n  Qed.'
     ]
     goals = [
-        GoalAnswer(versionId, Position(31, 8), [], GoalConfig([Goal([], '∀ n : nat, n = 0 + n')], [], [], [], None)),
-        GoalAnswer(versionId, Position(32, 13), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
-        GoalAnswer(versionId, Position(33, 27), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
-        GoalAnswer(versionId, Position(34, 37), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
-        GoalAnswer(versionId, Position(35, 14), [], GoalConfig([], [], [], [], None))
+        GoalAnswer(versionId, Position(32, 8), [], GoalConfig([Goal([], '∀ n : nat, n = 0 + n')], [], [], [], None)),
+        GoalAnswer(versionId, Position(33, 13), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
+        GoalAnswer(versionId, Position(34, 27), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
+        GoalAnswer(versionId, Position(35, 37), [], GoalConfig([Goal([Hyp(['n'], 'nat', None)], 'n = 0 + n')], [], [], [], None)),
+        GoalAnswer(versionId, Position(36, 14), [], GoalConfig([], [], [], [], None))
     ]
     contexts = [
         [],
@@ -109,21 +109,21 @@ def test_proof_steps(setup, teardown):
 
     texts = [
         '\n    intros n m.',
-        '\n    rewrite <- (plus_O_n (S n * m)).',
+        '\n    rewrite <- (plus_O_n (|n| * m)).',
         '\n    Compute Out.In.plus_O_n.',
         '\n    reflexivity.',
         '\n  Qed.'
     ]
     goals = [
-        GoalAnswer(versionId, Position(40, 8), [], GoalConfig([Goal([], '∀ n m : nat, S n * m = 0 + S n * m')], [], [], [], None)),
-        GoalAnswer(versionId, Position(41, 15), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], 'S n * m = 0 + S n * m')], [], [], [], None)),
-        GoalAnswer(versionId, Position(42, 36), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], 'S n * m = S n * m')], [], [], [], None)),
-        GoalAnswer(versionId, Position(43, 28), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], 'S n * m = S n * m')], [], [], [], None)),
-        GoalAnswer(versionId, Position(44, 16), [], GoalConfig([], [], [], [], None))
+        GoalAnswer(versionId, Position(41, 8), [], GoalConfig([Goal([], '∀ n m : nat, | n | * m = 0 + | n | * m')], [], [], [], None)),
+        GoalAnswer(versionId, Position(42, 15), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], '| n | * m = 0 + | n | * m')], [], [], [], None)),
+        GoalAnswer(versionId, Position(43, 36), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], '| n | * m = | n | * m')], [], [], [], None)),
+        GoalAnswer(versionId, Position(44, 28), [], GoalConfig([Goal([Hyp(['n', 'm'], 'nat', None)], '| n | * m = | n | * m')], [], [], [], None)),
+        GoalAnswer(versionId, Position(45, 16), [], GoalConfig([], [], [], [], None))
     ]
     contexts = [
         [],
-        ['plus_O_n : ∀ n : nat, n = 0 + n', 'Notation "x * y" := (Nat.mul x y) : nat_scope'],
+        ['plus_O_n : ∀ n : nat, n = 0 + n', 'Notation "x * y" := (Nat.mul x y) : nat_scope', 'Notation "| a |" := (S a)'],
         ['Out.In.plus_O_n : ∀ n : nat, 0 + n = n'],
         [],
         None

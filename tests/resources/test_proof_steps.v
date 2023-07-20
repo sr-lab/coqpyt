@@ -27,6 +27,7 @@ End Random.
 
 Module Extra.
   Record example := mk_example { fst : nat; snd : nat }.
+  Notation "| a |" := (S a) (at level 30, right associativity).
 
   Theorem plus_O_n : forall n:nat, n = 0 + n.
   Proof.
@@ -40,7 +41,7 @@ Module Extra.
     S n * m = 0 + (S n * m).
   Proof.
     intros n m.
-    rewrite <- (plus_O_n (S n * m)).
+    rewrite <- (plus_O_n (|n| * m)).
     Compute Out.In.plus_O_n.
     reflexivity.
   Qed.

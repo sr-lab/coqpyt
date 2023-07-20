@@ -264,6 +264,10 @@ class ProofState(object):
                     name = expr[2][0][2][0][1][0][1][1]
                     name = '.'.join(module_path + [name])
                     print("TACTIC:", name)
+                elif expr[0] == 'VernacNotation':
+                    notation = expr[3][0]['v']
+                    if expr[1]: print("INFIX:", notation)
+                    else: print("NOTATION:", notation)
                 elif expr[0] == 'VernacDefineModule':
                     module_path.append(expr[2]['v'][1])
                     print("PUSH:", module_path)

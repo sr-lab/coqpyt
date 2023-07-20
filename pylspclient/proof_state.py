@@ -216,6 +216,27 @@ class ProofState(object):
             self.exec()
 
     def __get_symbols_library(self, file_path):
+        def transverse_ast(el):
+            if isinstance(el, dict):
+                if 'v' in el and isinstance(el['v'], list) and len(el['v']) == 2:
+                    if el['v'][0] == 'Id': return [el['v'][1]]
+                    if el['v'][0] == 'Name': return [el['v'][1][1]]
+
+                res = []
+                for k, v in el.items():
+                    res.extend(transverse_ast(k))
+                    res.extend(transverse_ast(v))
+                return res
+            elif isinstance(el, list):
+                if len(el) > 0 and el[0] == 'CLocalAssum': return []
+
+                res = []
+                for v in el:
+                    res.extend(transverse_ast(v))
+                return res
+
+            return []
+
         temp_dir = tempfile.gettempdir()
         new_path = os.path.join(temp_dir, "aux_" + str(uuid.uuid4()).replace('-', '') + ".v")
         shutil.copyfile(file_path, new_path)
@@ -241,13 +262,20 @@ class ProofState(object):
                     and expr[1][0] == "VernacDeclareTacticDefinition"
                 ):
                     name = expr[2][0][2][0][1][0][1][1]
+                    name = '.'.join(module_path + [name])
                     print("TACTIC:", name)
                 elif expr[0] == 'VernacDefineModule':
                     module_path.append(expr[2]['v'][1])
                     print("PUSH:", module_path)
-                elif expr[0] == 'VernacEndSegment' and [expr[1]['v'][1]] == module_path[-1:]:
+                elif expr[0] == 'VernacEndSegment':
+                    if [expr[1]['v'][1]] != module_path[-1:]:
+                        continue
                     module_path.pop()
                     print("POP:", module_path)
+                elif expr[0] != 'VernacBeginSection':
+                    names = transverse_ast(expr)
+                    names = ['.'.join(module_path + [n]) for n in names]
+                    if len(names) > 0: print("NAMES:", names)
         finally:
             os.remove(new_path)
             coq_lsp_client.shutdown()
@@ -273,6 +301,7 @@ class ProofState(object):
         for i, library in enumerate(libraries):
             v_file = self.__get_diagnostics(('Locate Library',), library, last_line + i + 1)[0]
             v_file = v_file.split('\n')[-1][:-1]
+            print("LIBRARY:", library)
             self.__get_symbols_library(v_file)
 
         proofs = []

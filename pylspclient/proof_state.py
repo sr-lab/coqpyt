@@ -237,6 +237,16 @@ class ProofState(object):
 
             return []
 
+        def step_text(step, lines):
+            start_line = step['range']['start']['line']
+            start_character = step['range']['start']['character']
+            end_line = step['range']['end']['line']
+            end_character = step['range']['end']['character']
+            lines = lines[start_line:end_line + 1]
+            lines[-1] = lines[-1][:end_character + 1]
+            lines[0] = lines[0][start_character:]
+            return ' '.join('\n'.join(lines).split())
+
         temp_dir = tempfile.gettempdir()
         new_path = os.path.join(temp_dir, "aux_" + str(uuid.uuid4()).replace('-', '') + ".v")
         shutil.copyfile(file_path, new_path)
@@ -251,8 +261,10 @@ class ProofState(object):
                 coq_lsp_client.didOpen(TextDocumentItem(file_uri, 'coq', 1, '\n'.join(lines)))
             ast = coq_lsp_client.get_document(TextDocumentIdentifier(file_uri))
             module_path = []
+            terms, notations = {}, []
             for step in ast['spans']:
                 expr = self.__get_expr(step)
+                text = step_text(step, lines)
                 if expr == [None]:
                     continue
                 if (
@@ -263,23 +275,20 @@ class ProofState(object):
                 ):
                     name = expr[2][0][2][0][1][0][1][1]
                     name = '.'.join(module_path + [name])
-                    print("TACTIC:", name)
+                    terms[name] = text
                 elif expr[0] == 'VernacNotation':
-                    notation = expr[3][0]['v']
-                    if expr[1]: print("INFIX:", notation)
-                    else: print("NOTATION:", notation)
+                    notations.append(text)
                 elif expr[0] == 'VernacDefineModule':
                     module_path.append(expr[2]['v'][1])
-                    print("PUSH:", module_path)
                 elif expr[0] == 'VernacEndSegment':
                     if [expr[1]['v'][1]] != module_path[-1:]:
                         continue
                     module_path.pop()
-                    print("POP:", module_path)
                 elif expr[0] != 'VernacBeginSection':
                     names = transverse_ast(expr)
                     names = ['.'.join(module_path + [n]) for n in names]
-                    if len(names) > 0: print("NAMES:", names)
+                    for name in names: terms[name] = text
+            return terms, notations
         finally:
             os.remove(new_path)
             coq_lsp_client.shutdown()
@@ -305,8 +314,9 @@ class ProofState(object):
         for i, library in enumerate(libraries):
             v_file = self.__get_diagnostics(('Locate Library',), library, last_line + i + 1)[0]
             v_file = v_file.split('\n')[-1][:-1]
-            print("LIBRARY:", library)
-            self.__get_symbols_library(v_file)
+            terms, notations = self.__get_symbols_library(v_file)
+            for k, v in terms.items(): print(k, '->', v)
+            for notation in notations: print(notation)
 
         proofs = []
         for aux_proof_steps in aux_proofs:

@@ -263,8 +263,11 @@ class ProofState(object):
             module_path = []
             terms, notations = {}, []
             for step in ast['spans']:
-                expr = self.__get_expr(step)
                 text = step_text(step, lines)
+                if text.startswith('Local'):
+                    continue
+
+                expr = self.__get_expr(step)
                 if expr == [None]:
                     continue
                 if (

@@ -9,7 +9,7 @@ state: ProofState = None
 
 @pytest.fixture
 def setup(request):
-    global lsp_client, state, versionId
+    global state, versionId
     file_path = os.path.join("tests/resources", request.param)
     uri = "file://" + file_path
     state = ProofState(file_path)

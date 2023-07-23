@@ -21,6 +21,8 @@ class ProofState(object):
             self.ast = self.ast['spans']
             self.current_step = None
             self.in_proof = False
+            self.terms = {}
+            self.notations = []
             self.__init_aux_file()
         except Exception as e:
             if not isinstance(e, ResponseError) or e.code != ErrorCodes.ServerQuit.value:
@@ -215,7 +217,17 @@ class ProofState(object):
         while not self.in_proof and len(self.ast) > 0:
             self.exec()
 
-    def __get_symbols_library(self, file_path):
+    def __process_step(self, module_path, step=None, lines=None):
+        def step_text(step, lines):
+            start_line = step['range']['start']['line']
+            start_character = step['range']['start']['character']
+            end_line = step['range']['end']['line']
+            end_character = step['range']['end']['character']
+            lines = lines[start_line:end_line + 1]
+            lines[-1] = lines[-1][:end_character + 1]
+            lines[0] = lines[0][start_character:]
+            return ' '.join('\n'.join(lines).split())
+        
         def transverse_ast(el):
             if isinstance(el, dict):
                 if 'v' in el and isinstance(el['v'], list) and len(el['v']) == 2:
@@ -236,17 +248,38 @@ class ProofState(object):
                 return res
 
             return []
+        
+        if step is None and lines is None:
+            step, lines = self.current_step, self.lines
+        
+        text = step_text(step, lines)
+        if text.startswith('Local'): return module_path
+        expr = self.__get_expr(step)
+        if expr == [None]: return module_path
 
-        def step_text(step, lines):
-            start_line = step['range']['start']['line']
-            start_character = step['range']['start']['character']
-            end_line = step['range']['end']['line']
-            end_character = step['range']['end']['character']
-            lines = lines[start_line:end_line + 1]
-            lines[-1] = lines[-1][:end_character + 1]
-            lines[0] = lines[0][start_character:]
-            return ' '.join('\n'.join(lines).split())
+        full_name = lambda name: '.'.join(module_path + [name])
+        if (
+            len(expr) >= 2 
+            and isinstance(expr[1], list) 
+            and len(expr[1]) == 2 
+            and expr[1][0] == "VernacDeclareTacticDefinition"
+        ):
+            name = expr[2][0][2][0][1][0][1][1]
+            self.terms[full_name(name)] = text
+        elif expr[0] == 'VernacNotation':
+            self.notations.append(text)
+        elif expr[0] == 'VernacDefineModule':
+            module_path.append(expr[2]['v'][1])
+        elif expr[0] == 'VernacEndSegment':
+            if [expr[1]['v'][1]] == module_path[-1:]:
+                module_path.pop()
+        elif expr[0] != 'VernacBeginSection':
+            names = transverse_ast(expr)
+            for name in names: self.terms[full_name(name)] = text
 
+        return module_path
+
+    def __get_symbols_library(self, file_path):
         temp_dir = tempfile.gettempdir()
         new_path = os.path.join(temp_dir, "aux_" + str(uuid.uuid4()).replace('-', '') + ".v")
         shutil.copyfile(file_path, new_path)
@@ -255,43 +288,13 @@ class ProofState(object):
         coq_lsp_client = CoqLspClient(file_uri)
         coq_lsp_client.lsp_endpoint.timeout = self.coq_lsp_client.lsp_endpoint.timeout
         try:
-
             with open(new_path, 'r') as f:
                 lines = f.read().split('\n')
                 coq_lsp_client.didOpen(TextDocumentItem(file_uri, 'coq', 1, '\n'.join(lines)))
             ast = coq_lsp_client.get_document(TextDocumentIdentifier(file_uri))
             module_path = []
-            terms, notations = {}, []
             for step in ast['spans']:
-                text = step_text(step, lines)
-                if text.startswith('Local'):
-                    continue
-
-                expr = self.__get_expr(step)
-                if expr == [None]:
-                    continue
-                if (
-                    len(expr) >= 2 
-                    and isinstance(expr[1], list) 
-                    and len(expr[1]) == 2 
-                    and expr[1][0] == "VernacDeclareTacticDefinition"
-                ):
-                    name = expr[2][0][2][0][1][0][1][1]
-                    name = '.'.join(module_path + [name])
-                    terms[name] = text
-                elif expr[0] == 'VernacNotation':
-                    notations.append(text)
-                elif expr[0] == 'VernacDefineModule':
-                    module_path.append(expr[2]['v'][1])
-                elif expr[0] == 'VernacEndSegment':
-                    if [expr[1]['v'][1]] != module_path[-1:]:
-                        continue
-                    module_path.pop()
-                elif expr[0] != 'VernacBeginSection':
-                    names = transverse_ast(expr)
-                    names = ['.'.join(module_path + [n]) for n in names]
-                    for name in names: terms[name] = text
-            return terms, notations
+                module_path = self.__process_step(module_path, step, lines)
         finally:
             os.remove(new_path)
             coq_lsp_client.shutdown()
@@ -299,10 +302,13 @@ class ProofState(object):
 
     def proof_steps(self):
         aux_proofs = []
+        module_path = []
         while len(self.ast) > 0:
             self.exec()
             if self.in_proof:
                 aux_proofs.append(self.__next_steps())
+            else:
+                module_path = self.__process_step(module_path)
         self.__write_on_aux_file('\nPrint Libraries.')
         self.__call_didOpen()
 
@@ -317,9 +323,10 @@ class ProofState(object):
         for i, library in enumerate(libraries):
             v_file = self.__get_diagnostics(('Locate Library',), library, last_line + i + 1)[0]
             v_file = v_file.split('\n')[-1][:-1]
-            terms, notations = self.__get_symbols_library(v_file)
-            for k, v in terms.items(): print(k, '->', v)
-            for notation in notations: print(notation)
+            self.__get_symbols_library(v_file)
+
+        for k, v in self.terms.items(): print(k, '->', v)
+        for notation in self.notations: print(notation)
 
         proofs = []
         for aux_proof_steps in aux_proofs:

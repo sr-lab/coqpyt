@@ -28,7 +28,7 @@ class Message(object):
 
 
 class GoalAnswer(object):
-    def __init__(self, textDocument, position, messages, goals=None, error=None, program=None):
+    def __init__(self, textDocument, position, messages, goals=None, error=None, program=[]):
         self.textDocument = textDocument
         self.position = position
         self.messages = messages

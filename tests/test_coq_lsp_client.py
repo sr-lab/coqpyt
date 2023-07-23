@@ -9,7 +9,7 @@ def test_save_vo():
     uri = f"file://{os.getcwd()}/tests/resources/test_proof_steps.v"
     with open(file_path, 'r') as f:
         client.didOpen(TextDocumentItem(uri, 'coq', 1, f.read()))
-    versionId = VersionedTextDocumentIdentifier(uri, 1)
+    versionId = TextDocumentIdentifier(uri)
     client.save_vo(versionId)
     client.shutdown()
     client.exit()

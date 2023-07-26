@@ -249,7 +249,7 @@ class ProofState(object):
             lines[0] = lines[0][start_character:]
             return ' '.join('\n'.join(lines).split())
         
-        def transverse_ast(el):
+        def transverse_ast(el, inductive=False):
             if isinstance(el, dict):
                 if 'v' in el and isinstance(el['v'], list) and len(el['v']) == 2:
                     if el['v'][0] == 'Id': return [el['v'][1]]
@@ -257,15 +257,18 @@ class ProofState(object):
 
                 res = []
                 for k, v in el.items():
-                    res.extend(transverse_ast(k))
-                    res.extend(transverse_ast(v))
+                    res.extend(transverse_ast(k, inductive))
+                    res.extend(transverse_ast(v, inductive))
                 return res
             elif isinstance(el, list):
-                if len(el) > 0 and el[0] == 'CLocalAssum': return []
+                if len(el) > 0:
+                    if el[0] == 'CLocalAssum': return []
+                    if el[0] == 'VernacInductive': inductive = True
 
                 res = []
                 for v in el:
-                    res.extend(transverse_ast(v))
+                    res.extend(transverse_ast(v, inductive))
+                    if not inductive and len(res) > 0: return res
                 return res
 
             return []
@@ -274,7 +277,8 @@ class ProofState(object):
             step, lines = self.current_step, self.lines
         
         text = step_text(step, lines)
-        if text.startswith('Local'): return module_path
+        for keyword in ['Local', 'Variable', 'Let', 'Context']:
+            if text.startswith(keyword): return module_path
         expr = self.__get_expr(step)
         if expr == [None]: return module_path
 

@@ -12,7 +12,7 @@ def setup(request):
     global state, versionId
     file_path = os.path.join("tests/resources", request.param)
     uri = "file://" + file_path
-    state = ProofState(file_path)
+    state = ProofState(file_path, timeout=60)
     versionId = VersionedTextDocumentIdentifier(uri, 1)
     yield
 
@@ -69,7 +69,7 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
-        ['Lemma plus_O_n : forall n:nat, 0 + n = n.', 'Notation "x * y" := (Nat.mul x y) : nat_scope', "Variables S S' : Set.", "Definition nztail_int d := match d with | Pos d => let (r, n) := nztail d in pair (Pos r) n | Neg d => let (r, n) := nztail d in pair (Neg r) n end."],
+        ['Lemma plus_O_n : forall n:nat, 0 + n = n.', 'Notation "x * y" := (Nat.mul x y) : nat_scope', "Inductive nat : Set := | O : nat | S : nat -> nat."],
         ['Notation "A /\\ B" := (and A B) : type_scope', 'Inductive True : Prop := I : True.'],
         [],
         None
@@ -96,8 +96,8 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
-        ['Record example := mk_example { fst : nat; snd : nat }.', 'Definition nztail_int d := match d with | Pos d => let (r, n) := nztail d in pair (Pos r) n | Neg d => let (r, n) := nztail d in pair (Neg r) n end.'],
-        ['Record example := mk_example { fst : nat; snd : nat }.', 'Definition nztail_int d := match d with | Pos d => let (r, n) := nztail d in pair (Pos r) n | Neg d => let (r, n) := nztail d in pair (Neg r) n end.'],
+        ['Record example := mk_example { fst : nat; snd : nat }.'],
+        ['Record example := mk_example { fst : nat; snd : nat }.'],
         ['Ltac reduce_eq := simpl; reflexivity.'],
         None
     ]
@@ -123,7 +123,7 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
-        ['Theorem plus_O_n : forall n:nat, n = 0 + n.', 'Notation "x * y" := (Nat.mul x y) : nat_scope', 'Notation "| a |" := (S a)', 'Definition nztail_int d := match d with | Pos d => let (r, n) := nztail d in pair (Pos r) n | Neg d => let (r, n) := nztail d in pair (Neg r) n end.'],
+        ['Theorem plus_O_n : forall n:nat, n = 0 + n.', 'Notation "x * y" := (Nat.mul x y) : nat_scope', 'Notation "| a |" := (S a)'],
         ['Theorem plus_O_n : forall n:nat, 0 + n = n.'],
         [],
         None

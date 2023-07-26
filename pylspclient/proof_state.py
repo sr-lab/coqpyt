@@ -78,13 +78,13 @@ class ProofState(object):
             command = f'\n{keyword} {search}.'
             self.__write_on_aux_file(command)
 
-    def __get_diagnostics(self, keywords, search, line):
+    def __get_diagnostics(self, coq_lsp_client, file_path, keywords, search, line):
         res = []
-        uri = f"file://{self.aux_path}"
+        uri = f"file://{file_path}"
     
         for keyword in keywords:
             kw_res = None
-            queries = self.coq_lsp_client.get_queries(TextDocumentIdentifier(uri), keyword)
+            queries = coq_lsp_client.get_queries(TextDocumentIdentifier(uri), keyword)
             for query in queries:
                 if query.query == f"{search}":
                     for result in query.results:
@@ -98,7 +98,12 @@ class ProofState(object):
         return tuple(res)
     
     def __compute(self, search, line):
-        res = self.__get_diagnostics(('Locate', 'Print', 'Compute'), f"{search}", line)
+        res = self.__get_diagnostics(self.coq_lsp_client, 
+                                     self.aux_path, 
+                                     ('Locate', 'Print', 'Compute'), 
+                                     f"{search}", 
+                                     line
+                                    )
         if res[0].split()[1].startswith('Coq.Init.'): return None
 
         if res[1] is None: return None
@@ -111,12 +116,14 @@ class ProofState(object):
         return ' '.join(res_print)
     
     def __locate(self, search, line):
-        nots = self.__get_diagnostics(('Locate',), f"\"{search}\"", line)[0].split('\n')
+        nots = self.__get_diagnostics(self.coq_lsp_client, self.aux_path, 
+                                      ('Locate',), f"\"{search}\"", 
+                                      line)[0].split('\n')
         fun = lambda x: x.endswith("(default interpretation)")
         if len(nots) > 1: return list(filter(fun, nots))[0][:-25]
         else: return nots[0][:-25] if fun(nots[0]) else nots[0]
     
-    def __step_context(self):
+    def __step_context(self, module_path):
         def transverse_ast(el):
             if isinstance(el, dict):
                 res = []
@@ -126,9 +133,7 @@ class ProofState(object):
                 return res
             elif isinstance(el, list) and len(el) == 3 and el[0] == 'Ser_Qualid':
                 id = '.'.join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
-                first_line = len(self.aux_file_text.split('\n'))
-                self.__command(("Locate", "Print", "Compute"), id)
-                return [(self.__compute, id, first_line)]
+                return [(self.__get_term, id, module_path[:])]
             elif isinstance(el, list) and len(el) == 4 and el[0] == 'CNotation':
                 line = len(self.aux_file_text.split('\n'))
                 self.__command(("Locate",), f"\"{el[2][1]}\"")
@@ -185,7 +190,7 @@ class ProofState(object):
             elif expr[0] == 'VernacEndProof':
                 self.in_proof = False
 
-    def __next_steps(self):
+    def __next_steps(self, module_path):
         if not self.in_proof:
             return None
 
@@ -196,7 +201,7 @@ class ProofState(object):
             character = self.current_step['range']['end']['character']
 
             self.exec()
-            context_calls = self.__step_context()
+            context_calls = self.__step_context(module_path)
             text = self.__step_text(line, character)
             aux_steps.append((text, goals, context_calls))
 
@@ -218,11 +223,14 @@ class ProofState(object):
         while not self.in_proof and len(self.ast) > 0:
             self.exec()
 
-    def __get_term(self, name):
-        if name in self.terms:
-            return self.terms[name]
-        else:
-            return self.terms[self.alias_terms[name]]
+    def __get_term(self, name, module_path):
+        for i in range(len(module_path), -1, -1):
+            cur_name = '.'.join(module_path[:i] + [name])
+            if cur_name in self.terms:
+                return self.terms[cur_name]
+            elif cur_name in self.alias_terms:
+                return self.terms[self.alias_terms[cur_name]]
+        return None
 
     def __add_alias(self, name, file_modules):
         current_file_module_path = ""
@@ -331,34 +339,54 @@ class ProofState(object):
             coq_lsp_client.shutdown()
             coq_lsp_client.exit()
 
+    def __get_libraries(self):
+        temp_dir = tempfile.gettempdir()
+        new_path = os.path.join(temp_dir, "aux_" + str(uuid.uuid4()).replace('-', '') + ".v")
+        shutil.copyfile(self.path, new_path)
+
+        file_uri = f"file://{new_path}"
+        coq_lsp_client = CoqLspClient(file_uri)
+        coq_lsp_client.lsp_endpoint.timeout = self.coq_lsp_client.lsp_endpoint.timeout
+        try:
+            with open(new_path, 'a') as f:
+                f.write('\nPrint Libraries.')
+            with open(new_path, 'r') as f:
+                lines = f.read().split('\n')
+                coq_lsp_client.didOpen(TextDocumentItem(file_uri, 'coq', 1, '\n'.join(lines)))
+                last_line = len(lines) - 1
+            libraries = self.__get_diagnostics(coq_lsp_client, new_path, ('Print Libraries',), '', last_line)[0]
+            libraries = list(map(lambda line: line.strip(), libraries.split('\n')[1:-1]))
+            with open(new_path, 'a') as f:
+                for library in libraries:
+                    lines.append(f'Locate Library {library}.')
+                    f.write(f'\nLocate Library {library}.')
+            coq_lsp_client.didChange(VersionedTextDocumentIdentifier(file_uri, 2), 
+                                     [TextDocumentContentChangeEvent(None, None, '\n'.join(lines))])
+            for i, library in enumerate(libraries):
+                v_file = self.__get_diagnostics(coq_lsp_client, new_path, ('Locate Library',), 
+                                                library, last_line + i + 1)[0]
+                v_file = v_file.split('\n')[-1][:-1]
+                self.__get_symbols_library(v_file)
+
+            # Get symbols from own file
+            self.__get_symbols_library(self.path)
+        finally:
+            os.remove(new_path)
+            coq_lsp_client.shutdown()
+            coq_lsp_client.exit()
+
     def proof_steps(self):
         aux_proofs = []
         module_path = []
+
+        self.__get_libraries()
         while len(self.ast) > 0:
             self.exec()
             if self.in_proof:
-                aux_proofs.append(self.__next_steps())
+                aux_proofs.append(self.__next_steps(module_path))
             else:
                 module_path = self.__process_step(module_path)
-        self.__write_on_aux_file('\nPrint Libraries.')
         self.__call_didOpen()
-
-        last_line = len(self.aux_file_text.split('\n')) - 1
-        libraries = self.__get_diagnostics(('Print Libraries',), 
-                                           '', 
-                                           last_line)[0]
-        libraries = list(map(lambda line: line.strip(), libraries.split('\n')[1:-1]))
-        for library in libraries:
-            self.__write_on_aux_file(f'\nLocate Library {library}.')
-        self.__call_didChange()
-        for i, library in enumerate(libraries):
-            v_file = self.__get_diagnostics(('Locate Library',), library, last_line + i + 1)[0]
-            v_file = v_file.split('\n')[-1][:-1]
-            self.__get_symbols_library(v_file)
-
-        for k, v in self.terms.items(): print(k, '->', v)
-        for k, v in self.alias_terms.items(): print(k, '->', v)
-        for notation in self.notations: print(notation)
 
         proofs = []
         for aux_proof_steps in aux_proofs:

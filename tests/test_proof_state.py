@@ -42,9 +42,9 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
-        [],
-        [],
-        ['Ltac reduce_eq := simpl; reflexivity'],
+        ['Notation plus := Nat.add (only parsing).'],
+        ['Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'],
+        ['Ltac reduce_eq := simpl; reflexivity.'],
         None
     ]
     
@@ -69,8 +69,8 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
-        ['Notation "x * y" := (Nat.mul x y) : nat_scope'],
-        ['Notation "A /\\ B" := (and A B) : type_scope'],
+        ['Lemma plus_O_n : forall n:nat, 0 + n = n.', 'Notation "x * y" := (Nat.mul x y) : nat_scope', "Variables S S' : Set.", "Definition nztail_int d := match d with | Pos d => let (r, n) := nztail d in pair (Pos r) n | Neg d => let (r, n) := nztail d in pair (Neg r) n end."],
+        ['Notation "A /\\ B" := (and A B) : type_scope', 'Inductive True : Prop := I : True.'],
         [],
         None
     ]
@@ -96,9 +96,9 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
-        ['Record example : Set := mk_example { fst : nat; snd : nat }. Arguments mk_example (fst snd)%nat_scope'],
-        ['fst = λ e : example, let (fst, _) := e in fst : example → nat Arguments fst e', 'snd = λ e : example, let (_, snd) := e in snd : example → nat Arguments snd e'],
-        ['Ltac reduce_eq := simpl; reflexivity'],
+        ['Record example := mk_example { fst : nat; snd : nat }.', 'Definition nztail_int d := match d with | Pos d => let (r, n) := nztail d in pair (Pos r) n | Neg d => let (r, n) := nztail d in pair (Neg r) n end.'],
+        ['Record example := mk_example { fst : nat; snd : nat }.', 'Definition nztail_int d := match d with | Pos d => let (r, n) := nztail d in pair (Pos r) n | Neg d => let (r, n) := nztail d in pair (Neg r) n end.'],
+        ['Ltac reduce_eq := simpl; reflexivity.'],
         None
     ]
     
@@ -123,8 +123,8 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
-        ['plus_O_n : ∀ n : nat, n = 0 + n', 'Notation "x * y" := (Nat.mul x y) : nat_scope', 'Notation "| a |" := (S a)'],
-        ['Out.In.plus_O_n : ∀ n : nat, 0 + n = n'],
+        ['Theorem plus_O_n : forall n:nat, n = 0 + n.', 'Notation "x * y" := (Nat.mul x y) : nat_scope', 'Notation "| a |" := (S a)', 'Definition nztail_int d := match d with | Pos d => let (r, n) := nztail d in pair (Pos r) n | Neg d => let (r, n) := nztail d in pair (Neg r) n end.'],
+        ['Theorem plus_O_n : forall n:nat, 0 + n = n.'],
         [],
         None
     ]

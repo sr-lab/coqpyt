@@ -26,23 +26,28 @@ Section Random.
 End Random.
 
 Module Extra.
-  Record example := mk_example { fst : nat; snd : nat }.
-  Notation "| a |" := (S a) (at level 30, right associativity).
+  Module Fst.
+    Record example := mk_example { fst : nat; snd : nat }.
 
-  Theorem plus_O_n : forall n:nat, n = 0 + n.
-  Proof.
-    intros n.
-    Compute mk_example n n.
-    Compute {| fst := n; snd := n |}.
-    reduce_eq.
-  Qed.
+    Theorem plus_O_n : forall n:nat, n = 0 + n.
+    Proof.
+      intros n.
+      Compute mk_example n n.
+      Compute Out.In.plus_O_n.
+      reduce_eq.
+    Qed.
+  End Fst.
 
-  Theorem mult_0_plus : ∀ n m : nat,
-    S n * m = 0 + (S n * m).
-  Proof.
-    intros n m.
-    rewrite <- (plus_O_n (|n| * m)).
-    Compute Out.In.plus_O_n.
-    reflexivity.
-  Qed.
+  Module Snd.
+    Notation "| a |" := (S a) (at level 30, right associativity).
+    
+    Theorem mult_0_plus : ∀ n m : nat,
+      S n * m = 0 + (S n * m).
+    Proof.
+      intros n m.
+      rewrite <- (Fst.plus_O_n (|n| * m)).
+      Compute {| Fst.fst := n; Fst.snd := n |}.
+      reflexivity.
+    Qed.
+  End Snd.
 End Extra.

@@ -22,6 +22,7 @@ class ProofState(object):
             self.current_step = None
             self.in_proof = False
             self.terms = {}
+            self.alias_terms = {}
             self.notations = []
             self.__init_aux_file()
         except Exception as e:
@@ -217,7 +218,19 @@ class ProofState(object):
         while not self.in_proof and len(self.ast) > 0:
             self.exec()
 
-    def __process_step(self, module_path, step=None, lines=None):
+    def __get_term(self, name):
+        if name in self.terms:
+            return self.terms[name]
+        else:
+            return self.terms[self.alias_terms[name]]
+
+    def __add_alias(self, name, file_modules):
+        current_file_module_path = ""
+        for module in file_modules[::-1]:
+            current_file_module_path = module + "." + current_file_module_path
+            self.alias_terms[current_file_module_path + name] = name
+
+    def __process_step(self, module_path, file_modules=[], step=None, lines=None):
         def step_text(step, lines):
             start_line = step['range']['start']['line']
             start_character = step['range']['start']['character']
@@ -266,6 +279,7 @@ class ProofState(object):
         ):
             name = expr[2][0][2][0][1][0][1][1]
             self.terms[full_name(name)] = text
+            self.__add_alias(name, file_modules)
         elif expr[0] == 'VernacNotation':
             self.notations.append(text)
         elif expr[0] == 'VernacDefineModule':
@@ -275,9 +289,21 @@ class ProofState(object):
                 module_path.pop()
         elif expr[0] != 'VernacBeginSection':
             names = transverse_ast(expr)
-            for name in names: self.terms[full_name(name)] = text
+            for name in names: 
+                self.terms[full_name(name)] = text
+                self.__add_alias(name, file_modules)
 
         return module_path
+    
+    def __get_path_modules(self, file_path):
+        modules = []
+        if os.path.join("default", "lib", "coq") in file_path:
+            modules.append("Coq")
+        modules.extend(filter(lambda f: len(f) > 0 and f[0].isupper(), file_path.split(os.sep)))
+        # File
+        if len(modules) > 0 and modules[-1].endswith('.v'):
+            modules[-1] = modules[-1][:-2]
+        return modules
 
     def __get_symbols_library(self, file_path):
         temp_dir = tempfile.gettempdir()
@@ -285,6 +311,7 @@ class ProofState(object):
         shutil.copyfile(file_path, new_path)
 
         file_uri = f"file://{new_path}"
+        file_modules = self.__get_path_modules(file_path)
         coq_lsp_client = CoqLspClient(file_uri)
         coq_lsp_client.lsp_endpoint.timeout = self.coq_lsp_client.lsp_endpoint.timeout
         try:
@@ -294,7 +321,11 @@ class ProofState(object):
             ast = coq_lsp_client.get_document(TextDocumentIdentifier(file_uri))
             module_path = []
             for step in ast['spans']:
-                module_path = self.__process_step(module_path, step, lines)
+                module_path = self.__process_step(module_path, 
+                                                  file_modules=file_modules, 
+                                                  step=step,
+                                                  lines=lines
+                                                  )
         finally:
             os.remove(new_path)
             coq_lsp_client.shutdown()
@@ -326,6 +357,7 @@ class ProofState(object):
             self.__get_symbols_library(v_file)
 
         for k, v in self.terms.items(): print(k, '->', v)
+        for k, v in self.alias_terms.items(): print(k, '->', v)
         for notation in self.notations: print(notation)
 
         proofs = []

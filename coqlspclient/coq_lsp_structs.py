@@ -1,5 +1,6 @@
+from enum import Enum
 from typing import Dict, Optional, Any, List
-from pylspclient.lsp_structs import Range
+from pylspclient.lsp_structs import Range, VersionedTextDocumentIdentifier
 
 
 class Hyp(object):
@@ -133,3 +134,43 @@ class FlecheDocument(object):
             Range(**fleche_document["completed"]["range"]),
         )
         return FlecheDocument(spans, completion_status)
+
+
+class CoqFileProgressKind(Enum):
+    Processing = 1
+    FatalError = 2
+
+
+class CoqFileProgressProcessingInfo(object):
+    def __init__(self, range: Range, kind: Optional[CoqFileProgressKind]):
+        self.range = range
+        self.kind = kind
+
+
+class CoqFileProgressParams(object):
+    def __init__(
+        self,
+        textDocument: VersionedTextDocumentIdentifier,
+        processing: List[CoqFileProgressProcessingInfo],
+    ):
+        self.textDocument = textDocument
+        self.processing = processing
+
+    @staticmethod
+    def parse(coqFileProgressParams: Dict) -> Optional["CoqFileProgressParams"]:
+        if (
+            "textDocument" not in coqFileProgressParams
+            or "processing" not in coqFileProgressParams
+        ):
+            return None
+        textDocument = VersionedTextDocumentIdentifier(
+            coqFileProgressParams["textDocument"]["uri"],
+            coqFileProgressParams["textDocument"]["version"],
+        )
+        processing = []
+        for progress in coqFileProgressParams["processing"]:
+            processing.append(CoqFileProgressProcessingInfo(
+                Range(**progress["range"]),
+                None if "kind" not in progress else CoqFileProgressKind(progress["kind"])
+            ))
+        return CoqFileProgressParams(textDocument, processing)

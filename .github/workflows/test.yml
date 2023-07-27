@@ -37,6 +37,10 @@ jobs:
       run: |
         opam install coq-lsp
 
+    - name: Install coq-lsp
+      run: |
+        whereis coq-lsp
+
     - name: Run tests
       run: |
         pytest -s

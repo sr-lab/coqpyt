@@ -13,10 +13,11 @@ class CoqLspClient(LspClient):
 
     Attributes:
         file_progress (Dict[str, List[CoqFileProgressParams]]): Contains all
-            the `$/coq/fileProgress` notifications sent by the server. The 
-            keys are the URIs of the files and the values are the list of 
+            the `$/coq/fileProgress` notifications sent by the server. The
+            keys are the URIs of the files and the values are the list of
             notifications.
     """
+
     __DEFAULT_INIT_OPTIONS = {
         "max_errors": 120000000,
         "show_coq_info_messages": True,
@@ -65,7 +66,7 @@ class CoqLspClient(LspClient):
         lsp_endpoint = LspEndpoint(json_rpc_endpoint, timeout=timeout)
         lsp_endpoint.notify_callbacks = {
             "$/coq/fileProgress": self.__handle_file_progress,
-            "textDocument/publishDiagnostics": self.__handle_publish_diagnostics
+            "textDocument/publishDiagnostics": self.__handle_publish_diagnostics,
         }
         super().__init__(lsp_endpoint)
         workspaces = [{"name": "coq-lsp", "uri": root_uri}]

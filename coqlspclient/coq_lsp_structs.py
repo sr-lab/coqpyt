@@ -169,8 +169,12 @@ class CoqFileProgressParams(object):
         )
         processing = []
         for progress in coqFileProgressParams["processing"]:
-            processing.append(CoqFileProgressProcessingInfo(
-                Range(**progress["range"]),
-                None if "kind" not in progress else CoqFileProgressKind(progress["kind"])
-            ))
+            processing.append(
+                CoqFileProgressProcessingInfo(
+                    Range(**progress["range"]),
+                    None
+                    if "kind" not in progress
+                    else CoqFileProgressKind(progress["kind"]),
+                )
+            )
         return CoqFileProgressParams(textDocument, processing)

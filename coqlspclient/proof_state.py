@@ -105,7 +105,9 @@ class ProofState(object):
 
         for keyword in keywords:
             kw_res = None
-            queries = self.get_queries(coq_lsp_client, TextDocumentIdentifier(uri), keyword)
+            queries = self.get_queries(
+                coq_lsp_client, TextDocumentIdentifier(uri), keyword
+            )
             for query in queries:
                 if query.query == f"{search}":
                     for result in query.results:
@@ -117,7 +119,7 @@ class ProofState(object):
             line += 1
 
         return tuple(res)
-    
+
     def get_queries(self, coq_lsp_client, textDocument, keyword):
         """
         keyword might be Search, Print, Check, etc...
@@ -156,16 +158,14 @@ class ProofState(object):
                     query = command[len(keyword) + 1 : -1]
                     if query not in searches:
                         searches[query] = []
-                    searches[query].append(
-                        Result(diagnostic.range, diagnostic.message)
-                    )
+                    searches[query].append(Result(diagnostic.range, diagnostic.message))
 
             res = []
             for query, results in searches.items():
                 res.append(Query(query, results))
 
         return res
-    
+
     def has_error(self, textDocument):
         uri = textDocument.uri
         if textDocument.uri.startswith("file://"):

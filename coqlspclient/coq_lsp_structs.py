@@ -125,7 +125,9 @@ class FlecheDocument(object):
         spans: List[RangedSpan] = []
         for span in fleche_document["spans"]:
             range = Range(**span["range"])
-            spans.append(RangedSpan(range, None if "span" not in span else span["span"]))
+            spans.append(
+                RangedSpan(range, None if "span" not in span else span["span"])
+            )
         completion_status = CompletionStatus(
             fleche_document["completed"]["status"],
             Range(**fleche_document["completed"]["range"]),

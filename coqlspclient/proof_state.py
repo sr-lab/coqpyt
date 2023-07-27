@@ -13,15 +13,14 @@ from pylspclient.lsp_structs import (
     ResponseError,
     ErrorCodes,
 )
-from pylspclient.coq_lsp_structs import Step
-from pylspclient.coq_lsp_client import CoqLspClient
+from coqlspclient.coq_lsp_structs import Step, Result, Query, RangedSpan
+from coqlspclient.coq_lsp_client import CoqLspClient
 
 
 class ProofState(object):
     def __init__(self, file_path, timeout=2):
         file_uri = f"file://{file_path}"
-        self.coq_lsp_client = CoqLspClient(file_uri)
-        self.coq_lsp_client.lsp_endpoint.timeout = timeout
+        self.coq_lsp_client = CoqLspClient(file_uri, timeout=timeout)
         try:
             with open(file_path, "r") as f:
                 self.lines = f.read().split("\n")
@@ -31,9 +30,8 @@ class ProofState(object):
             self.path = file_path
             self.ast = self.coq_lsp_client.get_document(
                 TextDocumentIdentifier(file_uri)
-            )
-            self.ast = self.ast["spans"]
-            self.current_step = None
+            ).spans
+            self.current_step: RangedSpan = None
             self.in_proof = False
             self.terms = {}
             self.alias_terms = {}
@@ -63,16 +61,15 @@ class ProofState(object):
             # Create empty file
             pass
 
-    def __get_expr(self, ast_step):
+    def __get_expr(self, ast_step: RangedSpan):
         if (
-            isinstance(ast_step, dict)
-            and "span" in ast_step
-            and isinstance(ast_step["span"], dict)
-            and "v" in ast_step["span"]
-            and isinstance(ast_step["span"]["v"], dict)
-            and "expr" in ast_step["span"]["v"]
+            ast_step.span is not None
+            and isinstance(ast_step.span, dict)
+            and "v" in ast_step.span
+            and isinstance(ast_step.span["v"], dict)
+            and "expr" in ast_step.span["v"]
         ):
-            return ast_step["span"]["v"]["expr"]
+            return ast_step.span["v"]["expr"]
         return [None]
 
     def __get_theorem_name(self, expr):
@@ -106,7 +103,9 @@ class ProofState(object):
 
         for keyword in keywords:
             kw_res = None
-            queries = coq_lsp_client.get_queries(TextDocumentIdentifier(uri), keyword)
+            queries = self.get_queries(
+                coq_lsp_client, TextDocumentIdentifier(uri), keyword
+            )
             for query in queries:
                 if query.query == f"{search}":
                     for result in query.results:
@@ -118,6 +117,66 @@ class ProofState(object):
             line += 1
 
         return tuple(res)
+
+    def get_queries(self, coq_lsp_client, textDocument, keyword):
+        """
+        keyword might be Search, Print, Check, etc...
+        """
+        uri = textDocument.uri
+        if textDocument.uri.startswith("file://"):
+            uri = uri[7:]
+
+        with open(uri, "r") as doc:
+            if textDocument.uri not in coq_lsp_client.lsp_endpoint.diagnostics:
+                return []
+            lines = doc.readlines()
+            diagnostics = coq_lsp_client.lsp_endpoint.diagnostics[textDocument.uri]
+            searches = {}
+
+            for diagnostic in diagnostics:
+                command = lines[
+                    diagnostic.range["start"]["line"] : diagnostic.range["end"]["line"]
+                    + 1
+                ]
+                if len(command) == 1:
+                    command[0] = command[0][
+                        diagnostic.range["start"]["character"] : diagnostic.range[
+                            "end"
+                        ]["character"]
+                        + 1
+                    ]
+                else:
+                    command[0] = command[0][diagnostic.range["start"]["character"] :]
+                    command[-1] = command[-1][
+                        : diagnostic.range["end"]["character"] + 1
+                    ]
+                command = "".join(command).strip()
+
+                if command.startswith(keyword):
+                    query = command[len(keyword) + 1 : -1]
+                    if query not in searches:
+                        searches[query] = []
+                    searches[query].append(Result(diagnostic.range, diagnostic.message))
+
+            res = []
+            for query, results in searches.items():
+                res.append(Query(query, results))
+
+        return res
+
+    def has_error(self, textDocument):
+        uri = textDocument.uri
+        if textDocument.uri.startswith("file://"):
+            uri = uri[7:]
+
+        if textDocument.uri not in self.coq_lsp_client.lsp_endpoint.diagnostics:
+            return False
+
+        diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics[textDocument.uri]
+        for diagnostic in diagnostics:
+            if diagnostic.severity == 1:
+                return True
+        return False
 
     def __compute(self, search, line):
         res = self.__get_diagnostics(
@@ -177,20 +236,20 @@ class ProofState(object):
         if not self.in_proof:
             return None
 
-        res, transversed = [], transverse_ast(self.current_step)
+        res, transversed = [], transverse_ast(self.current_step.span)
         [res.append(x) for x in transversed if x not in res]
         return res
 
     def __step_goals(self):
         uri = "file://" + self.path
-        start_line = self.current_step["range"]["end"]["line"]
-        start_character = self.current_step["range"]["end"]["character"]
+        start_line = self.current_step.range.end.line
+        start_character = self.current_step.range.end.character
         end_pos = Position(start_line, start_character)
         return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
 
     def __step_text(self, start_line, start_character):
-        end_line = self.current_step["range"]["end"]["line"]
-        end_character = self.current_step["range"]["end"]["character"]
+        end_line = self.current_step.range.end.line
+        end_character = self.current_step.range.end.character
         lines = self.lines[start_line : end_line + 1]
         lines[-1] = lines[-1][: end_character + 1]
         lines[0] = lines[0][start_character:]
@@ -200,8 +259,8 @@ class ProofState(object):
         for _ in range(steps):
             if self.current_step != None:
                 end_previous = (
-                    self.current_step["range"]["end"]["line"],
-                    self.current_step["range"]["end"]["character"],
+                    self.current_step.range.end.line,
+                    self.current_step.range.end.character,
                 )
             else:
                 end_previous = (0, 0)
@@ -229,8 +288,8 @@ class ProofState(object):
         aux_steps = []
         while self.in_proof:
             goals = self.__step_goals()
-            line = self.current_step["range"]["end"]["line"]
-            character = self.current_step["range"]["end"]["character"]
+            line = self.current_step.range.end.line
+            character = self.current_step.range.end.character
 
             self.exec()
             context_calls = self.__step_context(module_path)
@@ -270,12 +329,14 @@ class ProofState(object):
             current_file_module_path = module + "." + current_file_module_path
             self.alias_terms[current_file_module_path + name] = name
 
-    def __process_step(self, module_path, file_modules=[], step=None, lines=None):
-        def step_text(step, lines):
-            start_line = step["range"]["start"]["line"]
-            start_character = step["range"]["start"]["character"]
-            end_line = step["range"]["end"]["line"]
-            end_character = step["range"]["end"]["character"]
+    def __process_step(
+        self, module_path, file_modules=[], step: RangedSpan = None, lines=None
+    ):
+        def step_text(step: RangedSpan, lines):
+            start_line = step.range.start.line
+            start_character = step.range.start.character
+            end_line = step.range.end.line
+            end_character = step.range.end.character
             lines = lines[start_line : end_line + 1]
             lines[-1] = lines[-1][: end_character + 1]
             lines[0] = lines[0][start_character:]
@@ -367,8 +428,9 @@ class ProofState(object):
 
         file_uri = f"file://{new_path}"
         file_modules = self.__get_path_modules(file_path)
-        coq_lsp_client = CoqLspClient(file_uri)
-        coq_lsp_client.lsp_endpoint.timeout = self.coq_lsp_client.lsp_endpoint.timeout
+        coq_lsp_client = CoqLspClient(
+            file_uri, timeout=self.coq_lsp_client.lsp_endpoint.timeout
+        )
         try:
             with open(new_path, "r") as f:
                 lines = f.read().split("\n")
@@ -377,7 +439,7 @@ class ProofState(object):
                 )
             ast = coq_lsp_client.get_document(TextDocumentIdentifier(file_uri))
             module_path = []
-            for step in ast["spans"]:
+            for step in ast.spans:
                 module_path = self.__process_step(
                     module_path, file_modules=file_modules, step=step, lines=lines
                 )
@@ -469,7 +531,7 @@ class ProofState(object):
 
     def is_invalid(self):
         uri = f"file://{self.path}"
-        return self.coq_lsp_client.has_error(TextDocumentIdentifier(uri))
+        return self.has_error(TextDocumentIdentifier(uri))
 
     def close(self):
         self.coq_lsp_client.shutdown()

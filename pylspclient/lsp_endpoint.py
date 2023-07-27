@@ -15,7 +15,6 @@ class LspEndpoint(threading.Thread):
         self.event_dict = {}
         self.response_dict = {}
         self.next_id = 0
-        self.completed_operation = False
         self.timeout = timeout
         self.shutdown_flag = False
         self.diagnostics = {}
@@ -56,7 +55,7 @@ class LspEndpoint(threading.Thread):
                         self.send_response(rpc_id, result, None)
                     else:
                         # a call for notify
-                        if method not in self.notify_callbacks:
+                        if method == "textDocument/publishDiagnostics":
                             # Default method
                             logging.debug("received message:", params)
                             if "diagnostics" in params:
@@ -66,9 +65,7 @@ class LspEndpoint(threading.Thread):
                                     self.diagnostics[params["uri"]].append(
                                         lsp_structs.Diagnostic(**diagnostic)
                                     )
-                                # Marks didOpen operation as completed
-                                self.completed_operation = True
-                        else:
+                        if method in self.notify_callbacks:
                             self.notify_callbacks[method](params)
                 else:
                     self.handle_result(rpc_id, result, error)
@@ -117,5 +114,4 @@ class LspEndpoint(threading.Thread):
         return result
 
     def send_notification(self, method_name, **kwargs):
-        self.completed_operation = False
         self.send_message(method_name, kwargs)

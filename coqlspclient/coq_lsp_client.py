@@ -109,7 +109,7 @@ class CoqLspClient(LspClient):
 
     def proof_goals(
         self, textDocument: TextDocumentIdentifier, position: Position
-    ) -> GoalAnswer:
+    ) -> Optional[GoalAnswer]:
         """Get proof goals and relevant information at a position.
 
         Args:
@@ -141,19 +141,29 @@ class CoqLspClient(LspClient):
 
         return GoalAnswer(**result_dict)
 
-    def get_document(self, textDocument):
+    def get_document(
+        self, textDocument: TextDocumentIdentifier
+    ) -> Optional[FlecheDocument]:
+        """Get the AST of a text document.
+
+        Args:
+            textDocument (TextDocumentIdentifier): Text document
+
+        Returns:
+            Optional[FlecheDocument]: Serialized version of Fleche's document
+        """
         result_dict = self.lsp_endpoint.call_method(
             "coq/getDocument", textDocument=textDocument
         )
-        return result_dict
+        return FlecheDocument.parse(result_dict)
 
-    def save_vo(self, textDocument):
+    def save_vo(self, textDocument: TextDocumentIdentifier):
+        """Save a compiled file to disk.
+
+        Args:
+            textDocument (TextDocumentIdentifier): File to be saved.
+                The uri in the textDocument should contain an absolute path.
         """
-        The uri in the textDocument should contain an absolute path.
-        """
-        result_dict = self.lsp_endpoint.call_method(
-            "coq/saveVo", textDocument=textDocument
-        )
-        return result_dict
+        self.lsp_endpoint.call_method("coq/saveVo", textDocument=textDocument)
 
     # TODO: handle performance data notification and file checking progress

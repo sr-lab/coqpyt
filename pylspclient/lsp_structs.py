@@ -15,7 +15,7 @@ def to_type(o, new_type):
 
 
 class Position(object):
-    def __init__(self, line, character):
+    def __init__(self, line, character, offset=0):
         """
         Constructs a new Position instance.
 
@@ -24,6 +24,7 @@ class Position(object):
         """
         self.line = line
         self.character = character
+        self.offset = offset
 
 
 class Range(object):

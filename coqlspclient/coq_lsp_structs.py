@@ -1,4 +1,5 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, Any, List
+from pylspclient.lsp_structs import Range
 
 
 class Hyp(object):
@@ -98,3 +99,35 @@ class Step(object):
         self.text = text
         self.goals = goals
         self.context = context
+
+
+class RangedSpan(object):
+    def __init__(self, range: Range, span: Any):
+        self.range = range
+        self.span = span
+
+
+class CompletionStatus(object):
+    def __init__(self, status: str, range: Range):
+        self.status = status
+        self.range = range
+
+
+class FlecheDocument(object):
+    def __init__(self, spans: List[RangedSpan], completed: CompletionStatus):
+        self.spans = spans
+        self.completed = completed
+
+    @staticmethod
+    def parse(fleche_document: Dict) -> Optional["FlecheDocument"]:
+        if "spans" not in fleche_document or "completed" not in fleche_document:
+            return None
+        spans: List[RangedSpan] = []
+        for span in fleche_document["spans"]:
+            range = Range(**span["range"])
+            spans.append(RangedSpan(range, None if "span" not in span else span["span"]))
+        completion_status = CompletionStatus(
+            fleche_document["completed"]["status"],
+            Range(**fleche_document["completed"]["range"]),
+        )
+        return FlecheDocument(spans, completion_status)

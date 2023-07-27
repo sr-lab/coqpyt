@@ -13,7 +13,7 @@ from pylspclient.lsp_structs import (
     ResponseError,
     ErrorCodes,
 )
-from coqlspclient.coq_lsp_structs import Step
+from coqlspclient.coq_lsp_structs import Step, Result, Query
 from coqlspclient.coq_lsp_client import CoqLspClient
 
 
@@ -105,7 +105,7 @@ class ProofState(object):
 
         for keyword in keywords:
             kw_res = None
-            queries = coq_lsp_client.get_queries(TextDocumentIdentifier(uri), keyword)
+            queries = self.get_queries(coq_lsp_client, TextDocumentIdentifier(uri), keyword)
             for query in queries:
                 if query.query == f"{search}":
                     for result in query.results:
@@ -117,6 +117,68 @@ class ProofState(object):
             line += 1
 
         return tuple(res)
+    
+    def get_queries(self, coq_lsp_client, textDocument, keyword):
+        """
+        keyword might be Search, Print, Check, etc...
+        """
+        uri = textDocument.uri
+        if textDocument.uri.startswith("file://"):
+            uri = uri[7:]
+
+        with open(uri, "r") as doc:
+            if textDocument.uri not in coq_lsp_client.lsp_endpoint.diagnostics:
+                return []
+            lines = doc.readlines()
+            diagnostics = coq_lsp_client.lsp_endpoint.diagnostics[textDocument.uri]
+            searches = {}
+
+            for diagnostic in diagnostics:
+                command = lines[
+                    diagnostic.range["start"]["line"] : diagnostic.range["end"]["line"]
+                    + 1
+                ]
+                if len(command) == 1:
+                    command[0] = command[0][
+                        diagnostic.range["start"]["character"] : diagnostic.range[
+                            "end"
+                        ]["character"]
+                        + 1
+                    ]
+                else:
+                    command[0] = command[0][diagnostic.range["start"]["character"] :]
+                    command[-1] = command[-1][
+                        : diagnostic.range["end"]["character"] + 1
+                    ]
+                command = "".join(command).strip()
+
+                if command.startswith(keyword):
+                    query = command[len(keyword) + 1 : -1]
+                    if query not in searches:
+                        searches[query] = []
+                    searches[query].append(
+                        Result(diagnostic.range, diagnostic.message)
+                    )
+
+            res = []
+            for query, results in searches.items():
+                res.append(Query(query, results))
+
+        return res
+    
+    def has_error(self, textDocument):
+        uri = textDocument.uri
+        if textDocument.uri.startswith("file://"):
+            uri = uri[7:]
+
+        if textDocument.uri not in self.coq_lsp_client.lsp_endpoint.diagnostics:
+            return False
+
+        diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics[textDocument.uri]
+        for diagnostic in diagnostics:
+            if diagnostic.severity == 1:
+                return True
+        return False
 
     def __compute(self, search, line):
         res = self.__get_diagnostics(
@@ -469,7 +531,7 @@ class ProofState(object):
 
     def is_invalid(self):
         uri = f"file://{self.path}"
-        return self.coq_lsp_client.has_error(TextDocumentIdentifier(uri))
+        return self.has_error(TextDocumentIdentifier(uri))
 
     def close(self):
         self.coq_lsp_client.shutdown()

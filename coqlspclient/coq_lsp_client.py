@@ -96,68 +96,6 @@ class CoqLspClient(LspClient):
 
         return coq_lsp_structs.GoalAnswer(**result_dict)
 
-    def get_queries(self, textDocument, keyword):
-        """
-        keyword might be Search, Print, Check, etc...
-        """
-        uri = textDocument.uri
-        if textDocument.uri.startswith("file://"):
-            uri = uri[7:]
-
-        with open(uri, "r") as doc:
-            if textDocument.uri not in self.lsp_endpoint.diagnostics:
-                return []
-            lines = doc.readlines()
-            diagnostics = self.lsp_endpoint.diagnostics[textDocument.uri]
-            searches = {}
-
-            for diagnostic in diagnostics:
-                command = lines[
-                    diagnostic.range["start"]["line"] : diagnostic.range["end"]["line"]
-                    + 1
-                ]
-                if len(command) == 1:
-                    command[0] = command[0][
-                        diagnostic.range["start"]["character"] : diagnostic.range[
-                            "end"
-                        ]["character"]
-                        + 1
-                    ]
-                else:
-                    command[0] = command[0][diagnostic.range["start"]["character"] :]
-                    command[-1] = command[-1][
-                        : diagnostic.range["end"]["character"] + 1
-                    ]
-                command = "".join(command).strip()
-
-                if command.startswith(keyword):
-                    query = command[len(keyword) + 1 : -1]
-                    if query not in searches:
-                        searches[query] = []
-                    searches[query].append(
-                        coq_lsp_structs.Result(diagnostic.range, diagnostic.message)
-                    )
-
-            res = []
-            for query, results in searches.items():
-                res.append(coq_lsp_structs.Query(query, results))
-
-        return res
-
-    def has_error(self, textDocument):
-        uri = textDocument.uri
-        if textDocument.uri.startswith("file://"):
-            uri = uri[7:]
-
-        if textDocument.uri not in self.lsp_endpoint.diagnostics:
-            return False
-
-        diagnostics = self.lsp_endpoint.diagnostics[textDocument.uri]
-        for diagnostic in diagnostics:
-            if diagnostic.severity == 1:
-                return True
-        return False
-
     def get_document(self, textDocument):
         result_dict = self.lsp_endpoint.call_method(
             "coq/getDocument", textDocument=textDocument

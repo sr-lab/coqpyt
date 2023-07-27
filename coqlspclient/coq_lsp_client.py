@@ -151,23 +151,7 @@ class CoqLspClient(LspClient):
         result_dict = self.lsp_endpoint.call_method(
             "proof/goals", textDocument=textDocument, position=position
         )
-        result_dict["textDocument"] = VersionedTextDocumentIdentifier(
-            **result_dict["textDocument"]
-        )
-        result_dict["position"] = Position(
-            result_dict["position"]["line"], result_dict["position"]["character"]
-        )
-
-        if result_dict["goals"] is not None:
-            result_dict["goals"] = GoalConfig.parse(result_dict["goals"])
-
-        for i, message in enumerate(result_dict["messages"]):
-            if not isinstance(message, str):
-                if message["range"]:
-                    message["range"] = Range(**message["range"])
-                result_dict["messages"][i] = Message(**message)
-
-        return GoalAnswer(**result_dict)
+        return GoalAnswer.parse(result_dict)
 
     def get_document(
         self, textDocument: TextDocumentIdentifier

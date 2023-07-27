@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Dict, Optional, Any, List
-from pylspclient.lsp_structs import Range, VersionedTextDocumentIdentifier
+from pylspclient.lsp_structs import Range, VersionedTextDocumentIdentifier, Position
 
 
 class Hyp(object):
@@ -81,6 +81,26 @@ class GoalAnswer(object):
                 return res
 
         return str(recursive_vars(self))
+
+    @staticmethod
+    def parse(goal_answer) -> Optional["GoalAnswer"]:
+        goal_answer["textDocument"] = VersionedTextDocumentIdentifier(
+            **goal_answer["textDocument"]
+        )
+        goal_answer["position"] = Position(
+            goal_answer["position"]["line"], goal_answer["position"]["character"]
+        )
+
+        if goal_answer["goals"] is not None:
+            goal_answer["goals"] = GoalConfig.parse(goal_answer["goals"])
+
+        for i, message in enumerate(goal_answer["messages"]):
+            if not isinstance(message, str):
+                if message["range"]:
+                    message["range"] = Range(**message["range"])
+                goal_answer["messages"][i] = Message(**message)
+
+        return GoalAnswer(**goal_answer)
 
 
 class Result(object):

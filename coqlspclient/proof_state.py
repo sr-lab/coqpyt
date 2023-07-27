@@ -20,8 +20,7 @@ from coqlspclient.coq_lsp_client import CoqLspClient
 class ProofState(object):
     def __init__(self, file_path, timeout=2):
         file_uri = f"file://{file_path}"
-        self.coq_lsp_client = CoqLspClient(file_uri)
-        self.coq_lsp_client.lsp_endpoint.timeout = timeout
+        self.coq_lsp_client = CoqLspClient(file_uri, timeout=timeout)
         try:
             with open(file_path, "r") as f:
                 self.lines = f.read().split("\n")
@@ -367,8 +366,9 @@ class ProofState(object):
 
         file_uri = f"file://{new_path}"
         file_modules = self.__get_path_modules(file_path)
-        coq_lsp_client = CoqLspClient(file_uri)
-        coq_lsp_client.lsp_endpoint.timeout = self.coq_lsp_client.lsp_endpoint.timeout
+        coq_lsp_client = CoqLspClient(
+            file_uri, timeout=self.coq_lsp_client.lsp_endpoint.timeout
+        )
         try:
             with open(new_path, "r") as f:
                 lines = f.read().split("\n")

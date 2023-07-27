@@ -5,37 +5,45 @@ from pylspclient.lsp_endpoint import LspEndpoint
 from pylspclient.lsp_client import LspClient
 from pylspclient import lsp_structs
 from coqlspclient import coq_lsp_structs
+from typing import Dict
 
 
 class CoqLspClient(LspClient):
-    def __init__(self, root_uri):
+    __DEFAULT_INIT_OPTIONS = {
+        "max_errors": 120000000,
+        "show_coq_info_messages": True,
+        "eager_diagnostics": False,
+    }
+
+    def __init__(
+        self,
+        root_uri: str,
+        timeout: int = 2,
+        memory_limit: int = 2097152,
+        init_options: Dict = __DEFAULT_INIT_OPTIONS,
+    ):
         proc = subprocess.Popen(
-            "ulimit -v 2097152; coq-lsp",
+            f"ulimit -v {memory_limit}; coq-lsp",
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
             shell=True,
         )
         json_rpc_endpoint = JsonRpcEndpoint(proc.stdin, proc.stdout)
-        lsp_endpoint = LspEndpoint(json_rpc_endpoint)
+        lsp_endpoint = LspEndpoint(json_rpc_endpoint, timeout=timeout)
         super().__init__(lsp_endpoint)
         workspaces = [{"name": "coq-lsp", "uri": root_uri}]
         self.initialize(
             proc.pid,
             "",
             root_uri,
-            {
-                "max_errors": 120000000,
-                "show_coq_info_messages": True,
-                "eager_diagnostics": False,
-            },
+            init_options,
             {},
             "off",
             workspaces,
         )
         self.initialized()
 
-    def didOpen(self, textDocument: lsp_structs.TextDocumentItem):
-        super().didOpen(textDocument)
+    def __wait_for_operation(self):
         timeout = self.lsp_endpoint.timeout
         while not self.lsp_endpoint.completed_operation and timeout > 0:
             if self.lsp_endpoint.shutdown_flag:
@@ -52,28 +60,19 @@ class CoqLspClient(LspClient):
                 lsp_structs.ErrorCodes.ServerQuit, "Server quit"
             )
 
+    def didOpen(self, textDocument: lsp_structs.TextDocumentItem):
+        super().didOpen(textDocument)
+        self.__wait_for_operation()
+
     def didChange(
         self,
         textDocument: lsp_structs.VersionedTextDocumentIdentifier,
         contentChanges: list[lsp_structs.TextDocumentContentChangeEvent],
     ):
         super().didChange(textDocument, contentChanges)
-        while self.lsp_endpoint.completed_operation != True:
-            time.sleep(0.1)
+        self.__wait_for_operation()
 
     def proof_goals(self, textDocument, position):
-        def parse_goal(goal):
-            for hyp in goal["hyps"]:
-                if "def" in hyp:
-                    hyp["definition"] = hyp["def"]
-                    hyp.pop("def")
-            hyps = [coq_lsp_structs.Hyp(**hyp) for hyp in goal["hyps"]]
-            ty = None if "ty" not in goal else goal["ty"]
-            return coq_lsp_structs.Goal(hyps, ty)
-
-        def parse_goals(goals):
-            return [parse_goal(goal) for goal in goals]
-
         result_dict = self.lsp_endpoint.call_method(
             "proof/goals", textDocument=textDocument, position=position
         )
@@ -85,16 +84,8 @@ class CoqLspClient(LspClient):
         )
 
         if result_dict["goals"] is not None:
-            goal_config = result_dict["goals"]
-            goals = parse_goals(goal_config["goals"])
-            stack = [
-                (parse_goals(t[0]), parse_goals(t[1])) for t in goal_config["stack"]
-            ]
-            bullet = None if "bullet" not in goal_config else goal_config["bullet"]
-            shelf = parse_goals(goal_config["shelf"])
-            given_up = parse_goals(goal_config["given_up"])
-            result_dict["goals"] = coq_lsp_structs.GoalConfig(
-                goals, stack, shelf, given_up, bullet=bullet
+            result_dict["goals"] = coq_lsp_structs.GoalConfig.parse(
+                result_dict["goals"]
             )
 
         for i, message in enumerate(result_dict["messages"]):

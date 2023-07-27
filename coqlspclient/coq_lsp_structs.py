@@ -1,3 +1,6 @@
+from typing import Dict, Optional
+
+
 class Hyp(object):
     def __init__(self, names, ty, definition=None):
         self.names = names
@@ -10,6 +13,18 @@ class Goal(object):
         self.hyps = hyps
         self.ty = ty
 
+    @staticmethod
+    def parse(goal: Dict) -> Optional["Goal"]:
+        if "hyps" not in goal:
+            return None
+        for hyp in goal["hyps"]:
+            if "def" in hyp:
+                hyp["definition"] = hyp["def"]
+                hyp.pop("def")
+        hyps = [Hyp(**hyp) for hyp in goal["hyps"]]
+        ty = None if "ty" not in goal else goal["ty"]
+        return Goal(hyps, ty)
+
 
 class GoalConfig(object):
     def __init__(self, goals, stack, shelf, given_up, bullet=None):
@@ -18,6 +33,16 @@ class GoalConfig(object):
         self.shelf = shelf
         self.given_up = given_up
         self.bullet = bullet
+
+    @staticmethod
+    def parse(goal_config: Dict) -> Optional["GoalConfig"]:
+        parse_goals = lambda goals: [Goal.parse(goal) for goal in goals]
+        goals = parse_goals(goal_config["goals"])
+        stack = [(parse_goals(t[0]), parse_goals(t[1])) for t in goal_config["stack"]]
+        bullet = None if "bullet" not in goal_config else goal_config["bullet"]
+        shelf = parse_goals(goal_config["shelf"])
+        given_up = parse_goals(goal_config["given_up"])
+        return GoalConfig(goals, stack, shelf, given_up, bullet=bullet)
 
 
 class Message(object):

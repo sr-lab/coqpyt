@@ -13,8 +13,8 @@ from pylspclient.lsp_structs import (
     ResponseError,
     ErrorCodes,
 )
-from pylspclient.coq_lsp_structs import Step
-from pylspclient.coq_lsp_client import CoqLspClient
+from coqlspclient.coq_lsp_structs import Step
+from coqlspclient.coq_lsp_client import CoqLspClient
 
 
 class ProofState(object):

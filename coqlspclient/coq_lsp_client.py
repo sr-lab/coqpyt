@@ -4,7 +4,7 @@ from pylspclient.json_rpc_endpoint import JsonRpcEndpoint
 from pylspclient.lsp_endpoint import LspEndpoint
 from pylspclient.lsp_client import LspClient
 from pylspclient import lsp_structs
-from pylspclient import coq_lsp_structs
+from coqlspclient import coq_lsp_structs
 
 
 class CoqLspClient(LspClient):

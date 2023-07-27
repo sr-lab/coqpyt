@@ -1,8 +1,8 @@
 import os
 import pytest
 from pylspclient.lsp_structs import *
-from pylspclient.coq_lsp_structs import *
-from pylspclient.proof_state import ProofState
+from coqlspclient.coq_lsp_structs import *
+from coqlspclient.proof_state import ProofState
 
 versionId: VersionedTextDocumentIdentifier = None
 state: ProofState = None

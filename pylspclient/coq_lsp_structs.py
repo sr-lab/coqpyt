@@ -28,7 +28,9 @@ class Message(object):
 
 
 class GoalAnswer(object):
-    def __init__(self, textDocument, position, messages, goals=None, error=None, program=[]):
+    def __init__(
+        self, textDocument, position, messages, goals=None, error=None, program=[]
+    ):
         self.textDocument = textDocument
         self.position = position
         self.messages = messages
@@ -50,15 +52,15 @@ class GoalAnswer(object):
                 for key, v in res.items():
                     res[key] = recursive_vars(v)
                 return res
-            
+
         return str(recursive_vars(self))
-    
+
 
 class Result(object):
     def __init__(self, range, message):
         self.range = range
         self.message = message
-    
+
 
 class Query(object):
     def __init__(self, query, results):

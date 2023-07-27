@@ -7,6 +7,7 @@ from setuptools.command.test import test as TestCommand
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+
 class PyTest(TestCommand):
     user_options = [("pytest-args=", "a", "Arguments to pass to pytest")]
 
@@ -17,6 +18,7 @@ class PyTest(TestCommand):
     def run_tests(self):
         # import here, cause outside the eggs aren't loaded
         import pytest
+
         errno = pytest.main(self.pytest_args)
         sys.exit(errno)
 

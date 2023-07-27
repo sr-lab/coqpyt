@@ -2,7 +2,7 @@ import os
 from pylspclient.lsp_structs import ResponseError
 from pylspclient.proof_state import ProofState
 
-file_path = os.path.join(os.getcwd(), 'test.v')
+file_path = os.path.join(os.getcwd(), "test.v")
 
 try:
     # symbols = lsp_client.documentSymbol(TextDocumentIdentifier(uri))
@@ -17,65 +17,65 @@ try:
     print(state.get_current_theorem())
 
     state.exec(2)
-    expr = state.current_step['span']['v']['expr']
+    expr = state.current_step["span"]["v"]["expr"]
     print("INTROS")
     [print(i) for i in expr[:-1]]
     [print(i) for i in expr[-1]]
     print()
 
     state.exec()
-    expr = state.current_step['span']['v']['expr']
+    expr = state.current_step["span"]["v"]["expr"]
     print("PRINT")
     [print(i) for i in expr[:-1]]
     [print(i) for i in expr[-1]]
     print()
 
     state.exec()
-    expr = state.current_step['span']['v']['expr']
+    expr = state.current_step["span"]["v"]["expr"]
     print("PRINT DOT")
     [print(i) for i in expr[:-1]]
     [print(i) for i in expr[-1]]
     print()
 
     state.exec(19)
-    expr = state.current_step['span']['v']['expr']
+    expr = state.current_step["span"]["v"]["expr"]
     print("REWRITE HYP")
     [print(i) for i in expr[:-1]]
     [print(i) for i in expr[-1]]
     print()
 
     state.exec(7)
-    expr = state.current_step['span']['v']['expr']
+    expr = state.current_step["span"]["v"]["expr"]
     print("REWRITE 2 HYPS")
     [print(i) for i in expr[:-1]]
     [print(i) for i in expr[-1]]
     print()
 
     state.exec(12)
-    expr = state.current_step['span']['v']['expr']
+    expr = state.current_step["span"]["v"]["expr"]
     print("REWRITE ARROW")
     [print(i) for i in expr[:-1]]
     [print(i) for i in expr[-1]]
     print()
 
     state.exec(6)
-    expr = state.current_step['span']['v']['expr']
+    expr = state.current_step["span"]["v"]["expr"]
     print("REWRITE")
     [print(i) for i in expr[:-1]]
     [print(i) for i in expr[-1]]
     print()
 
     state.exec(61)
-    expr = state.current_step['span']['v']['expr']
+    expr = state.current_step["span"]["v"]["expr"]
     print("SEQUENCE")
     [print(i) for i in expr[:-1]]
     [print(i) for i in expr[-1]]
     print()
 
-    state.exec() # Qed
+    state.exec()  # Qed
     state.jump_to_proof()
-    print(state.current_step['range'])
-    expr = state.current_step['span']['v']['expr']
+    print(state.current_step["range"])
+    expr = state.current_step["span"]["v"]["expr"]
     print("JUMP")
     [print(i) for i in expr]
     print()

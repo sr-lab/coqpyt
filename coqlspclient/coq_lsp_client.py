@@ -5,7 +5,6 @@ from pylspclient.lsp_endpoint import LspEndpoint
 from pylspclient.lsp_client import LspClient
 from pylspclient.lsp_structs import *
 from coqlspclient.coq_lsp_structs import *
-from typing import Dict
 
 
 class CoqLspClient(LspClient):

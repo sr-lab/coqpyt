@@ -1,3 +1,5 @@
+(* Start of test file. *)
+
 Require Import Coq.Unicode.Utf8.
 
 Ltac reduce_eq := simpl; reflexivity.
@@ -51,3 +53,5 @@ Module Extra.
     Qed.
   End Snd.
 End Extra.
+
+(* End of test file. *)

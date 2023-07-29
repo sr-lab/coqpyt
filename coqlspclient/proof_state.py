@@ -9,7 +9,10 @@ class ProofState(object):
         self.coq_file = CoqFile(file_path, timeout=timeout)
         if not self.coq_file.is_valid:
             self.coq_file.close()
-            raise CoqError(CoqErrorCodes.InvalidFile, f"At least one error found in file {file_path}")
+            raise CoqError(
+                CoqErrorCodes.InvalidFile,
+                f"At least one error found in file {file_path}",
+            )
         self.coq_file.context = AuxFile.get_context(file_path, timeout)
         self.aux_file = AuxFile(timeout=timeout)
         self.current_step = None
@@ -20,7 +23,9 @@ class ProofState(object):
             if curr_name in self.coq_file.context.terms:
                 return self.coq_file.context.terms[curr_name]
             elif curr_name in self.coq_file.context.aliases:
-                return self.coq_file.context.terms[self.coq_file.context.aliases[curr_name]]
+                return self.coq_file.context.terms[
+                    self.coq_file.context.aliases[curr_name]
+                ]
         return None
 
     def __locate(self, search, line):
@@ -40,7 +45,7 @@ class ProofState(object):
                 return [(lambda x: x, self.__get_term(id))]
             elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
                 line = len(self.aux_file.read().split("\n"))
-                self.aux_file.append(f"\nLocate \"{el[2][1]}\".")
+                self.aux_file.append(f'\nLocate "{el[2][1]}".')
                 return [(self.__locate, el[2][1], line)] + traverse_ast(el[1:])
             elif isinstance(el, list):
                 return [x for v in el for x in traverse_ast(v)]
@@ -60,7 +65,7 @@ class ProofState(object):
             range = self.current_step.ast.range
             nlines = range.end.line - range.start.line
             text = self.current_step.text.split("\n")[-nlines:]
-            text[0] = text[0][range.start.character:]
+            text[0] = text[0][range.start.character :]
             return "\n".join(text)
 
         pre_proof_steps = []

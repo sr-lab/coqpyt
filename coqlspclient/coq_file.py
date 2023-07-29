@@ -39,7 +39,7 @@ class CoqFile(object):
         if not self.from_lib:
             self.path = file_path
             return
-        
+
         # Coq LSP cannot open files from Coq.Init, so we need to work with a copy of such files.
         temp_dir = tempfile.gettempdir()
         new_path = os.path.join(
@@ -60,15 +60,12 @@ class CoqFile(object):
             self.file_module[-1] = self.file_module[-1][:-2]
 
     def __handle_exception(self, e):
-        if not (
-            isinstance(e, ResponseError)
-            and e.code == ErrorCodes.ServerQuit.value
-        ):
+        if not (isinstance(e, ResponseError) and e.code == ErrorCodes.ServerQuit.value):
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
         if self.from_lib:
             os.remove(self.path)
-    
+
     def __validate(self):
         uri = f"file://{self.path}"
         if uri not in self.coq_lsp_client.lsp_endpoint.diagnostics:
@@ -102,7 +99,9 @@ class CoqFile(object):
             start_line = curr_step.range.start.line
             start_character = curr_step.range.start.character
         else:
-            prev_step = None if self.steps_taken == 0 else self.ast[self.steps_taken - 1]
+            prev_step = (
+                None if self.steps_taken == 0 else self.ast[self.steps_taken - 1]
+            )
             start_line = 0 if prev_step is None else prev_step.range.end.line
             start_character = 0 if prev_step is None else prev_step.range.end.character
 
@@ -111,7 +110,7 @@ class CoqFile(object):
         lines[0] = lines[0][start_character:]
         text = "\n".join(lines)
         return " ".join(text.split()) if trim else text
-    
+
     def __add_alias(self, name):
         curr_file_module = ""
         for module in self.file_module[::-1]:
@@ -149,7 +148,14 @@ class CoqFile(object):
             #   - names should be removed from the context
             #   - curr_module should change as you leave or re-enter modules
             text = self.__step_text(trim=True)
-            for keyword in ["Local", "Variable", "Let", "Context", "Hypothesis", "Hypotheses"]:
+            for keyword in [
+                "Local",
+                "Variable",
+                "Let",
+                "Context",
+                "Hypothesis",
+                "Hypotheses",
+            ]:
                 if text.startswith(keyword):
                     return
             expr = self.__step_expr()
@@ -180,11 +186,14 @@ class CoqFile(object):
                     self.__add_alias(name)
         finally:
             self.steps_taken += sign
-        
+
     def exec(self, nsteps=1):
         steps = []
         sign = 1 if nsteps > 0 else -1
-        nsteps = min(nsteps * sign, len(self.ast) - self.steps_taken if sign > 0 else self.steps_taken)
+        nsteps = min(
+            nsteps * sign,
+            len(self.ast) - self.steps_taken if sign > 0 else self.steps_taken,
+        )
         for _ in range(nsteps):
             steps.append(Step(self.__step_text(), self.ast[self.steps_taken]))
             self.__process_step(sign)
@@ -192,13 +201,17 @@ class CoqFile(object):
 
     def run(self):
         return self.exec(len(self.ast))
-    
+
     def checked(self):
         return self.steps_taken == len(self.ast)
-    
+
     def current_goals(self):
         uri = f"file://{self.path}"
-        end_pos = Position(0, 0) if self.steps_taken == 0 else self.ast[self.steps_taken - 1].range.end
+        end_pos = (
+            Position(0, 0)
+            if self.steps_taken == 0
+            else self.ast[self.steps_taken - 1].range.end
+        )
         try:
             return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
         except Exception as e:

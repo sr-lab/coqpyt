@@ -2,7 +2,11 @@ import os
 import shutil
 import uuid
 import tempfile
-from pylspclient.lsp_structs import TextDocumentItem, VersionedTextDocumentIdentifier, TextDocumentContentChangeEvent
+from pylspclient.lsp_structs import (
+    TextDocumentItem,
+    VersionedTextDocumentIdentifier,
+    TextDocumentContentChangeEvent,
+)
 from pylspclient.lsp_structs import ResponseError, ErrorCodes
 from coqlspclient.coq_lsp_structs import Result, Query, FileContext
 from coqlspclient.coq_lsp_client import CoqLspClient
@@ -44,14 +48,11 @@ class AuxFile(object):
             f.write(text)
 
     def __handle_exception(self, e):
-        if not (
-            isinstance(e, ResponseError)
-            and e.code == ErrorCodes.ServerQuit.value
-        ):
+        if not (isinstance(e, ResponseError) and e.code == ErrorCodes.ServerQuit.value):
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
         os.remove(self.path)
-        
+
     def didOpen(self):
         uri = f"file://{self.path}"
         try:
@@ -76,26 +77,23 @@ class AuxFile(object):
         uri = f"file://{self.path}"
         if uri not in self.coq_lsp_client.lsp_endpoint.diagnostics:
             return []
-        
+
         searches = {}
         lines = self.read().split("\n")
         for diagnostic in self.coq_lsp_client.lsp_endpoint.diagnostics[uri]:
             command = lines[
-                diagnostic.range["start"]["line"] : diagnostic.range["end"]["line"]
-                + 1
+                diagnostic.range["start"]["line"] : diagnostic.range["end"]["line"] + 1
             ]
             if len(command) == 1:
                 command[0] = command[0][
-                    diagnostic.range["start"]["character"] : diagnostic.range[
-                        "end"
-                    ]["character"]
+                    diagnostic.range["start"]["character"] : diagnostic.range["end"][
+                        "character"
+                    ]
                     + 1
                 ]
             else:
                 command[0] = command[0][diagnostic.range["start"]["character"] :]
-                command[-1] = command[-1][
-                    : diagnostic.range["end"]["character"] + 1
-                ]
+                command[-1] = command[-1][: diagnostic.range["end"]["character"] + 1]
             command = "".join(command).strip()
 
             if command.startswith(keyword):
@@ -139,12 +137,14 @@ class AuxFile(object):
 
         context = FileContext()
         for i, library in enumerate(libraries):
-            v_file = aux_file.get_diagnostics("Locate Library", library, last_line + i + 1)
+            v_file = aux_file.get_diagnostics(
+                "Locate Library", library, last_line + i + 1
+            )
             v_file = v_file.split("\n")[-1][:-1]
             coq_file = CoqFile(v_file, timeout=timeout)
             coq_file.run()
             context.update(*coq_file.context)
             coq_file.close()
-        
+
         aux_file.close()
         return context

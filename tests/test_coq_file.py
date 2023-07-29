@@ -19,16 +19,16 @@ def teardown():
     coq_file.close()
 
 
-@pytest.mark.parametrize("setup", ["test_proof_steps.v"], indirect=True)
+@pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
 def test_is_valid(setup, teardown):
     assert coq_file.is_valid
 
 
-@pytest.mark.parametrize("setup", ["test_is_invalid_1.v"], indirect=True)
+@pytest.mark.parametrize("setup", ["test_invalid_1.v"], indirect=True)
 def test_is_invalid_1(setup, teardown):
     assert not coq_file.is_valid
 
 
-@pytest.mark.parametrize("setup", ["test_is_invalid_2.v"], indirect=True)
+@pytest.mark.parametrize("setup", ["test_invalid_2.v"], indirect=True)
 def test_is_invalid_2(setup, teardown):
     assert not coq_file.is_valid

@@ -23,12 +23,13 @@ def teardown():
     state.close()
 
 
-@pytest.mark.parametrize("setup", ["test_proof_steps.v"], indirect=True)
-def test_proof_steps(setup, teardown):
-    proof_steps = state.proof_steps()
-    assert len(proof_steps) == 4
+@pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
+def test_get_proofs(setup, teardown):
+    proofs = state.get_proofs()
+    assert len(proofs) == 4
 
     texts = [
+        "\n    Proof.",
         "\n      intros n.",
         "\n      Print plus.",
         "\n      Print Nat.add.",
@@ -36,6 +37,12 @@ def test_proof_steps(setup, teardown):
         "\n    Qed.",
     ]
     goals = [
+        GoalAnswer(
+            versionId,
+            Position(8, 47),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
         GoalAnswer(
             versionId,
             Position(9, 10),
@@ -64,6 +71,7 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
+        [],
         ["Notation plus := Nat.add (only parsing)."],
         [
             'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
@@ -72,19 +80,26 @@ def test_proof_steps(setup, teardown):
         [],
     ]
 
-    for i in range(5):
-        assert proof_steps[0][i].text == texts[i]
-        assert str(proof_steps[0][i].goals) == str(goals[i])
-        assert proof_steps[0][i].context == contexts[i]
+    for i in range(6):
+        assert proofs[0][i].text == texts[i]
+        assert str(proofs[0][i].goals) == str(goals[i])
+        assert proofs[0][i].context == contexts[i]
 
     texts = [
+        "\n  Proof.",
         "\n    intros n m.",
         "\n    rewrite -> (plus_O_n (S n * m)).",
         "\n    Compute True /\\ True.",
         "\n    reflexivity.",
-        "\n  Qed.",
+        "\n  Defined.",
     ]
     goals = [
+        GoalAnswer(
+            versionId,
+            Position(20, 28),
+            [],
+            GoalConfig([Goal([], "∀ n m : nat, 0 + S n * m = S n * m")], [], [], []),
+        ),
         GoalAnswer(
             versionId,
             Position(21, 8),
@@ -128,6 +143,7 @@ def test_proof_steps(setup, teardown):
     ]
     contexts = [
         [],
+        [],
         [
             "Lemma plus_O_n : forall n:nat, 0 + n = n.",
             'Notation "x * y" := (Nat.mul x y) : nat_scope',
@@ -141,10 +157,10 @@ def test_proof_steps(setup, teardown):
         [],
     ]
 
-    for i in range(5):
-        assert proof_steps[1][i].text == texts[i]
-        assert str(proof_steps[1][i].goals) == str(goals[i])
-        assert proof_steps[1][i].context == contexts[i]
+    for i in range(6):
+        assert proofs[1][i].text == texts[i]
+        assert str(proofs[1][i].goals) == str(goals[i])
+        assert proofs[1][i].context == contexts[i]
 
     texts = [
         "\n      intros n.",
@@ -156,29 +172,29 @@ def test_proof_steps(setup, teardown):
     goals = [
         GoalAnswer(
             versionId,
-            Position(34, 10),
+            Position(33, 47),
             [],
             GoalConfig([Goal([], "∀ n : nat, n = 0 + n")], [], [], []),
         ),
         GoalAnswer(
             versionId,
-            Position(35, 15),
+            Position(34, 15),
             [],
             GoalConfig([Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], []),
         ),
         GoalAnswer(
             versionId,
-            Position(36, 29),
+            Position(35, 29),
             [],
             GoalConfig([Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], []),
         ),
         GoalAnswer(
             versionId,
-            Position(37, 30),
+            Position(36, 30),
             [],
             GoalConfig([Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], []),
         ),
-        GoalAnswer(versionId, Position(38, 16), [], GoalConfig([], [], [], [])),
+        GoalAnswer(versionId, Position(37, 16), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
         [],
@@ -189,21 +205,22 @@ def test_proof_steps(setup, teardown):
     ]
 
     for i in range(5):
-        assert proof_steps[2][i].text == texts[i]
-        assert str(proof_steps[2][i].goals) == str(goals[i])
-        assert proof_steps[2][i].context == contexts[i]
+        assert proofs[2][i].text == texts[i]
+        assert str(proofs[2][i].goals) == str(goals[i])
+        assert proofs[2][i].context == contexts[i]
 
     texts = [
+        "\n    Proof.",
         "\n      intros n m.",
         "\n      rewrite <- (Fst.plus_O_n (|n| * m)).",
         "\n      Compute {| Fst.fst := n; Fst.snd := n |}.",
         "\n      reflexivity.",
-        "\n    Qed.",
+        "\n    Admitted.",
     ]
     goals = [
         GoalAnswer(
             versionId,
-            Position(47, 10),
+            Position(45, 30),
             [],
             GoalConfig(
                 [Goal([], "∀ n m : nat, | n | * m = 0 + | n | * m")], [], [], []
@@ -211,7 +228,15 @@ def test_proof_steps(setup, teardown):
         ),
         GoalAnswer(
             versionId,
-            Position(48, 17),
+            Position(46, 10),
+            [],
+            GoalConfig(
+                [Goal([], "∀ n m : nat, | n | * m = 0 + | n | * m")], [], [], []
+            ),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(47, 17),
             [],
             GoalConfig(
                 [Goal([Hyp(["n", "m"], "nat", None)], "| n | * m = 0 + | n | * m")],
@@ -222,7 +247,7 @@ def test_proof_steps(setup, teardown):
         ),
         GoalAnswer(
             versionId,
-            Position(49, 42),
+            Position(48, 42),
             [],
             GoalConfig(
                 [Goal([Hyp(["n", "m"], "nat", None)], "| n | * m = | n | * m")],
@@ -233,7 +258,7 @@ def test_proof_steps(setup, teardown):
         ),
         GoalAnswer(
             versionId,
-            Position(50, 47),
+            Position(49, 47),
             [],
             GoalConfig(
                 [Goal([Hyp(["n", "m"], "nat", None)], "| n | * m = | n | * m")],
@@ -242,9 +267,10 @@ def test_proof_steps(setup, teardown):
                 [],
             ),
         ),
-        GoalAnswer(versionId, Position(51, 18), [], GoalConfig([], [], [], [])),
+        GoalAnswer(versionId, Position(50, 18), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
+        [],
         [],
         [
             "Theorem plus_O_n : forall n:nat, n = 0 + n.",
@@ -256,7 +282,7 @@ def test_proof_steps(setup, teardown):
         [],
     ]
 
-    for i in range(5):
-        assert proof_steps[3][i].text == texts[i]
-        assert str(proof_steps[3][i].goals) == str(goals[i])
-        assert proof_steps[3][i].context == contexts[i]
+    for i in range(6):
+        assert proofs[3][i].text == texts[i]
+        assert str(proofs[3][i].goals) == str(goals[i])
+        assert proofs[3][i].context == contexts[i]

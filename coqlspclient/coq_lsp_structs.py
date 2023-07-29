@@ -134,6 +134,21 @@ class ProofStep(object):
         self.context = context
 
 
+class FileContext(object):
+    def __init__(self, terms: Dict[str, str] = {}, aliases: Dict[str, str] = {}, notations: List[str] = []):
+        self.terms = terms
+        self.aliases = aliases
+        self.notations = notations
+    
+    def __iter__(self):
+        return iter((self.terms, self.aliases, self.notations))
+
+    def update(self, terms: Dict[str, str] = {}, aliases: Dict[str, str] = {}, notations: List[str] = []):
+        self.terms.update(terms)
+        self.aliases.update(aliases)
+        self.notations.extend(notations)
+
+
 class CompletionStatus(object):
     def __init__(self, status: str, range: Range):
         self.status = status

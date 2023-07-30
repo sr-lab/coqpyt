@@ -42,7 +42,8 @@ class ProofState(object):
                 return [x for v in el.values() for x in traverse_ast(v)]
             elif isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
                 id = ".".join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
-                return [(lambda x: x, self.__get_term(id))]
+                term = self.__get_term(id)
+                return [] if term is None else [(lambda x: x, term)]
             elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
                 line = len(self.aux_file.read().split("\n"))
                 self.aux_file.append(f'\nLocate "{el[2][1]}".')
@@ -52,9 +53,7 @@ class ProofState(object):
 
             return []
 
-        res, traversed = [], traverse_ast(self.current_step.ast.span)
-        [res.append(x) for x in traversed if x not in res]
-        return res
+        return traverse_ast(self.current_step.ast.span)
 
     def __step(self):
         self.current_step = self.coq_file.exec()[0]
@@ -84,9 +83,8 @@ class ProofState(object):
 
     def get_proofs(self):
         def get_proof_step(step):
-            context = [call[0](*call[1:]) for call in step[2]]
-            filtered, context = filter(lambda x: x is not None, context), []
-            [context.append(x) for x in filtered if x not in context]
+            context, calls = [], [call[0](*call[1:]) for call in step[2]]
+            [context.append(call) for call in calls if call not in context]
             return ProofStep(step[0], step[1], context)
 
         proofs = []

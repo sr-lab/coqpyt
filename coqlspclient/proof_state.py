@@ -60,7 +60,7 @@ class ProofState(object):
         self.current_step = self.coq_file.exec()[0]
         self.aux_file.append(self.current_step.text)
 
-    def __pre_proof_steps(self):
+    def __get_steps(self):
         def trim_step_text():
             range = self.current_step.ast.range
             nlines = range.end.line - range.start.line
@@ -68,7 +68,7 @@ class ProofState(object):
             text[0] = text[0][range.start.character :]
             return "\n".join(text)
 
-        pre_proof_steps = []
+        steps = []
         while self.coq_file.in_proof():
             try:
                 goals = self.coq_file.current_goals()
@@ -79,15 +79,21 @@ class ProofState(object):
             self.__step()
             text = trim_step_text()
             context_calls = self.__step_context()
-            pre_proof_steps.append((text, goals, context_calls))
-        return pre_proof_steps
+            steps.append((text, goals, context_calls))
+        return steps
 
     def get_proofs(self):
-        pre_proofs = []
+        def get_proof_step(step):
+            context = [call[0](*call[1:]) for call in step[2]]
+            filtered, context = filter(lambda x: x is not None, context), []
+            [context.append(x) for x in filtered if x not in context]
+            return ProofStep(step[0], step[1], context)
+
+        proofs = []
         while not self.coq_file.checked():
             self.__step()
             if self.coq_file.in_proof():
-                pre_proofs.append(self.__pre_proof_steps())
+                proofs.append(self.__get_steps())
 
         try:
             self.aux_file.didOpen()
@@ -95,17 +101,7 @@ class ProofState(object):
             self.coq_file.close()
             raise e
 
-        proofs = []
-        for pre_proof_steps in pre_proofs:
-            proof_steps = []
-            for step in pre_proof_steps:
-                context = [call[0](*call[1:]) for call in step[2]]
-                filtered, context = filter(lambda x: x is not None, context), []
-                [context.append(x) for x in filtered if x not in context]
-                proof_steps.append(ProofStep(step[0], step[1], context))
-            proofs.append(proof_steps)
-
-        return proofs
+        return [list(map(get_proof_step, steps)) for steps in proofs]
 
     def close(self):
         self.coq_file.close()

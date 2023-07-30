@@ -145,9 +145,6 @@ class FileContext(object):
         self.aliases = aliases
         self.notations = notations
 
-    def __iter__(self):
-        return iter((self.terms, self.aliases, self.notations))
-
     def update(
         self,
         terms: Dict[str, str] = {},

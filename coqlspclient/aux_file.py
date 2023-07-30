@@ -139,11 +139,10 @@ class AuxFile(object):
         for i, library in enumerate(libraries):
             v_file = aux_file.get_diagnostics(
                 "Locate Library", library, last_line + i + 1
-            )
-            v_file = v_file.split("\n")[-1][:-1]
+            ).split("\n")[-1][:-1]
             coq_file = CoqFile(v_file, library=library, timeout=timeout)
             coq_file.run()
-            context.update(*coq_file.context)
+            context.update(**vars(coq_file.context))
             coq_file.close()
 
         aux_file.close()

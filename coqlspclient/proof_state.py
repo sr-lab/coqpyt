@@ -70,7 +70,12 @@ class ProofState(object):
 
         pre_proof_steps = []
         while self.coq_file.in_proof():
-            goals = self.coq_file.current_goals()
+            try:
+                goals = self.coq_file.current_goals()
+            except Exception as e:
+                self.aux_file.close()
+                raise e
+
             self.__step()
             text = trim_step_text()
             context_calls = self.__step_context()
@@ -83,7 +88,12 @@ class ProofState(object):
             self.__step()
             if self.coq_file.in_proof():
                 pre_proofs.append(self.__pre_proof_steps())
-        self.aux_file.didOpen()
+
+        try:
+            self.aux_file.didOpen()
+        except Exception as e:
+            self.coq_file.close()
+            raise e
 
         proofs = []
         for pre_proof_steps in pre_proofs:

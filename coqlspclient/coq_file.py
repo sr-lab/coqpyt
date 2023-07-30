@@ -221,6 +221,14 @@ class CoqFile(object):
     def in_proof(self):
         return self.current_goals().goals is not None
 
+    def save_vo(self):
+        uri = f"file://{self.path}"
+        try:
+            self.coq_lsp_client.save_vo(TextDocumentIdentifier(uri))
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+
     def close(self):
         self.coq_lsp_client.shutdown()
         self.coq_lsp_client.exit()

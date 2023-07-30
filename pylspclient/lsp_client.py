@@ -1,8 +1,8 @@
 from pylspclient import lsp_structs
-
+from pylspclient.lsp_endpoint import LspEndpoint
 
 class LspClient(object):
-    def __init__(self, lsp_endpoint):
+    def __init__(self, lsp_endpoint: LspEndpoint):
         """
         Constructs a new LspClient instance.
 

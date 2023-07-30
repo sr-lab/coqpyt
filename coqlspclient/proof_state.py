@@ -5,17 +5,20 @@ from coqlspclient.aux_file import AuxFile
 
 
 class ProofState(object):
-    def __init__(self, file_path, timeout=2):
-        self.coq_file = CoqFile(file_path, timeout=timeout)
+    def __init__(self, coq_file: CoqFile):
+        self.coq_file = coq_file
         if not self.coq_file.is_valid:
             self.coq_file.close()
             raise CoqError(
                 CoqErrorCodes.InvalidFile,
-                f"At least one error found in file {file_path}",
+                f"At least one error found in file {coq_file.path}",
             )
-        self.coq_file.context = AuxFile.get_context(file_path, timeout)
-        self.aux_file = AuxFile(timeout=timeout)
+        self.coq_file.context = AuxFile.get_context(coq_file.path, coq_file.timeout)
+        self.aux_file = AuxFile(timeout=coq_file.timeout)
         self.current_step = None
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
     def __get_term(self, name):
         for i in range(len(self.coq_file.curr_module), -1, -1):

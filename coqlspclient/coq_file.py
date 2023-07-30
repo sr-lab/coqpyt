@@ -33,6 +33,9 @@ class CoqFile(object):
         self.curr_module: List[str] = []
         self.context = FileContext()
 
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
     def __init_path(self, file_path, library):
         self.file_module = [] if library is None else library.split(".")
         self.from_lib = self.file_module[:1] == ["Coq"]
@@ -175,6 +178,10 @@ class CoqFile(object):
                     self.__add_alias(name)
         finally:
             self.steps_taken += sign
+
+    @property
+    def timeout(self):
+        return self.coq_lsp_client.lsp_endpoint.timeout
 
     def exec(self, nsteps=1):
         steps = []

@@ -20,6 +20,9 @@ class AuxFile(object):
         uri = f"file://{self.path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
 
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
     def __init_path(self, file_path):
         temp_dir = tempfile.gettempdir()
         new_path = os.path.join(

@@ -1,7 +1,7 @@
 import os
 import pytest
 from coqlspclient.coq_lsp_structs import *
-from coqlspclient.proof_state import ProofState
+from coqlspclient.proof_state import ProofState, CoqFile
 
 versionId: VersionedTextDocumentIdentifier = None
 state: ProofState = None
@@ -12,7 +12,7 @@ def setup(request):
     global state, versionId
     file_path = os.path.join("tests/resources", request.param)
     uri = "file://" + file_path
-    state = ProofState(file_path, timeout=60)
+    state = ProofState(CoqFile(file_path, timeout=60))
     versionId = VersionedTextDocumentIdentifier(uri, 1)
     yield
 

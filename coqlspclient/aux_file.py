@@ -141,7 +141,7 @@ class AuxFile(object):
                 "Locate Library", library, last_line + i + 1
             )
             v_file = v_file.split("\n")[-1][:-1]
-            coq_file = CoqFile(v_file, timeout=timeout)
+            coq_file = CoqFile(v_file, library=library, timeout=timeout)
             coq_file.run()
             context.update(*coq_file.context)
             coq_file.close()

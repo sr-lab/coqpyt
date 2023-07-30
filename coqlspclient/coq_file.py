@@ -6,12 +6,12 @@ from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier
 from pylspclient.lsp_structs import ResponseError, ErrorCodes
 from coqlspclient.coq_lsp_structs import Step, Position, FileContext
 from coqlspclient.coq_lsp_client import CoqLspClient
-from typing import List
+from typing import List, Optional
 
 
 class CoqFile(object):
-    def __init__(self, file_path: str, timeout: int = 2):
-        self.__init_path(file_path)
+    def __init__(self, file_path: str, library: Optional[str] = None, timeout: int = 2):
+        self.__init_path(file_path, library)
         uri = f"file://{self.path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
         with open(self.path, "r") as f:
@@ -30,34 +30,23 @@ class CoqFile(object):
 
         self.__validate()
         self.steps_taken: int = 0
-        self.__init_file_module(file_path)
         self.curr_module: List[str] = []
         self.context = FileContext()
 
-    def __init_path(self, file_path):
-        self.from_lib = os.path.join("lib", "coq") in file_path
+    def __init_path(self, file_path, library):
+        self.file_module = [] if library is None else library.split(".")
+        self.from_lib = self.file_module[:1] == ["Coq"]
         if not self.from_lib:
             self.path = file_path
             return
 
-        # Coq LSP cannot open files from Coq.Init, so we need to work with a copy of such files.
+        # Coq LSP cannot open files from Coq library, so we need to work with a copy of such files.
         temp_dir = tempfile.gettempdir()
         new_path = os.path.join(
             temp_dir, "coq_" + str(uuid.uuid4()).replace("-", "") + ".v"
         )
         shutil.copyfile(file_path, new_path)
         self.path = new_path
-
-    def __init_file_module(self, file_path):
-        self.file_module = []
-        if self.from_lib:
-            self.file_module.append("Coq")
-        self.file_module.extend(
-            filter(lambda f: len(f) > 0 and f[0].isupper(), file_path.split(os.sep))
-        )
-        # File
-        if len(self.file_module) > 0 and self.file_module[-1].endswith(".v"):
-            self.file_module[-1] = self.file_module[-1][:-2]
 
     def __handle_exception(self, e):
         if not (isinstance(e, ResponseError) and e.code == ErrorCodes.ServerQuit.value):

@@ -2,10 +2,25 @@ from coqlspclient.coq_lsp_structs import ProofStep
 from coqlspclient.coq_lsp_structs import CoqError, CoqErrorCodes
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.aux_file import AuxFile
+from typing import List
 
 
 class ProofState(object):
+    """Abstraction to interact with the proofs of a Coq file
+
+    Attributes:
+        coq_file (CoqFile): Coq file to interact with
+    """
+
     def __init__(self, coq_file: CoqFile):
+        """Creates a ProofState
+
+        Args:
+            coq_file (CoqFile): Coq file to interact with
+
+        Raises:
+            CoqError: If the provided file is not valid.
+        """
         self.coq_file = coq_file
         if not self.coq_file.is_valid:
             self.coq_file.close()
@@ -14,8 +29,8 @@ class ProofState(object):
                 f"At least one error found in file {coq_file.path}",
             )
         self.coq_file.context = AuxFile.get_context(coq_file.path, coq_file.timeout)
-        self.aux_file = AuxFile(timeout=coq_file.timeout)
-        self.current_step = None
+        self.__aux_file = AuxFile(timeout=coq_file.timeout)
+        self.__current_step = None
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
@@ -32,7 +47,7 @@ class ProofState(object):
         return None
 
     def __locate(self, search, line):
-        nots = self.aux_file.get_diagnostics("Locate", f'"{search}"', line).split("\n")
+        nots = self.__aux_file.get_diagnostics("Locate", f'"{search}"', line).split("\n")
         fun = lambda x: x.endswith("(default interpretation)")
         if len(nots) > 1:
             return list(filter(fun, nots))[0][:-25]
@@ -48,25 +63,25 @@ class ProofState(object):
                 term = self.__get_term(id)
                 return [] if term is None else [(lambda x: x, term)]
             elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
-                line = len(self.aux_file.read().split("\n"))
-                self.aux_file.append(f'\nLocate "{el[2][1]}".')
+                line = len(self.__aux_file.read().split("\n"))
+                self.__aux_file.append(f'\nLocate "{el[2][1]}".')
                 return [(self.__locate, el[2][1], line)] + traverse_ast(el[1:])
             elif isinstance(el, list):
                 return [x for v in el for x in traverse_ast(v)]
 
             return []
 
-        return traverse_ast(self.current_step.ast.span)
+        return traverse_ast(self.__current_step.ast.span)
 
     def __step(self):
-        self.current_step = self.coq_file.exec()[0]
-        self.aux_file.append(self.current_step.text)
+        self.__current_step = self.coq_file.exec()[0]
+        self.__aux_file.append(self.__current_step.text)
 
     def __get_steps(self):
         def trim_step_text():
-            range = self.current_step.ast.range
+            range = self.__current_step.ast.range
             nlines = range.end.line - range.start.line
-            text = self.current_step.text.split("\n")[-nlines:]
+            text = self.__current_step.text.split("\n")[-nlines:]
             text[0] = text[0][range.start.character :]
             return "\n".join(text)
 
@@ -75,7 +90,7 @@ class ProofState(object):
             try:
                 goals = self.coq_file.current_goals()
             except Exception as e:
-                self.aux_file.close()
+                self.__aux_file.close()
                 raise e
 
             self.__step()
@@ -84,7 +99,14 @@ class ProofState(object):
             steps.append((text, goals, context_calls))
         return steps
 
-    def get_proofs(self):
+    def get_proofs(self) -> List[List[ProofStep]]:
+        """Gets all the proofs in the file and their corresponding steps.
+
+        Returns:
+            List[ProofStep]: Each element has the list of steps for a single 
+                proof of the Coq file. The proofs are ordered by the order 
+                they are written on the file.
+        """
         def get_proof_step(step):
             context, calls = [], [call[0](*call[1:]) for call in step[2]]
             [context.append(call) for call in calls if call not in context]
@@ -97,7 +119,7 @@ class ProofState(object):
                 proofs.append(self.__get_steps())
 
         try:
-            self.aux_file.didOpen()
+            self.__aux_file.didOpen()
         except Exception as e:
             self.coq_file.close()
             raise e
@@ -105,5 +127,7 @@ class ProofState(object):
         return [list(map(get_proof_step, steps)) for steps in proofs]
 
     def close(self):
+        """Closes all resources used by this object. 
+        """
         self.coq_file.close()
-        self.aux_file.close()
+        self.__aux_file.close()

@@ -1,29 +1,37 @@
 import os
+import subprocess
 import pytest
 from coqlspclient.coq_lsp_structs import *
 from coqlspclient.proof_state import ProofState, CoqFile
 
 versionId: VersionedTextDocumentIdentifier = None
 state: ProofState = None
+workspace: str = None
 
 
 @pytest.fixture
 def setup(request):
-    global state, versionId
-    file_path = os.path.join("tests/resources", request.param)
+    global state, versionId, workspace
+    file_path, workspace = request.param[0], request.param[1]
+    file_path = os.path.join("tests/resources", file_path)
+    if workspace is not None:
+        workspace = os.path.join(os.getcwd(), "tests/resources", workspace)
+        subprocess.run(f"cd {workspace} && make", shell=True, capture_output=True)
     uri = "file://" + file_path
-    state = ProofState(CoqFile(file_path, timeout=60))
+    state = ProofState(CoqFile(file_path, timeout=60, workspace=workspace))
     versionId = VersionedTextDocumentIdentifier(uri, 1)
     yield
 
 
 @pytest.fixture
-def teardown():
+def teardown(request):
     yield
+    if workspace is not None:
+        subprocess.run(f"cd {workspace} && make clean", shell=True, capture_output=True)
     state.close()
 
 
-@pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
+@pytest.mark.parametrize("setup", [("test_valid.v", None)], indirect=True)
 def test_get_proofs(setup, teardown):
     proofs = state.get_proofs()
     assert len(proofs) == 4
@@ -286,3 +294,26 @@ def test_get_proofs(setup, teardown):
         assert proofs[3][i].text == texts[i]
         assert str(proofs[3][i].goals) == str(goals[i])
         assert proofs[3][i].context == contexts[i]
+
+@pytest.mark.parametrize("setup", [("test_imports/test_import.v", 
+                                   "test_imports/")], indirect=True)
+def test_imports(setup, teardown):
+    proofs = state.get_proofs()
+    assert len(proofs) == 2
+    context = [
+        [],
+        [],
+        [
+            "Local Theorem plus_O_n : forall n:nat, 0 + n = n.",
+            'Notation "x * y" := (Nat.mul x y) : nat_scope',
+            "Inductive nat : Set := | O : nat | S : nat -> nat.",
+        ],
+        [], # FIXME: in the future we should get a Local Theorem from other file here
+        ["Lemma plus_O_n : forall n:nat, 0 + n = n."],
+        [],
+        [],
+    ]
+    
+    assert len(proofs[1]) == len(context)
+    for i, step in enumerate(proofs[1]):
+        assert step.context == context[i]

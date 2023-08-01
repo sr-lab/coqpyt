@@ -138,22 +138,18 @@ class FileContext(object):
     def __init__(
         self,
         terms: Dict[str, str] = {},
-        aliases: Dict[str, str] = {},
-        notations: List[str] = [],
+        notations: set[str] = set(),
     ):
         self.terms = terms
-        self.aliases = aliases
         self.notations = notations
 
     def update(
         self,
         terms: Dict[str, str] = {},
-        aliases: Dict[str, str] = {},
-        notations: List[str] = [],
+        notations: set[str] = set(),
     ):
         self.terms.update(terms)
-        self.aliases.update(aliases)
-        self.notations.extend(notations)
+        self.notations.update(notations)
 
 
 class CompletionStatus(object):

@@ -156,6 +156,14 @@ class _AuxFile(object):
                 ).split("\n")[-1][:-1]
                 coq_file = CoqFile(v_file, library=library, timeout=timeout)
                 coq_file.run()
+
+                # FIXME: we ignore the usage of Local from imported files to
+                # simplify the implementation. However, they can be used:
+                # https://coq.inria.fr/refman/language/core/modules.html?highlight=local#coq:attr.local
+                for term in list(coq_file.context.terms.keys()):
+                    if coq_file.context.terms[term].startswith("Local"):
+                        coq_file.context.terms.pop(term)
+
                 context.update(**vars(coq_file.context))
                 coq_file.close()
 
@@ -200,10 +208,6 @@ class ProofState(object):
             curr_name = ".".join(self.coq_file.curr_module[:i] + [name])
             if curr_name in self.coq_file.context.terms:
                 return self.coq_file.context.terms[curr_name]
-            elif curr_name in self.coq_file.context.aliases:
-                return self.coq_file.context.terms[
-                    self.coq_file.context.aliases[curr_name]
-                ]
         return None
 
     def __locate(self, search, line):

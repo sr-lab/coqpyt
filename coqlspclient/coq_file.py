@@ -26,17 +26,24 @@ class CoqFile(object):
         file_module(List[str]): Module where the file is included.
     """
 
-    def __init__(self, file_path: str, library: Optional[str] = None, timeout: int = 2):
+    def __init__(self, file_path: str, library: Optional[str] = None, timeout: int = 2, workspace: Optional[str] = None):
         """Creates a CoqFile.
 
         Args:
             file_path (str): Path of the Coq file.
             library (Optional[str], optional): The library of the file. Defaults to None.
             timeout (int, optional): Timeout used in coq-lsp. Defaults to 2.
+            workspace(Optional[str], optional): Absolute path for the workspace.
+                If the workspace is not defined, the workspace is equal to the 
+                path of the file.
         """
         self.__init_path(file_path, library)
-        uri = f"file://{self.path}"
+        if workspace is not None:
+            uri = f"file://{workspace}"
+        else:
+            uri = f"file://{self.path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
+        uri = f"file://{self.path}"
         with open(self.path, "r") as f:
             self.__lines = f.read().split("\n")
 
@@ -130,11 +137,14 @@ class CoqFile(object):
         text = "\n".join(lines)
         return " ".join(text.split()) if trim else text
 
-    def __add_alias(self, name):
+    def __add_term(self, name: str, text: str):
+        full_name = lambda name: ".".join(self.curr_module + [name])
+        self.context.update(terms={full_name(name): text})
+
         curr_file_module = ""
         for module in self.file_module[::-1]:
             curr_file_module = module + "." + curr_file_module
-            self.context.update(aliases={curr_file_module + name: name})
+            self.context.update(terms={curr_file_module + name: text})
 
     def __process_step(self, sign):
         def traverse_ast(el, inductive=False):
@@ -168,7 +178,6 @@ class CoqFile(object):
             #   - curr_module should change as you leave or re-enter modules
             text = self.__step_text(trim=True)
             for keyword in [
-                "Local",
                 "Variable",
                 "Let",
                 "Context",
@@ -181,7 +190,6 @@ class CoqFile(object):
             if expr == [None]:
                 return
 
-            full_name = lambda name: ".".join(self.curr_module + [name])
             if (
                 len(expr) >= 2
                 and isinstance(expr[1], list)
@@ -189,8 +197,7 @@ class CoqFile(object):
                 and expr[1][0] == "VernacDeclareTacticDefinition"
             ):
                 name = expr[2][0][2][0][1][0][1][1]
-                self.context.update(terms={full_name(name): text})
-                self.__add_alias(name)
+                self.__add_term(name, text)
             elif expr[0] == "VernacNotation":
                 self.context.update(notations=[text])
             elif expr[0] == "VernacDefineModule":
@@ -201,8 +208,7 @@ class CoqFile(object):
             elif expr[0] != "VernacBeginSection":
                 names = traverse_ast(expr)
                 for name in names:
-                    self.context.update(terms={full_name(name): text})
-                    self.__add_alias(name)
+                    self.__add_term(name, text)
         finally:
             self.steps_taken += sign
 

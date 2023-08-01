@@ -295,8 +295,10 @@ def test_get_proofs(setup, teardown):
         assert str(proofs[3][i].goals) == str(goals[i])
         assert proofs[3][i].context == contexts[i]
 
-@pytest.mark.parametrize("setup", [("test_imports/test_import.v", 
-                                   "test_imports/")], indirect=True)
+
+@pytest.mark.parametrize(
+    "setup", [("test_imports/test_import.v", "test_imports/")], indirect=True
+)
 def test_imports(setup, teardown):
     proofs = state.proofs
     assert len(proofs) == 2
@@ -308,12 +310,12 @@ def test_imports(setup, teardown):
             'Notation "x * y" := (Nat.mul x y) : nat_scope',
             "Inductive nat : Set := | O : nat | S : nat -> nat.",
         ],
-        [], # FIXME: in the future we should get a Local Theorem from other file here
+        [],  # FIXME: in the future we should get a Local Theorem from other file here
         ["Lemma plus_O_n : forall n:nat, 0 + n = n."],
         [],
         [],
     ]
-    
+
     assert len(proofs[1]) == len(context)
     for i, step in enumerate(proofs[1]):
         assert step.context == context[i]

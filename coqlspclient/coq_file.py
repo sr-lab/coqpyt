@@ -26,7 +26,13 @@ class CoqFile(object):
         file_module(List[str]): Module where the file is included.
     """
 
-    def __init__(self, file_path: str, library: Optional[str] = None, timeout: int = 2, workspace: Optional[str] = None):
+    def __init__(
+        self,
+        file_path: str,
+        library: Optional[str] = None,
+        timeout: int = 2,
+        workspace: Optional[str] = None,
+    ):
         """Creates a CoqFile.
 
         Args:
@@ -34,7 +40,7 @@ class CoqFile(object):
             library (Optional[str], optional): The library of the file. Defaults to None.
             timeout (int, optional): Timeout used in coq-lsp. Defaults to 2.
             workspace(Optional[str], optional): Absolute path for the workspace.
-                If the workspace is not defined, the workspace is equal to the 
+                If the workspace is not defined, the workspace is equal to the
                 path of the file.
         """
         self.__init_path(file_path, library)

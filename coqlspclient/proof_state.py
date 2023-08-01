@@ -144,7 +144,9 @@ class _AuxFile(object):
 
             last_line = len(aux_file.read().split("\n")) - 1
             libraries = aux_file.get_diagnostics("Print Libraries", "", last_line)
-            libraries = list(map(lambda line: line.strip(), libraries.split("\n")[1:-1]))
+            libraries = list(
+                map(lambda line: line.strip(), libraries.split("\n")[1:-1])
+            )
             for library in libraries:
                 aux_file.append(f"\nLocate Library {library}.")
             aux_file.didChange()
@@ -288,7 +290,7 @@ class ProofState(object):
             raise e
 
         return [list(map(get_proof_step, steps)) for steps in proofs]
-    
+
     @property
     def proofs(self) -> List[List[ProofStep]]:
         """Gets all the proofs in the file and their corresponding steps.
@@ -300,7 +302,7 @@ class ProofState(object):
                 used for each step and the goals in that step.
         """
         return self.__proofs
-    
+
     @property
     def context(self) -> FileContext:
         """

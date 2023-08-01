@@ -4,22 +4,45 @@ import uuid
 import tempfile
 from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier
 from pylspclient.lsp_structs import ResponseError, ErrorCodes
-from coqlspclient.coq_lsp_structs import Step, Position, FileContext
+from coqlspclient.coq_lsp_structs import Step, Position, FileContext, GoalAnswer
 from coqlspclient.coq_lsp_client import CoqLspClient
 from typing import List, Optional
 
 
 class CoqFile(object):
+    """Abstraction to interact with a Coq file
+
+    Attributes:
+        coq_lsp_client (CoqLspClient): coq-lsp client used on the file
+        ast (List[RangedSpan]): AST of the Coq file. Each element is a step
+            of execution in the Coq file.
+        steps_taken (int): The number of steps already executed
+        curr_module (List[str]): A list correspondent to the module path in the
+            current step. For instance, if the current module is `Ex.Test`, the
+            list will be ['Ex', 'Test'].
+        context (FileContext): The context defined in the file.
+        path (str): Path of the file. If the file is from the Coq library, a
+            temporary file will be used.
+        file_module(List[str]): Module where the file is included.
+    """
+
     def __init__(self, file_path: str, library: Optional[str] = None, timeout: int = 2):
+        """Creates a CoqFile.
+
+        Args:
+            file_path (str): Path of the Coq file.
+            library (Optional[str], optional): The library of the file. Defaults to None.
+            timeout (int, optional): Timeout used in coq-lsp. Defaults to 2.
+        """
         self.__init_path(file_path, library)
         uri = f"file://{self.path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
         with open(self.path, "r") as f:
-            self.lines = f.read().split("\n")
+            self.__lines = f.read().split("\n")
 
         try:
             self.coq_lsp_client.didOpen(
-                TextDocumentItem(uri, "coq", 1, "\n".join(self.lines))
+                TextDocumentItem(uri, "coq", 1, "\n".join(self.__lines))
             )
             self.ast = self.coq_lsp_client.get_document(
                 TextDocumentIdentifier(uri)
@@ -33,17 +56,21 @@ class CoqFile(object):
         self.curr_module: List[str] = []
         self.context = FileContext()
 
+    def __enter__(self):
+        return self
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
 
     def __init_path(self, file_path, library):
         self.file_module = [] if library is None else library.split(".")
-        self.from_lib = self.file_module[:1] == ["Coq"]
-        if not self.from_lib:
+        self.__from_lib = self.file_module[:1] == ["Coq"]
+        if not self.__from_lib:
             self.path = file_path
             return
 
-        # Coq LSP cannot open files from Coq library, so we need to work with a copy of such files.
+        # Coq LSP cannot open files from Coq library, so we need to work with
+        # a copy of such files.
         temp_dir = tempfile.gettempdir()
         new_path = os.path.join(
             temp_dir, "coq_" + str(uuid.uuid4()).replace("-", "") + ".v"
@@ -55,7 +82,7 @@ class CoqFile(object):
         if not (isinstance(e, ResponseError) and e.code == ErrorCodes.ServerQuit.value):
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
-        if self.from_lib:
+        if self.__from_lib:
             os.remove(self.path)
 
     def __validate(self):
@@ -97,7 +124,7 @@ class CoqFile(object):
             start_line = 0 if prev_step is None else prev_step.range.end.line
             start_character = 0 if prev_step is None else prev_step.range.end.character
 
-        lines = self.lines[start_line : end_line + 1]
+        lines = self.__lines[start_line : end_line + 1]
         lines[-1] = lines[-1][: end_character + 1]
         lines[0] = lines[0][start_character:]
         text = "\n".join(lines)
@@ -180,11 +207,40 @@ class CoqFile(object):
             self.steps_taken += sign
 
     @property
-    def timeout(self):
+    def timeout(self) -> int:
+        """The timeout of the coq-lsp client.
+
+        Returns:
+            int: Timeout.
+        """
         return self.coq_lsp_client.lsp_endpoint.timeout
 
-    def exec(self, nsteps=1):
-        steps = []
+    @property
+    def checked(self) -> bool:
+        """
+        Returns:
+            bool: True if the whole file was already executed
+        """
+        return self.steps_taken == len(self.ast)
+
+    @property
+    def in_proof(self) -> bool:
+        """
+        Returns:
+            bool: True if the current step is inside a proof
+        """
+        return self.current_goals().goals is not None
+
+    def exec(self, nsteps=1) -> List[Step]:
+        """Execute steps in the file.
+
+        Args:
+            nsteps (int, optional): Number of steps to execute. Defaults to 1.
+
+        Returns:
+            List[Step]: List of steps executed.
+        """
+        steps: List[Step] = []
         sign = 1 if nsteps > 0 else -1
         nsteps = min(
             nsteps * sign,
@@ -195,13 +251,20 @@ class CoqFile(object):
             self.__process_step(sign)
         return steps
 
-    def run(self):
+    def run(self) -> List[Step]:
+        """Executes all the steps in the file.
+
+        Returns:
+            List[Step]: List of all the steps in the file.
+        """
         return self.exec(len(self.ast))
 
-    def checked(self):
-        return self.steps_taken == len(self.ast)
+    def current_goals(self) -> Optional[GoalAnswer]:
+        """Get goals in current position.
 
-    def current_goals(self):
+        Returns:
+            Optional[GoalAnswer]: Goals in the current position if there are goals
+        """
         uri = f"file://{self.path}"
         end_pos = (
             Position(0, 0)
@@ -214,10 +277,8 @@ class CoqFile(object):
             self.__handle_exception(e)
             raise e
 
-    def in_proof(self):
-        return self.current_goals().goals is not None
-
     def save_vo(self):
+        """Compiles the vo file for this Coq file."""
         uri = f"file://{self.path}"
         try:
             self.coq_lsp_client.save_vo(TextDocumentIdentifier(uri))
@@ -226,7 +287,8 @@ class CoqFile(object):
             raise e
 
     def close(self):
+        """Closes all resources used by this object."""
         self.coq_lsp_client.shutdown()
         self.coq_lsp_client.exit()
-        if self.from_lib:
+        if self.__from_lib:
             os.remove(self.path)

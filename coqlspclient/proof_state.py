@@ -1,12 +1,169 @@
+import os
+import shutil
+import uuid
+import tempfile
+from pylspclient.lsp_structs import (
+    TextDocumentItem,
+    VersionedTextDocumentIdentifier,
+    TextDocumentContentChangeEvent,
+    ResponseError,
+    ErrorCodes,
+)
 from coqlspclient.coq_lsp_structs import ProofStep
-from coqlspclient.coq_lsp_structs import CoqError, CoqErrorCodes
+from coqlspclient.coq_lsp_structs import (
+    CoqError,
+    CoqErrorCodes,
+    Result,
+    Query,
+    FileContext,
+)
 from coqlspclient.coq_file import CoqFile
-from coqlspclient.aux_file import AuxFile
-from typing import List
+from coqlspclient.coq_lsp_client import CoqLspClient
+from typing import List, Optional
+
+
+class _AuxFile(object):
+    def __init__(self, file_path: Optional[str] = None, timeout: int = 2):
+        self.__init_path(file_path)
+        uri = f"file://{self.path}"
+        self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def __init_path(self, file_path):
+        temp_dir = tempfile.gettempdir()
+        new_path = os.path.join(
+            temp_dir, "aux_" + str(uuid.uuid4()).replace("-", "") + ".v"
+        )
+        with open(new_path, "w"):
+            # Create empty file
+            pass
+
+        if file_path is not None:
+            shutil.copyfile(file_path, new_path)
+
+        self.path = new_path
+        self.version = 1
+
+    def read(self):
+        with open(self.path, "r") as f:
+            return f.read()
+
+    def write(self, text):
+        with open(self.path, "w") as f:
+            f.write(text)
+
+    def append(self, text):
+        with open(self.path, "a") as f:
+            f.write(text)
+
+    def __handle_exception(self, e):
+        if not (isinstance(e, ResponseError) and e.code == ErrorCodes.ServerQuit.value):
+            self.coq_lsp_client.shutdown()
+            self.coq_lsp_client.exit()
+        os.remove(self.path)
+
+    def didOpen(self):
+        uri = f"file://{self.path}"
+        try:
+            self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, self.read()))
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+
+    def didChange(self):
+        uri = f"file://{self.path}"
+        self.version += 1
+        try:
+            self.coq_lsp_client.didChange(
+                VersionedTextDocumentIdentifier(uri, self.version),
+                [TextDocumentContentChangeEvent(None, None, self.read())],
+            )
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+
+    def __get_queries(self, keyword):
+        uri = f"file://{self.path}"
+        if uri not in self.coq_lsp_client.lsp_endpoint.diagnostics:
+            return []
+
+        searches = {}
+        lines = self.read().split("\n")
+        for diagnostic in self.coq_lsp_client.lsp_endpoint.diagnostics[uri]:
+            command = lines[
+                diagnostic.range["start"]["line"] : diagnostic.range["end"]["line"] + 1
+            ]
+            if len(command) == 1:
+                command[0] = command[0][
+                    diagnostic.range["start"]["character"] : diagnostic.range["end"][
+                        "character"
+                    ]
+                    + 1
+                ]
+            else:
+                command[0] = command[0][diagnostic.range["start"]["character"] :]
+                command[-1] = command[-1][: diagnostic.range["end"]["character"] + 1]
+            command = "".join(command).strip()
+
+            if command.startswith(keyword):
+                query = command[len(keyword) + 1 : -1]
+                if query not in searches:
+                    searches[query] = []
+                searches[query].append(Result(diagnostic.range, diagnostic.message))
+
+        res = []
+        for query, results in searches.items():
+            res.append(Query(query, results))
+
+        return res
+
+    def get_diagnostics(self, keyword, search, line):
+        for query in self.__get_queries(keyword):
+            if query.query == f"{search}":
+                for result in query.results:
+                    if result.range["start"]["line"] == line:
+                        return result.message
+                break
+        return None
+
+    def close(self):
+        self.coq_lsp_client.shutdown()
+        self.coq_lsp_client.exit()
+        os.remove(self.path)
+
+    @staticmethod
+    def get_context(file_path: str, timeout: int):
+        with _AuxFile(file_path=file_path, timeout=timeout) as aux_file:
+            aux_file.append("\nPrint Libraries.")
+            aux_file.didOpen()
+
+            last_line = len(aux_file.read().split("\n")) - 1
+            libraries = aux_file.get_diagnostics("Print Libraries", "", last_line)
+            libraries = list(map(lambda line: line.strip(), libraries.split("\n")[1:-1]))
+            for library in libraries:
+                aux_file.append(f"\nLocate Library {library}.")
+            aux_file.didChange()
+
+            context = FileContext()
+            for i, library in enumerate(libraries):
+                v_file = aux_file.get_diagnostics(
+                    "Locate Library", library, last_line + i + 1
+                ).split("\n")[-1][:-1]
+                coq_file = CoqFile(v_file, library=library, timeout=timeout)
+                coq_file.run()
+                context.update(**vars(coq_file.context))
+                coq_file.close()
+
+        return context
 
 
 class ProofState(object):
-    """Abstraction to interact with the proofs of a Coq file
+    """Allows to get information about the proofs of a Coq file
 
     Attributes:
         coq_file (CoqFile): Coq file to interact with
@@ -28,9 +185,12 @@ class ProofState(object):
                 CoqErrorCodes.InvalidFile,
                 f"At least one error found in file {coq_file.path}",
             )
-        self.coq_file.context = AuxFile.get_context(coq_file.path, coq_file.timeout)
-        self.__aux_file = AuxFile(timeout=coq_file.timeout)
+        self.coq_file.context = _AuxFile.get_context(coq_file.path, coq_file.timeout)
+        self.__aux_file = _AuxFile(timeout=coq_file.timeout)
         self.__current_step = None
+
+    def __enter__(self):
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
@@ -47,7 +207,9 @@ class ProofState(object):
         return None
 
     def __locate(self, search, line):
-        nots = self.__aux_file.get_diagnostics("Locate", f'"{search}"', line).split("\n")
+        nots = self.__aux_file.get_diagnostics("Locate", f'"{search}"', line).split(
+            "\n"
+        )
         fun = lambda x: x.endswith("(default interpretation)")
         if len(nots) > 1:
             return list(filter(fun, nots))[0][:-25]
@@ -86,7 +248,7 @@ class ProofState(object):
             return "\n".join(text)
 
         steps = []
-        while self.coq_file.in_proof():
+        while self.coq_file.in_proof:
             try:
                 goals = self.coq_file.current_goals()
             except Exception as e:
@@ -103,19 +265,21 @@ class ProofState(object):
         """Gets all the proofs in the file and their corresponding steps.
 
         Returns:
-            List[ProofStep]: Each element has the list of steps for a single 
-                proof of the Coq file. The proofs are ordered by the order 
-                they are written on the file.
+            List[ProofStep]: Each element has the list of steps for a single
+                proof of the Coq file. The proofs are ordered by the order
+                they are written on the file. The steps include the context
+                used for each step and the goals in that step.
         """
+
         def get_proof_step(step):
             context, calls = [], [call[0](*call[1:]) for call in step[2]]
             [context.append(call) for call in calls if call not in context]
             return ProofStep(step[0], step[1], context)
 
         proofs = []
-        while not self.coq_file.checked():
+        while not self.coq_file.checked:
             self.__step()
-            if self.coq_file.in_proof():
+            if self.coq_file.in_proof:
                 proofs.append(self.__get_steps())
 
         try:
@@ -127,7 +291,6 @@ class ProofState(object):
         return [list(map(get_proof_step, steps)) for steps in proofs]
 
     def close(self):
-        """Closes all resources used by this object. 
-        """
+        """Closes all resources used by this object."""
         self.coq_file.close()
         self.__aux_file.close()

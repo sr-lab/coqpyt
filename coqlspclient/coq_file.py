@@ -30,7 +30,7 @@ class CoqFile(object):
         """Creates a CoqFile.
 
         Args:
-            file_path (str): Path of the Coq file.
+            file_path (str): Absolute path of the Coq file.
             library (Optional[str], optional): The library of the file. Defaults to None.
             timeout (int, optional): Timeout used in coq-lsp. Defaults to 2.
             workspace(Optional[str], optional): Absolute path for the workspace.

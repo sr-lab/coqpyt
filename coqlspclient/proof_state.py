@@ -171,7 +171,10 @@ class _AuxFile(object):
 
 
 class ProofState(object):
-    """Allows to get information about the proofs of a Coq file
+    """Allows to get information about the proofs of a Coq file.
+    ProofState will run the file from its current state, i.e., if the file
+    has finished its execution, ProofState won't return anything. The Coq file
+    will be fully checked after the creation of a ProofState.
 
     Attributes:
         coq_file (CoqFile): Coq file to interact with
@@ -196,6 +199,7 @@ class ProofState(object):
         self.coq_file.context = _AuxFile.get_context(coq_file.path, coq_file.timeout)
         self.__aux_file = _AuxFile(timeout=coq_file.timeout)
         self.__current_step = None
+        self.__proofs = self.__get_proofs()
 
     def __enter__(self):
         return self
@@ -265,16 +269,7 @@ class ProofState(object):
             steps.append((text, goals, context_calls))
         return steps
 
-    def get_proofs(self) -> List[List[ProofStep]]:
-        """Gets all the proofs in the file and their corresponding steps.
-
-        Returns:
-            List[ProofStep]: Each element has the list of steps for a single
-                proof of the Coq file. The proofs are ordered by the order
-                they are written on the file. The steps include the context
-                used for each step and the goals in that step.
-        """
-
+    def __get_proofs(self) -> List[List[ProofStep]]:
         def get_proof_step(step):
             context, calls = [], [call[0](*call[1:]) for call in step[2]]
             [context.append(call) for call in calls if call not in context]
@@ -293,6 +288,26 @@ class ProofState(object):
             raise e
 
         return [list(map(get_proof_step, steps)) for steps in proofs]
+    
+    @property
+    def proofs(self) -> List[List[ProofStep]]:
+        """Gets all the proofs in the file and their corresponding steps.
+
+        Returns:
+            List[ProofStep]: Each element has the list of steps for a single
+                proof of the Coq file. The proofs are ordered by the order
+                they are written on the file. The steps include the context
+                used for each step and the goals in that step.
+        """
+        return self.__proofs
+    
+    @property
+    def context(self) -> FileContext:
+        """
+        Returns:
+            FileContext: Whole context available in the environment of the Coq file.
+        """
+        return self.coq_file.context
 
     def close(self):
         """Closes all resources used by this object."""

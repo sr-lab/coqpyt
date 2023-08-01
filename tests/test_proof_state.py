@@ -33,7 +33,7 @@ def teardown(request):
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None)], indirect=True)
 def test_get_proofs(setup, teardown):
-    proofs = state.get_proofs()
+    proofs = state.proofs
     assert len(proofs) == 4
 
     texts = [
@@ -298,7 +298,7 @@ def test_get_proofs(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_imports/test_import.v", 
                                    "test_imports/")], indirect=True)
 def test_imports(setup, teardown):
-    proofs = state.get_proofs()
+    proofs = state.proofs
     assert len(proofs) == 2
     context = [
         [],

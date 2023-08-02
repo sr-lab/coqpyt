@@ -164,8 +164,20 @@ def test_get_proofs(setup, teardown):
         [],
         [],
     ]
+    ranges = [
+        (21, 2, 21, 8),
+        (22, 4, 22, 15),
+        (23, 4, 23, 36),
+        (24, 4, 24, 25),
+        (25, 4, 25, 16),
+        (26, 2, 26, 10)
+    ]
 
     for i in range(6):
+        assert proofs[1][i].ast.range.start.line == ranges[i][0]
+        assert proofs[1][i].ast.range.start.character == ranges[i][1]
+        assert proofs[1][i].ast.range.end.line == ranges[i][2]
+        assert proofs[1][i].ast.range.end.character == ranges[i][3]
         assert proofs[1][i].text == texts[i]
         assert str(proofs[1][i].goals) == str(goals[i])
         assert proofs[1][i].context == contexts[i]

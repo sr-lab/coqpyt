@@ -16,10 +16,12 @@ from coqlspclient.coq_lsp_structs import (
     Result,
     Query,
     FileContext,
+    Step,
+    GoalAnswer
 )
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.coq_lsp_client import CoqLspClient
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 class _AuxFile(object):
@@ -249,14 +251,7 @@ class ProofState(object):
         self.__current_step = self.coq_file.exec()[0]
         self.__aux_file.append(self.__current_step.text)
 
-    def __get_steps(self):
-        def trim_step_text():
-            range = self.__current_step.ast.range
-            nlines = range.end.line - range.start.line
-            text = self.__current_step.text.split("\n")[-nlines:]
-            text[0] = text[0][range.start.character :]
-            return "\n".join(text)
-
+    def __get_steps(self) -> List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]:
         steps = []
         while self.coq_file.in_proof:
             try:
@@ -266,18 +261,17 @@ class ProofState(object):
                 raise e
 
             self.__step()
-            text = trim_step_text()
             context_calls = self.__step_context()
-            steps.append((text, goals, context_calls))
+            steps.append((self.__current_step, goals, context_calls))
         return steps
 
     def __get_proofs(self) -> List[List[ProofStep]]:
-        def get_proof_step(step):
+        def get_proof_step(step: Tuple[Step, Optional[GoalAnswer], List[Tuple]]):
             context, calls = [], [call[0](*call[1:]) for call in step[2]]
             [context.append(call) for call in calls if call not in context]
             return ProofStep(step[0], step[1], context)
 
-        proofs = []
+        proofs: List[List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]] = []
         while not self.coq_file.checked:
             self.__step()
             if self.coq_file.in_proof:

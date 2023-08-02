@@ -127,13 +127,16 @@ class Step(object):
         self.ast = ast
 
 
-class ProofStep(object):
-    def __init__(self, text: str, goals: GoalAnswer, context: List[str]):
-        self.text = text
+# FIXME Add Ranged Span
+# FIXME Change context to FileContext (probably change name of file context)
+class ProofStep(Step):
+    def __init__(self, step: Step, goals: GoalAnswer, context: List[str]):
+        super().__init__(step.text, step.ast)
         self.goals = goals
         self.context = context
 
-
+# FIXME Terms should have the file where they are defined and the 
+# RangedSpan
 class FileContext(object):
     def __init__(
         self,

@@ -9,15 +9,17 @@ from pylspclient.lsp_structs import (
     ResponseError,
     ErrorCodes,
 )
-from coqlspclient.coq_lsp_structs import ProofStep
+from coqlspclient.coq_structs import (
+    ProofStep,
+    FileContext,
+    Step,
+)
 from coqlspclient.coq_lsp_structs import (
     CoqError,
     CoqErrorCodes,
     Result,
     Query,
-    FileContext,
-    Step,
-    GoalAnswer
+    GoalAnswer,
 )
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.coq_lsp_client import CoqLspClient
@@ -165,7 +167,7 @@ class _AuxFile(object):
                 # simplify the implementation. However, they can be used:
                 # https://coq.inria.fr/refman/language/core/modules.html?highlight=local#coq:attr.local
                 for term in list(coq_file.context.terms.keys()):
-                    if coq_file.context.terms[term].startswith("Local"):
+                    if coq_file.context.terms[term].text.startswith("Local"):
                         coq_file.context.terms.pop(term)
 
                 context.update(**vars(coq_file.context))
@@ -239,7 +241,18 @@ class ProofState(object):
             elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
                 line = len(self.__aux_file.read().split("\n"))
                 self.__aux_file.append(f'\nLocate "{el[2][1]}".')
-                return [(self.__locate, el[2][1], line)] + traverse_ast(el[1:])
+                # FIXME consider ID of notations and check if a notations matches
+                def __search_notation(call):
+                    print(call[1:])
+                    notation = call[0](*call[1:])
+                    notation_name = notation.split('"')[1]
+                    if notation.split(':')[-1].endswith('_scope'):
+                        notation_name += " : " + notation.split(':')[-1].strip()
+                    return self.context.terms[notation_name]
+
+                return [
+                    (__search_notation, (self.__locate, el[2][1], line))
+                ] + traverse_ast(el[1:])
             elif isinstance(el, list):
                 return [x for v in el for x in traverse_ast(v)]
 

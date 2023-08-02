@@ -2,11 +2,16 @@ import os
 import subprocess
 import pytest
 from coqlspclient.coq_lsp_structs import *
+from coqlspclient.coq_structs import Term
 from coqlspclient.proof_state import ProofState, CoqFile
 
 versionId: VersionedTextDocumentIdentifier = None
 state: ProofState = None
 workspace: str = None
+
+
+def get_context_texts(context: List[Term]):
+    return list(map(lambda term: term.text, context))
 
 
 @pytest.fixture
@@ -91,7 +96,7 @@ def test_get_proofs(setup, teardown):
     for i in range(6):
         assert proofs[0][i].text == texts[i]
         assert str(proofs[0][i].goals) == str(goals[i])
-        assert proofs[0][i].context == contexts[i]
+        assert get_context_texts(proofs[0][i].context) == contexts[i]
 
     texts = [
         "\n  Proof.",
@@ -170,7 +175,7 @@ def test_get_proofs(setup, teardown):
         (23, 4, 23, 36),
         (24, 4, 24, 25),
         (25, 4, 25, 16),
-        (26, 2, 26, 10)
+        (26, 2, 26, 10),
     ]
 
     for i in range(6):
@@ -180,7 +185,7 @@ def test_get_proofs(setup, teardown):
         assert proofs[1][i].ast.range.end.character == ranges[i][3]
         assert proofs[1][i].text == texts[i]
         assert str(proofs[1][i].goals) == str(goals[i])
-        assert proofs[1][i].context == contexts[i]
+        assert get_context_texts(proofs[1][i].context) == contexts[i]
 
     texts = [
         "\n      intros n.",
@@ -227,7 +232,7 @@ def test_get_proofs(setup, teardown):
     for i in range(5):
         assert proofs[2][i].text == texts[i]
         assert str(proofs[2][i].goals) == str(goals[i])
-        assert proofs[2][i].context == contexts[i]
+        assert get_context_texts(proofs[2][i].context) == contexts[i]
 
     texts = [
         "\n    Proof.",
@@ -305,7 +310,7 @@ def test_get_proofs(setup, teardown):
     for i in range(6):
         assert proofs[3][i].text == texts[i]
         assert str(proofs[3][i].goals) == str(goals[i])
-        assert proofs[3][i].context == contexts[i]
+        assert get_context_texts(proofs[3][i].context) == contexts[i]
 
 
 @pytest.mark.parametrize(
@@ -330,4 +335,4 @@ def test_imports(setup, teardown):
 
     assert len(proofs[1]) == len(context)
     for i, step in enumerate(proofs[1]):
-        assert step.context == context[i]
+        assert get_context_texts(step.context) == context[i]

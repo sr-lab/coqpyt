@@ -4,7 +4,8 @@ import uuid
 import tempfile
 from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier
 from pylspclient.lsp_structs import ResponseError, ErrorCodes
-from coqlspclient.coq_lsp_structs import Step, Position, FileContext, GoalAnswer
+from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
+from coqlspclient.coq_structs import Step, FileContext, Term, TermType
 from coqlspclient.coq_lsp_client import CoqLspClient
 from typing import List, Optional
 
@@ -122,14 +123,13 @@ class CoqFile(object):
             return curr_step.span["v"]["expr"]
         return [None]
 
-    def __step_text(self, trim=False):
-        curr_step = self.ast[self.steps_taken]
-        end_line = curr_step.range.end.line
-        end_character = curr_step.range.end.character
+    def __get_text(self, range: Range, trim: bool=False):
+        end_line = range.end.line
+        end_character = range.end.character
 
         if trim:
-            start_line = curr_step.range.start.line
-            start_character = curr_step.range.start.character
+            start_line = range.start.line
+            start_character = range.start.character
         else:
             prev_step = (
                 None if self.steps_taken == 0 else self.ast[self.steps_taken - 1]
@@ -143,14 +143,104 @@ class CoqFile(object):
         text = "\n".join(lines)
         return " ".join(text.split()) if trim else text
 
-    def __add_term(self, name: str, text: str):
+    def __step_text(self, trim=False):
+        curr_step = self.ast[self.steps_taken]
+        return self.__get_text(curr_step.range, trim=trim)
+
+    def __add_term(self, name: str, ast: RangedSpan, text: str, term_type: TermType):
+        term = Term(text, ast, term_type, self.path)
+        if term.type == TermType.NOTATION:
+            self.context.update(terms={name: term})
+            return
+
         full_name = lambda name: ".".join(self.curr_module + [name])
-        self.context.update(terms={full_name(name): text})
+        self.context.update(terms={full_name(name): term})
 
         curr_file_module = ""
         for module in self.file_module[::-1]:
             curr_file_module = module + "." + curr_file_module
-            self.context.update(terms={curr_file_module + name: text})
+            self.context.update(terms={curr_file_module + name: term})
+
+    def __get_term_type(self, expr: List) -> TermType:
+        if expr[0] == "VernacStartTheoremProof" and expr[1][0] == "Theorem":
+            return TermType.THEOREM
+        elif expr[0] == "VernacStartTheoremProof" and expr[1][0] == "Lemma":
+            return TermType.LEMMA
+        elif expr[0] == "VernacDefinition":
+            return TermType.DEFINITION
+        elif expr[0] in ["VernacNotation"]:
+            return TermType.NOTATION
+        elif expr[0] == "VernacInductive" and expr[1][0] == "Record":
+            return TermType.RECORD
+        elif expr[0] == "VernacInductive" and expr[1][0] == "Variant":
+            return TermType.VARIANT
+        elif expr[0] == "VernacInductive":
+            return TermType.INDUCTIVE
+        elif expr[0] == "VernacFixpoint":
+            return TermType.FIXPOINT
+        elif expr[0] == "VernacScheme":
+            return TermType.SCHEME
+        elif (
+            len(expr) > 1
+            and isinstance(expr[1], list)
+            and expr[1][0] == "VernacDeclareTacticDefinition"
+        ):
+            return TermType.TACTIC
+        else:
+            return TermType.OTHER
+
+    def __handle_where_notations(self, expr: List, term_type: TermType):
+        # FIXME multiple notations (and)
+        span = None
+        if (
+            term_type
+            in [
+                TermType.RECORD,
+                TermType.VARIANT,
+                TermType.INDUCTIVE,
+            ]
+            and len(expr) > 2
+            and isinstance(expr[2], list)
+            and len(expr[2]) > 0
+            and isinstance(expr[2][0], list)
+            and len(expr[2][0]) > 1
+            and isinstance(expr[2][0][1], list)
+            and len(expr[2][0][1]) > 0
+        ):
+            span = expr[2][0][1][0]
+        elif (
+            term_type == TermType.FIXPOINT
+            and len(expr) > 2
+            and isinstance(expr[2], list)
+            and len(expr[2]) > 0
+            and isinstance(expr[2][0], dict)
+            and "notations" in expr[2][0]
+            and isinstance(expr[2][0]["notations"], list)
+            and len(expr[2][0]["notations"]) > 0
+        ):
+            span = expr[2][0]["notations"][0]
+
+        if span is not None:
+            range = Range(
+                Position(
+                    span['decl_ntn_string']['loc']['line_nb'] - 1, 
+                    span['decl_ntn_string']['loc']['bp'] - span['decl_ntn_string']['loc']['bol_pos']
+                ),
+                    Position(
+                    span['decl_ntn_interp']['loc']['line_nb_last'] - 1, 
+                    span['decl_ntn_interp']['loc']['ep'] - span['decl_ntn_interp']['loc']['bol_pos']
+                )
+            )
+            text = self.__get_text(range, trim=True)
+            name = span["decl_ntn_string"]["v"]
+            if span['decl_ntn_scope'] is not None:
+                text += " : " + span['decl_ntn_scope']
+                name += " : " + span['decl_ntn_scope']
+            text = "Notation " + text
+            self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
+
+            if term_type == TermType.FIXPOINT:
+                print(name, text)
 
     def __process_step(self, sign):
         def traverse_ast(el, inductive=False):
@@ -198,6 +288,7 @@ class CoqFile(object):
             expr = self.__step_expr()
             if expr == [None]:
                 return
+            term_type = self.__get_term_type(expr)
 
             if (
                 len(expr) >= 2
@@ -206,9 +297,15 @@ class CoqFile(object):
                 and expr[1][0] == "VernacDeclareTacticDefinition"
             ):
                 name = expr[2][0][2][0][1][0][1][1]
-                self.__add_term(name, text)
-            elif expr[0] == "VernacNotation":
-                self.context.update(notations=[text])
+                self.__add_term(name, self.ast[self.steps_taken], text, TermType.TACTIC)
+            # FIXME add VernacSyntacticDefinition?
+            elif expr[0] in ["VernacNotation"]:
+                name = text.split('"')[1]
+                if text[:-1].split(':')[-1].endswith('_scope'):
+                    name += " : " + text[:-1].split(':')[-1].strip()
+                self.__add_term(
+                    name, self.ast[self.steps_taken], text, TermType.NOTATION
+                )
             elif expr[0] == "VernacDefineModule":
                 self.curr_module.append(expr[2]["v"][1])
             elif expr[0] == "VernacEndSegment":
@@ -217,7 +314,11 @@ class CoqFile(object):
             elif expr[0] != "VernacBeginSection":
                 names = traverse_ast(expr)
                 for name in names:
-                    self.__add_term(name, text)
+                    self.__add_term(name, self.ast[self.steps_taken], text, term_type)
+
+            # Simultaneous definition of terms and notations (where clause)
+            # https://coq.inria.fr/refman/user-extensions/syntax-extensions.html#simultaneous-definition-of-terms-and-notations
+            self.__handle_where_notations(expr, term_type)
         finally:
             self.steps_taken += sign
 

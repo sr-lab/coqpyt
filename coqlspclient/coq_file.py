@@ -183,6 +183,9 @@ class CoqFile(object):
             #   - names should be removed from the context
             #   - curr_module should change as you leave or re-enter modules
             text = self.__step_text(trim=True)
+            # FIXME Let (and maybe Variable) should be handled. However,
+            # I think we can't handle them as normal Locals since they are
+            # specific to a section.
             for keyword in [
                 "Variable",
                 "Let",

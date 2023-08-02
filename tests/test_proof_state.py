@@ -1,35 +1,43 @@
 import os
+import subprocess
 import pytest
-from pylspclient.lsp_structs import *
 from coqlspclient.coq_lsp_structs import *
-from coqlspclient.proof_state import ProofState
+from coqlspclient.proof_state import ProofState, CoqFile
 
 versionId: VersionedTextDocumentIdentifier = None
 state: ProofState = None
+workspace: str = None
 
 
 @pytest.fixture
 def setup(request):
-    global state, versionId
-    file_path = os.path.join("tests/resources", request.param)
+    global state, versionId, workspace
+    file_path, workspace = request.param[0], request.param[1]
+    file_path = os.path.join("tests/resources", file_path)
+    if workspace is not None:
+        workspace = os.path.join(os.getcwd(), "tests/resources", workspace)
+        subprocess.run(f"cd {workspace} && make", shell=True, capture_output=True)
     uri = "file://" + file_path
-    state = ProofState(file_path, timeout=60)
+    state = ProofState(CoqFile(file_path, timeout=60, workspace=workspace))
     versionId = VersionedTextDocumentIdentifier(uri, 1)
     yield
 
 
 @pytest.fixture
-def teardown():
+def teardown(request):
     yield
+    if workspace is not None:
+        subprocess.run(f"cd {workspace} && make clean", shell=True, capture_output=True)
     state.close()
 
 
-@pytest.mark.parametrize("setup", ["test_proof_steps.v"], indirect=True)
-def test_proof_steps(setup, teardown):
-    proof_steps = state.proof_steps()
-    assert len(proof_steps) == 4
+@pytest.mark.parametrize("setup", [("test_valid.v", None)], indirect=True)
+def test_get_proofs(setup, teardown):
+    proofs = state.proofs
+    assert len(proofs) == 4
 
     texts = [
+        "\n    Proof.",
         "\n      intros n.",
         "\n      Print plus.",
         "\n      Print Nat.add.",
@@ -39,106 +47,110 @@ def test_proof_steps(setup, teardown):
     goals = [
         GoalAnswer(
             versionId,
-            Position(7, 10),
+            Position(8, 47),
             [],
-            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], [], None),
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
         ),
         GoalAnswer(
             versionId,
-            Position(8, 15),
+            Position(9, 10),
             [],
-            GoalConfig(
-                [Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], [], None
-            ),
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
         ),
         GoalAnswer(
             versionId,
-            Position(9, 17),
+            Position(10, 15),
             [],
-            GoalConfig(
-                [Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], [], None
-            ),
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
         ),
         GoalAnswer(
             versionId,
-            Position(10, 20),
+            Position(11, 17),
             [],
-            GoalConfig(
-                [Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], [], None
-            ),
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
         ),
-        GoalAnswer(versionId, Position(11, 16), [], GoalConfig([], [], [], [], None)),
+        GoalAnswer(
+            versionId,
+            Position(12, 20),
+            [],
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(versionId, Position(13, 16), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
+        [],
         [],
         ["Notation plus := Nat.add (only parsing)."],
         [
             'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
         ],
         ["Ltac reduce_eq := simpl; reflexivity."],
-        None,
+        [],
     ]
 
-    for i in range(5):
-        assert proof_steps[0][i].text == texts[i]
-        assert str(proof_steps[0][i].goals) == str(goals[i])
-        assert proof_steps[0][i].context == contexts[i]
+    for i in range(6):
+        assert proofs[0][i].text == texts[i]
+        assert str(proofs[0][i].goals) == str(goals[i])
+        assert proofs[0][i].context == contexts[i]
 
     texts = [
+        "\n  Proof.",
         "\n    intros n m.",
         "\n    rewrite -> (plus_O_n (S n * m)).",
         "\n    Compute True /\\ True.",
         "\n    reflexivity.",
-        "\n  Qed.",
+        "\n  Defined.",
     ]
     goals = [
         GoalAnswer(
             versionId,
-            Position(19, 8),
+            Position(20, 28),
             [],
-            GoalConfig(
-                [Goal([], "∀ n m : nat, 0 + S n * m = S n * m")], [], [], [], None
-            ),
+            GoalConfig([Goal([], "∀ n m : nat, 0 + S n * m = S n * m")], [], [], []),
         ),
         GoalAnswer(
             versionId,
-            Position(20, 15),
+            Position(21, 8),
+            [],
+            GoalConfig([Goal([], "∀ n m : nat, 0 + S n * m = S n * m")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(22, 15),
             [],
             GoalConfig(
                 [Goal([Hyp(["n", "m"], "nat", None)], "0 + S n * m = S n * m")],
                 [],
                 [],
                 [],
-                None,
             ),
         ),
         GoalAnswer(
             versionId,
-            Position(21, 36),
+            Position(23, 36),
             [],
             GoalConfig(
                 [Goal([Hyp(["n", "m"], "nat", None)], "S n * m = S n * m")],
                 [],
                 [],
                 [],
-                None,
             ),
         ),
         GoalAnswer(
             versionId,
-            Position(22, 25),
+            Position(24, 25),
             [],
             GoalConfig(
                 [Goal([Hyp(["n", "m"], "nat", None)], "S n * m = S n * m")],
                 [],
                 [],
                 [],
-                None,
             ),
         ),
-        GoalAnswer(versionId, Position(23, 16), [], GoalConfig([], [], [], [], None)),
+        GoalAnswer(versionId, Position(25, 16), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
+        [],
         [],
         [
             "Lemma plus_O_n : forall n:nat, 0 + n = n.",
@@ -150,13 +162,13 @@ def test_proof_steps(setup, teardown):
             "Inductive True : Prop := I : True.",
         ],
         [],
-        None,
+        [],
     ]
 
-    for i in range(5):
-        assert proof_steps[1][i].text == texts[i]
-        assert str(proof_steps[1][i].goals) == str(goals[i])
-        assert proof_steps[1][i].context == contexts[i]
+    for i in range(6):
+        assert proofs[1][i].text == texts[i]
+        assert str(proofs[1][i].goals) == str(goals[i])
+        assert proofs[1][i].context == contexts[i]
 
     texts = [
         "\n      intros n.",
@@ -168,104 +180,105 @@ def test_proof_steps(setup, teardown):
     goals = [
         GoalAnswer(
             versionId,
-            Position(32, 10),
+            Position(33, 47),
             [],
-            GoalConfig([Goal([], "∀ n : nat, n = 0 + n")], [], [], [], None),
+            GoalConfig([Goal([], "∀ n : nat, n = 0 + n")], [], [], []),
         ),
         GoalAnswer(
             versionId,
-            Position(33, 15),
+            Position(34, 15),
             [],
-            GoalConfig(
-                [Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], [], None
-            ),
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], []),
         ),
         GoalAnswer(
             versionId,
-            Position(34, 29),
+            Position(35, 29),
             [],
-            GoalConfig(
-                [Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], [], None
-            ),
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], []),
         ),
         GoalAnswer(
             versionId,
-            Position(35, 30),
+            Position(36, 30),
             [],
-            GoalConfig(
-                [Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], [], None
-            ),
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], []),
         ),
-        GoalAnswer(versionId, Position(36, 16), [], GoalConfig([], [], [], [], None)),
+        GoalAnswer(versionId, Position(37, 16), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
         [],
         ["Record example := mk_example { fst : nat; snd : nat }."],
         ["Theorem plus_O_n : forall n:nat, 0 + n = n."],
         ["Ltac reduce_eq := simpl; reflexivity."],
-        None,
+        [],
     ]
 
     for i in range(5):
-        assert proof_steps[2][i].text == texts[i]
-        assert str(proof_steps[2][i].goals) == str(goals[i])
-        assert proof_steps[2][i].context == contexts[i]
+        assert proofs[2][i].text == texts[i]
+        assert str(proofs[2][i].goals) == str(goals[i])
+        assert proofs[2][i].context == contexts[i]
 
     texts = [
+        "\n    Proof.",
         "\n      intros n m.",
         "\n      rewrite <- (Fst.plus_O_n (|n| * m)).",
         "\n      Compute {| Fst.fst := n; Fst.snd := n |}.",
         "\n      reflexivity.",
-        "\n    Qed.",
+        "\n    Admitted.",
     ]
     goals = [
         GoalAnswer(
             versionId,
-            Position(45, 10),
+            Position(45, 30),
             [],
             GoalConfig(
-                [Goal([], "∀ n m : nat, | n | * m = 0 + | n | * m")], [], [], [], None
+                [Goal([], "∀ n m : nat, | n | * m = 0 + | n | * m")], [], [], []
             ),
         ),
         GoalAnswer(
             versionId,
-            Position(46, 17),
+            Position(46, 10),
+            [],
+            GoalConfig(
+                [Goal([], "∀ n m : nat, | n | * m = 0 + | n | * m")], [], [], []
+            ),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(47, 17),
             [],
             GoalConfig(
                 [Goal([Hyp(["n", "m"], "nat", None)], "| n | * m = 0 + | n | * m")],
                 [],
                 [],
                 [],
-                None,
             ),
         ),
         GoalAnswer(
             versionId,
-            Position(47, 42),
+            Position(48, 42),
             [],
             GoalConfig(
                 [Goal([Hyp(["n", "m"], "nat", None)], "| n | * m = | n | * m")],
                 [],
                 [],
                 [],
-                None,
             ),
         ),
         GoalAnswer(
             versionId,
-            Position(48, 47),
+            Position(49, 47),
             [],
             GoalConfig(
                 [Goal([Hyp(["n", "m"], "nat", None)], "| n | * m = | n | * m")],
                 [],
                 [],
                 [],
-                None,
             ),
         ),
-        GoalAnswer(versionId, Position(49, 18), [], GoalConfig([], [], [], [], None)),
+        GoalAnswer(versionId, Position(50, 18), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
+        [],
         [],
         [
             "Theorem plus_O_n : forall n:nat, n = 0 + n.",
@@ -274,28 +287,35 @@ def test_proof_steps(setup, teardown):
         ],
         ["Record example := mk_example { fst : nat; snd : nat }."],
         [],
-        None,
+        [],
     ]
 
-    for i in range(5):
-        assert proof_steps[3][i].text == texts[i]
-        assert str(proof_steps[3][i].goals) == str(goals[i])
-        assert proof_steps[3][i].context == contexts[i]
+    for i in range(6):
+        assert proofs[3][i].text == texts[i]
+        assert str(proofs[3][i].goals) == str(goals[i])
+        assert proofs[3][i].context == contexts[i]
 
 
-@pytest.mark.parametrize("setup", ["test_proof_steps.v"], indirect=True)
-def test_is_valid(setup, teardown):
-    found_error = state.is_invalid()
-    assert found_error == False
+@pytest.mark.parametrize(
+    "setup", [("test_imports/test_import.v", "test_imports/")], indirect=True
+)
+def test_imports(setup, teardown):
+    proofs = state.proofs
+    assert len(proofs) == 2
+    context = [
+        [],
+        [],
+        [
+            "Local Theorem plus_O_n : forall n:nat, 0 + n = n.",
+            'Notation "x * y" := (Nat.mul x y) : nat_scope',
+            "Inductive nat : Set := | O : nat | S : nat -> nat.",
+        ],
+        [],  # FIXME: in the future we should get a Local Theorem from other file here
+        ["Lemma plus_O_n : forall n:nat, 0 + n = n."],
+        [],
+        [],
+    ]
 
-
-@pytest.mark.parametrize("setup", ["test_is_invalid_1.v"], indirect=True)
-def test_is_invalid_1(setup, teardown):
-    found_error = state.is_invalid()
-    assert found_error == True
-
-
-@pytest.mark.parametrize("setup", ["test_is_invalid_2.v"], indirect=True)
-def test_is_invalid_2(setup, teardown):
-    found_error = state.is_invalid()
-    assert found_error == True
+    assert len(proofs[1]) == len(context)
+    for i, step in enumerate(proofs[1]):
+        assert step.context == context[i]

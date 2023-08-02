@@ -1,3 +1,5 @@
+(* Start of test file. *)
+
 Require Import Coq.Unicode.Utf8.
 
 Ltac reduce_eq := simpl; reflexivity.
@@ -22,7 +24,7 @@ Section Random.
     rewrite -> (plus_O_n (S n * m)).
     Compute True /\ True.
     reflexivity.
-  Qed.
+  Defined.
 End Random.
 
 Module Extra.
@@ -30,7 +32,6 @@ Module Extra.
     Record example := mk_example { fst : nat; snd : nat }.
 
     Theorem plus_O_n : forall n:nat, n = 0 + n.
-    Proof.
       intros n.
       Compute mk_example n n.
       Compute Out.In.plus_O_n.
@@ -48,6 +49,8 @@ Module Extra.
       rewrite <- (Fst.plus_O_n (|n| * m)).
       Compute {| Fst.fst := n; Fst.snd := n |}.
       reflexivity.
-    Qed.
+    Admitted.
   End Snd.
 End Extra.
+
+(* End of test file. *)

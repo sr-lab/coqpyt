@@ -24,14 +24,14 @@ class PyTest(TestCommand):
 
 
 setup(
-    name="pylspclient",
-    version="0.0.2",
-    author="Avi Yeger",
-    author_email="yeger00@gmail.com",
-    description="LSP client implementation in Python",
+    name="coq-lsp-pyclient",
+    version="0.0.1",
+    author="Pedro Carrott, Nuno Saavedra, Avi Yeger",
+    author_email="pedro.carrott@tecnico.ulisboa.pt",
+    description="Python client for coq-lsp",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yeger00/pylspclient",
+    url="https://github.com/sr-lab/coq-lsp-pyclient",
     packages=find_packages(),
     tests_require=["pytest", "pytest_mock"],
     cmdclass={"test": PyTest},

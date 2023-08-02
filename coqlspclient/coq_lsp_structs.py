@@ -91,7 +91,7 @@ class GoalAnswer(object):
             goal_answer["position"]["line"], goal_answer["position"]["character"]
         )
 
-        if goal_answer["goals"] is not None:
+        if "goals" in goal_answer:
             goal_answer["goals"] = GoalConfig.parse(goal_answer["goals"])
 
         for i, message in enumerate(goal_answer["messages"]):
@@ -115,17 +115,41 @@ class Query(object):
         self.results = results
 
 
+class RangedSpan(object):
+    def __init__(self, range: Range, span: Any):
+        self.range = range
+        self.span = span
+
+
 class Step(object):
-    def __init__(self, text, goals, context):
+    def __init__(self, text: str, ast: RangedSpan):
+        self.text = text
+        self.ast = ast
+
+
+class ProofStep(object):
+    def __init__(self, text: str, goals: GoalAnswer, context: List[str]):
         self.text = text
         self.goals = goals
         self.context = context
 
 
-class RangedSpan(object):
-    def __init__(self, range: Range, span: Any):
-        self.range = range
-        self.span = span
+class FileContext(object):
+    def __init__(
+        self,
+        terms: Dict[str, str] = {},
+        notations: set[str] = set(),
+    ):
+        self.terms = terms
+        self.notations = notations
+
+    def update(
+        self,
+        terms: Dict[str, str] = {},
+        notations: set[str] = set(),
+    ):
+        self.terms.update(terms)
+        self.notations.update(notations)
 
 
 class CompletionStatus(object):
@@ -198,3 +222,13 @@ class CoqFileProgressParams(object):
                 )
             )
         return CoqFileProgressParams(textDocument, processing)
+
+
+class CoqErrorCodes(Enum):
+    InvalidFile = 0
+
+
+class CoqError(Exception):
+    def __init__(self, code: CoqErrorCodes, message: str):
+        self.code = code
+        self.message = message

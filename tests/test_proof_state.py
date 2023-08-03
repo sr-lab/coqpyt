@@ -159,7 +159,7 @@ def test_get_proofs(setup, teardown):
         [],
         [
             "Lemma plus_O_n : forall n:nat, 0 + n = n.",
-            'Notation "x * y" := (Nat.mul x y) : nat_scope',
+            'Notation "n * m" := (mul n m) : nat_scope',
             "Inductive nat : Set := | O : nat | S : nat -> nat.",
         ],
         [
@@ -299,8 +299,8 @@ def test_get_proofs(setup, teardown):
         [],
         [
             "Theorem plus_O_n : forall n:nat, n = 0 + n.",
-            'Notation "x * y" := (Nat.mul x y) : nat_scope',
-            'Notation "| a |" := (S a)',
+            'Notation "n * m" := (mul n m) : nat_scope',
+            'Notation "| a |" := (S a) (at level 30, right associativity).',
         ],
         ["Record example := mk_example { fst : nat; snd : nat }."],
         [],
@@ -324,7 +324,7 @@ def test_imports(setup, teardown):
         [],
         [
             "Local Theorem plus_O_n : forall n:nat, 0 + n = n.",
-            'Notation "x * y" := (Nat.mul x y) : nat_scope',
+            'Notation "n * m" := (mul n m) : nat_scope',
             "Inductive nat : Set := | O : nat | S : nat -> nat.",
         ],
         [],  # FIXME: in the future we should get a Local Theorem from other file here

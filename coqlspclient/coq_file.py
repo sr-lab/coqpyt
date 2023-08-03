@@ -239,9 +239,6 @@ class CoqFile(object):
             text = "Notation " + text
             self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
 
-            if term_type == TermType.FIXPOINT:
-                print(name, text)
-
     def __process_step(self, sign):
         def traverse_ast(el, inductive=False):
             if isinstance(el, dict):
@@ -263,7 +260,7 @@ class CoqFile(object):
                 for v in el:
                     res.extend(traverse_ast(v, inductive))
                     if not inductive and len(res) > 0:
-                        return res
+                        return [res[0]]
                 return res
 
             return []

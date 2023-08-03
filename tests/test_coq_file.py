@@ -23,6 +23,13 @@ def teardown():
 def test_is_valid(setup, teardown):
     assert coq_file.is_valid
 
+@pytest.mark.parametrize("setup", ["test_where_notation.v"], indirect=True)
+def test_where_notation(setup, teardown):
+    coq_file.run()
+    assert "n + m : test_scope" in coq_file.context.terms
+    assert coq_file.context.terms["n + m : test_scope"].text == 'Notation "n + m" := (plus n m) : test_scope'
+    assert "A & B" in coq_file.context.terms
+    assert coq_file.context.terms["A & B"].text == 'Notation "A & B" := (and\' A B)'
 
 @pytest.mark.parametrize("setup", ["test_invalid_1.v"], indirect=True)
 def test_is_invalid_1(setup, teardown):

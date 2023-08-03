@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import uuid
 import tempfile
@@ -13,6 +14,7 @@ from coqlspclient.coq_structs import (
     ProofStep,
     FileContext,
     Step,
+    Term
 )
 from coqlspclient.coq_lsp_structs import (
     CoqError,
@@ -229,6 +231,14 @@ class ProofState(object):
             return list(filter(fun, nots))[0][:-25]
         else:
             return nots[0][:-25] if fun(nots[0]) else nots[0]
+        
+    def __get_notation(self, notation_id: str) -> Term:
+        regex = f"^{re.escape(notation_id).replace('_', '.')}$"
+        for term in self.context.terms.keys():
+            if re.match(regex, term):
+                return self.context.terms[term]
+
+        raise RuntimeError(f"Notation not found in context: {notation_id}")
 
     def __step_context(self):
         def traverse_ast(el):
@@ -243,15 +253,14 @@ class ProofState(object):
                 self.__aux_file.append(f'\nLocate "{el[2][1]}".')
                 # FIXME consider ID of notations and check if a notations matches
                 def __search_notation(call):
-                    print(call[1:])
-                    notation = call[0](*call[1:])
-                    notation_name = notation.split('"')[1]
+                    notation_id = call[0]
+                    notation = call[1](*call[2:])
                     if notation.split(':')[-1].endswith('_scope'):
-                        notation_name += " : " + notation.split(':')[-1].strip()
-                    return self.context.terms[notation_name]
+                        notation_id += " : " + notation.split(':')[-1].strip()
+                    return self.__get_notation(notation_id)
 
                 return [
-                    (__search_notation, (self.__locate, el[2][1], line))
+                    (__search_notation, (el[2][1], self.__locate, el[2][1], line))
                 ] + traverse_ast(el[1:])
             elif isinstance(el, list):
                 return [x for v in el for x in traverse_ast(v)]

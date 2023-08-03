@@ -55,12 +55,12 @@ class ProofStep(Step):
         self.context = context
 
 
-class FileContext(object):
+class FileContext:
     def __init__(
         self,
-        terms: Dict[str, Term] = {},
+        terms: Dict[str, Term] = None
     ):
-        self.terms = terms
+        self.terms = {} if terms is None else terms
 
     def update(
         self,

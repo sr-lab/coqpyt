@@ -237,7 +237,9 @@ class CoqFile(object):
                 ),
             )
             text = self.__get_text(range, trim=True)
-            name = FileContext.get_notation_key(span["decl_ntn_string"]["v"], span["decl_ntn_scope"])
+            name = FileContext.get_notation_key(
+                span["decl_ntn_string"]["v"], span["decl_ntn_scope"]
+            )
             if span["decl_ntn_scope"] is not None:
                 text += " : " + span["decl_ntn_scope"]
             text = "Notation " + text
@@ -316,7 +318,7 @@ class CoqFile(object):
                 names = traverse_ast(expr)
                 for name in names:
                     self.__add_term(name, self.ast[self.steps_taken], text, term_type)
-            
+
             self.__handle_where_notations(expr, term_type)
         finally:
             self.steps_taken += sign

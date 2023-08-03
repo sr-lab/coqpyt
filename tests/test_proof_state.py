@@ -1,8 +1,9 @@
 import os
 import subprocess
 import pytest
+from typing import List, Tuple
 from coqlspclient.coq_lsp_structs import *
-from coqlspclient.coq_structs import Term
+from coqlspclient.coq_structs import TermType, Term
 from coqlspclient.proof_state import ProofState, CoqFile
 
 versionId: VersionedTextDocumentIdentifier = None
@@ -10,8 +11,11 @@ state: ProofState = None
 workspace: str = None
 
 
-def get_context_texts(context: List[Term]):
-    return list(map(lambda term: term.text, context))
+def compare_context(test_context: List[Tuple[str, TermType]], context: List[Term]):
+    assert len(test_context) == len(context)
+    for i in range(len(context)):
+        assert test_context[i][0] == context[i].text
+        assert test_context[i][1] == context[i].type
 
 
 @pytest.fixture
@@ -85,18 +89,19 @@ def test_get_proofs(setup, teardown):
     contexts = [
         [],
         [],
-        ["Notation plus := Nat.add (only parsing)."],
+        [("Notation plus := Nat.add (only parsing).", TermType.NOTATION)],
         [
-            'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
+            ('Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
+            TermType.FIXPOINT)
         ],
-        ["Ltac reduce_eq := simpl; reflexivity."],
+        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC)],
         [],
     ]
 
     for i in range(6):
         assert proofs[0][i].text == texts[i]
         assert str(proofs[0][i].goals) == str(goals[i])
-        assert get_context_texts(proofs[0][i].context) == contexts[i]
+        compare_context(contexts[i], proofs[0][i].context)
 
     texts = [
         "\n  Proof.",
@@ -158,13 +163,13 @@ def test_get_proofs(setup, teardown):
         [],
         [],
         [
-            "Lemma plus_O_n : forall n:nat, 0 + n = n.",
-            'Notation "n * m" := (mul n m) : nat_scope',
-            "Inductive nat : Set := | O : nat | S : nat -> nat.",
+            ("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA),
+            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION),
+            ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE),
         ],
         [
-            'Notation "A /\\ B" := (and A B) : type_scope',
-            "Inductive True : Prop := I : True.",
+            ('Notation "A /\\ B" := (and A B) : type_scope', TermType.NOTATION),
+            ("Inductive True : Prop := I : True.", TermType.INDUCTIVE),
         ],
         [],
         [],
@@ -185,7 +190,7 @@ def test_get_proofs(setup, teardown):
         assert proofs[1][i].ast.range.end.character == ranges[i][3]
         assert proofs[1][i].text == texts[i]
         assert str(proofs[1][i].goals) == str(goals[i])
-        assert get_context_texts(proofs[1][i].context) == contexts[i]
+        compare_context(contexts[i], proofs[1][i].context)
 
     texts = [
         "\n      intros n.",
@@ -223,16 +228,16 @@ def test_get_proofs(setup, teardown):
     ]
     contexts = [
         [],
-        ["Record example := mk_example { fst : nat; snd : nat }."],
-        ["Theorem plus_O_n : forall n:nat, 0 + n = n."],
-        ["Ltac reduce_eq := simpl; reflexivity."],
+        [("Record example := mk_example { fst : nat; snd : nat }.", TermType.RECORD)],
+        [("Theorem plus_O_n : forall n:nat, 0 + n = n.", TermType.THEOREM)],
+        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC)],
         [],
     ]
 
     for i in range(5):
         assert proofs[2][i].text == texts[i]
         assert str(proofs[2][i].goals) == str(goals[i])
-        assert get_context_texts(proofs[2][i].context) == contexts[i]
+        compare_context(contexts[i], proofs[2][i].context)
 
     texts = [
         "\n    Proof.",
@@ -298,11 +303,11 @@ def test_get_proofs(setup, teardown):
         [],
         [],
         [
-            "Theorem plus_O_n : forall n:nat, n = 0 + n.",
-            'Notation "n * m" := (mul n m) : nat_scope',
-            'Notation "| a |" := (S a) (at level 30, right associativity).',
+            ("Theorem plus_O_n : forall n:nat, n = 0 + n.", TermType.THEOREM),
+            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION),
+            ('Notation "| a |" := (S a) (at level 30, right associativity).', TermType.NOTATION),
         ],
-        ["Record example := mk_example { fst : nat; snd : nat }."],
+        [("Record example := mk_example { fst : nat; snd : nat }.", TermType.RECORD)],
         [],
         [],
     ]
@@ -310,7 +315,7 @@ def test_get_proofs(setup, teardown):
     for i in range(6):
         assert proofs[3][i].text == texts[i]
         assert str(proofs[3][i].goals) == str(goals[i])
-        assert get_context_texts(proofs[3][i].context) == contexts[i]
+        compare_context(contexts[i], proofs[3][i].context)
 
 
 @pytest.mark.parametrize(
@@ -323,16 +328,16 @@ def test_imports(setup, teardown):
         [],
         [],
         [
-            "Local Theorem plus_O_n : forall n:nat, 0 + n = n.",
-            'Notation "n * m" := (mul n m) : nat_scope',
-            "Inductive nat : Set := | O : nat | S : nat -> nat.",
+            ("Local Theorem plus_O_n : forall n:nat, 0 + n = n.", TermType.THEOREM),
+            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION),
+            ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE),
         ],
         [],  # FIXME: in the future we should get a Local Theorem from other file here
-        ["Lemma plus_O_n : forall n:nat, 0 + n = n."],
+        [("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA)],
         [],
         [],
     ]
 
     assert len(proofs[1]) == len(context)
     for i, step in enumerate(proofs[1]):
-        assert get_context_texts(step.context) == context[i]
+        compare_context(context[i], step.context)

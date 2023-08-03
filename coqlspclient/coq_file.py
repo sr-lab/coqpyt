@@ -169,7 +169,7 @@ class CoqFile(object):
             return TermType.LEMMA
         elif expr[0] == "VernacDefinition":
             return TermType.DEFINITION
-        elif expr[0] in ["VernacNotation"]:
+        elif expr[0] in ["VernacNotation", "VernacSyntacticDefinition"]:
             return TermType.NOTATION
         elif expr[0] == "VernacInductive" and expr[1][0] == "Record":
             return TermType.RECORD
@@ -301,9 +301,15 @@ class CoqFile(object):
             ):
                 name = expr[2][0][2][0][1][0][1][1]
                 self.__add_term(name, self.ast[self.steps_taken], text, TermType.TACTIC)
-            # FIXME add VernacSyntacticDefinition?
-            elif expr[0] in ["VernacNotation"]:
+            elif expr[0] == "VernacNotation":
                 name = text.split('"')[1]
+                if text[:-1].split(":")[-1].endswith("_scope"):
+                    name += " : " + text[:-1].split(":")[-1].strip()
+                self.__add_term(
+                    name, self.ast[self.steps_taken], text, TermType.NOTATION
+                )
+            elif expr[0] == "VernacSyntacticDefinition":
+                name = text.split(' ')[1]
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
                 self.__add_term(

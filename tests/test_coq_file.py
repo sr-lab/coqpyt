@@ -32,6 +32,11 @@ def test_where_notation(setup, teardown):
         coq_file.context.terms["n + m : test_scope"].text
         == 'Notation "n + m" := (plus n m) : test_scope'
     )
+    assert "n - m" in coq_file.context.terms
+    assert (
+        coq_file.context.terms["n - m"].text
+        == 'Notation "n - m" := (minus n m)'
+    )
     assert "A & B" in coq_file.context.terms
     assert coq_file.context.terms["A & B"].text == 'Notation "A & B" := (and\' A B)'
 

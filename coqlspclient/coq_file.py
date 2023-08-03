@@ -48,10 +48,10 @@ class CoqFile(object):
         if workspace is not None:
             uri = f"file://{workspace}"
         else:
-            uri = f"file://{self.path}"
+            uri = f"file://{self.__path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
-        uri = f"file://{self.path}"
-        with open(self.path, "r") as f:
+        uri = f"file://{self.__path}"
+        with open(self.__path, "r") as f:
             self.__lines = f.read().split("\n")
 
         try:
@@ -79,8 +79,9 @@ class CoqFile(object):
     def __init_path(self, file_path, library):
         self.file_module = [] if library is None else library.split(".")
         self.__from_lib = self.file_module[:1] == ["Coq"]
+        self.path = file_path
         if not self.__from_lib:
-            self.path = file_path
+            self.__path = file_path
             return
 
         # Coq LSP cannot open files from Coq library, so we need to work with
@@ -90,17 +91,17 @@ class CoqFile(object):
             temp_dir, "coq_" + str(uuid.uuid4()).replace("-", "") + ".v"
         )
         shutil.copyfile(file_path, new_path)
-        self.path = new_path
+        self.__path = new_path
 
     def __handle_exception(self, e):
         if not (isinstance(e, ResponseError) and e.code == ErrorCodes.ServerQuit.value):
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
         if self.__from_lib:
-            os.remove(self.path)
+            os.remove(self.__path)
 
     def __validate(self):
-        uri = f"file://{self.path}"
+        uri = f"file://{self.__path}"
         if uri not in self.coq_lsp_client.lsp_endpoint.diagnostics:
             self.is_valid = True
             return
@@ -189,9 +190,10 @@ class CoqFile(object):
         else:
             return TermType.OTHER
 
+    # Simultaneous definition of terms and notations (where clause)
+    # https://coq.inria.fr/refman/user-extensions/syntax-extensions.html#simultaneous-definition-of-terms-and-notations
     def __handle_where_notations(self, expr: List, term_type: TermType):
-        # FIXME multiple notations (and)
-        span = None
+        spans = []
         if (
             term_type
             in [
@@ -207,7 +209,7 @@ class CoqFile(object):
             and isinstance(expr[2][0][1], list)
             and len(expr[2][0][1]) > 0
         ):
-            span = expr[2][0][1][0]
+            spans = expr[2][0][1]
         elif (
             term_type == TermType.FIXPOINT
             and len(expr) > 2
@@ -218,9 +220,10 @@ class CoqFile(object):
             and isinstance(expr[2][0]["notations"], list)
             and len(expr[2][0]["notations"]) > 0
         ):
-            span = expr[2][0]["notations"][0]
+            spans = expr[2][0]["notations"]
 
-        if span is not None:
+        # handles when multiple notations are defined
+        for span in spans:
             range = Range(
                 Position(
                     span["decl_ntn_string"]["loc"]["line_nb"] - 1,
@@ -314,9 +317,7 @@ class CoqFile(object):
                 names = traverse_ast(expr)
                 for name in names:
                     self.__add_term(name, self.ast[self.steps_taken], text, term_type)
-
-            # Simultaneous definition of terms and notations (where clause)
-            # https://coq.inria.fr/refman/user-extensions/syntax-extensions.html#simultaneous-definition-of-terms-and-notations
+            
             self.__handle_where_notations(expr, term_type)
         finally:
             self.steps_taken += sign
@@ -380,7 +381,7 @@ class CoqFile(object):
         Returns:
             Optional[GoalAnswer]: Goals in the current position if there are goals
         """
-        uri = f"file://{self.path}"
+        uri = f"file://{self.__path}"
         end_pos = (
             Position(0, 0)
             if self.steps_taken == 0
@@ -394,7 +395,7 @@ class CoqFile(object):
 
     def save_vo(self):
         """Compiles the vo file for this Coq file."""
-        uri = f"file://{self.path}"
+        uri = f"file://{self.__path}"
         try:
             self.coq_lsp_client.save_vo(TextDocumentIdentifier(uri))
         except Exception as e:
@@ -406,4 +407,4 @@ class CoqFile(object):
         self.coq_lsp_client.shutdown()
         self.coq_lsp_client.exit()
         if self.__from_lib:
-            os.remove(self.path)
+            os.remove(self.__path)

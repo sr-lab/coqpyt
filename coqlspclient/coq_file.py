@@ -237,10 +237,9 @@ class CoqFile(object):
                 ),
             )
             text = self.__get_text(range, trim=True)
-            name = span["decl_ntn_string"]["v"]
+            name = FileContext.get_notation_key(span["decl_ntn_string"]["v"], span["decl_ntn_scope"])
             if span["decl_ntn_scope"] is not None:
                 text += " : " + span["decl_ntn_scope"]
-                name += " : " + span["decl_ntn_scope"]
             text = "Notation " + text
             self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
 

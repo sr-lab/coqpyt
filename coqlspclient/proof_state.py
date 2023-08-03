@@ -1,5 +1,4 @@
 import os
-import re
 import shutil
 import uuid
 import tempfile
@@ -227,14 +226,6 @@ class ProofState(object):
         else:
             return nots[0][:-25] if fun(nots[0]) else nots[0]
 
-    def __get_notation(self, notation_id: str) -> Term:
-        regex = f"^{re.escape(notation_id).replace('_', '.')}$"
-        for term in self.context.terms.keys():
-            if re.match(regex, term):
-                return self.context.terms[term]
-
-        raise RuntimeError(f"Notation not found in context: {notation_id}")
-
     def __step_context(self):
         def traverse_ast(el):
             if isinstance(el, dict):
@@ -247,13 +238,13 @@ class ProofState(object):
                 line = len(self.__aux_file.read().split("\n"))
                 self.__aux_file.append(f'\nLocate "{el[2][1]}".')
 
-                # FIXME consider ID of notations and check if a notations matches
                 def __search_notation(call):
-                    notation_id = call[0]
+                    notation_name = call[0]
+                    scope = ""
                     notation = call[1](*call[2:])
                     if notation.split(":")[-1].endswith("_scope"):
-                        notation_id += " : " + notation.split(":")[-1].strip()
-                    return self.__get_notation(notation_id)
+                        scope = notation.split(":")[-1].strip()
+                    return self.context.get_notation(notation_name, scope)
 
                 return [
                     (__search_notation, (el[2][1], self.__locate, el[2][1], line))

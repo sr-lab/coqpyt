@@ -1,3 +1,4 @@
+import re
 from enum import Enum
 from typing import Dict, List
 from coqlspclient.coq_lsp_structs import RangedSpan, GoalAnswer
@@ -64,3 +65,29 @@ class FileContext:
         terms: Dict[str, Term] = {},
     ):
         self.terms.update(terms)
+
+    def get_notation(self, notation: str, scope: str) -> Term:
+        """Get a notation from the context.
+
+        Args:
+            notation (str): Name of the notation. E.g. "x + y"
+            scope (str): Scope of the notation. E.g. "nat_scope"
+
+        Raises:
+            RuntimeError: If the notation is not found in the context.
+
+        Returns:
+            Term: Term that corresponds to the notation.
+        """
+        notation_id = FileContext.get_notation_key(notation, scope)
+        regex = f"^{re.escape(notation_id).replace('_', '.')}$"
+        for term in self.terms.keys():
+            if re.match(regex, term):
+                return self.terms[term]
+        raise RuntimeError(f"Notation not found in context: {notation_id}")
+
+    @staticmethod
+    def get_notation_key(notation: str, scope: str):
+        if scope != "" and scope is not None:
+            notation += " : " + scope
+        return notation

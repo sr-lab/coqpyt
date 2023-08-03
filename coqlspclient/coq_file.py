@@ -123,7 +123,7 @@ class CoqFile(object):
             return curr_step.span["v"]["expr"]
         return [None]
 
-    def __get_text(self, range: Range, trim: bool=False):
+    def __get_text(self, range: Range, trim: bool = False):
         end_line = range.end.line
         end_character = range.end.character
 
@@ -223,19 +223,21 @@ class CoqFile(object):
         if span is not None:
             range = Range(
                 Position(
-                    span['decl_ntn_string']['loc']['line_nb'] - 1, 
-                    span['decl_ntn_string']['loc']['bp'] - span['decl_ntn_string']['loc']['bol_pos']
+                    span["decl_ntn_string"]["loc"]["line_nb"] - 1,
+                    span["decl_ntn_string"]["loc"]["bp"]
+                    - span["decl_ntn_string"]["loc"]["bol_pos"],
                 ),
-                    Position(
-                    span['decl_ntn_interp']['loc']['line_nb_last'] - 1, 
-                    span['decl_ntn_interp']['loc']['ep'] - span['decl_ntn_interp']['loc']['bol_pos']
-                )
+                Position(
+                    span["decl_ntn_interp"]["loc"]["line_nb_last"] - 1,
+                    span["decl_ntn_interp"]["loc"]["ep"]
+                    - span["decl_ntn_interp"]["loc"]["bol_pos"],
+                ),
             )
             text = self.__get_text(range, trim=True)
             name = span["decl_ntn_string"]["v"]
-            if span['decl_ntn_scope'] is not None:
-                text += " : " + span['decl_ntn_scope']
-                name += " : " + span['decl_ntn_scope']
+            if span["decl_ntn_scope"] is not None:
+                text += " : " + span["decl_ntn_scope"]
+                name += " : " + span["decl_ntn_scope"]
             text = "Notation " + text
             self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
 
@@ -298,8 +300,8 @@ class CoqFile(object):
             # FIXME add VernacSyntacticDefinition?
             elif expr[0] in ["VernacNotation"]:
                 name = text.split('"')[1]
-                if text[:-1].split(':')[-1].endswith('_scope'):
-                    name += " : " + text[:-1].split(':')[-1].strip()
+                if text[:-1].split(":")[-1].endswith("_scope"):
+                    name += " : " + text[:-1].split(":")[-1].strip()
                 self.__add_term(
                     name, self.ast[self.steps_taken], text, TermType.NOTATION
                 )

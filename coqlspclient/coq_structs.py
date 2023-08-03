@@ -56,10 +56,7 @@ class ProofStep(Step):
 
 
 class FileContext:
-    def __init__(
-        self,
-        terms: Dict[str, Term] = None
-    ):
+    def __init__(self, terms: Dict[str, Term] = None):
         self.terms = {} if terms is None else terms
 
     def update(

@@ -10,12 +10,7 @@ from pylspclient.lsp_structs import (
     ResponseError,
     ErrorCodes,
 )
-from coqlspclient.coq_structs import (
-    ProofStep,
-    FileContext,
-    Step,
-    Term
-)
+from coqlspclient.coq_structs import ProofStep, FileContext, Step, Term
 from coqlspclient.coq_lsp_structs import (
     CoqError,
     CoqErrorCodes,
@@ -231,7 +226,7 @@ class ProofState(object):
             return list(filter(fun, nots))[0][:-25]
         else:
             return nots[0][:-25] if fun(nots[0]) else nots[0]
-        
+
     def __get_notation(self, notation_id: str) -> Term:
         regex = f"^{re.escape(notation_id).replace('_', '.')}$"
         for term in self.context.terms.keys():
@@ -251,12 +246,13 @@ class ProofState(object):
             elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
                 line = len(self.__aux_file.read().split("\n"))
                 self.__aux_file.append(f'\nLocate "{el[2][1]}".')
+
                 # FIXME consider ID of notations and check if a notations matches
                 def __search_notation(call):
                     notation_id = call[0]
                     notation = call[1](*call[2:])
-                    if notation.split(':')[-1].endswith('_scope'):
-                        notation_id += " : " + notation.split(':')[-1].strip()
+                    if notation.split(":")[-1].endswith("_scope"):
+                        notation_id += " : " + notation.split(":")[-1].strip()
                     return self.__get_notation(notation_id)
 
                 return [

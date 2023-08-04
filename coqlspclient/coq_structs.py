@@ -78,7 +78,7 @@ class FileContext:
         """Get a notation from the context.
 
         Args:
-            notation (str): Name of the notation. E.g. "x + y"
+            notation (str): Id of the notation. E.g. "_ + _"
             scope (str): Scope of the notation. E.g. "nat_scope"
 
         Raises:
@@ -88,7 +88,20 @@ class FileContext:
             Term: Term that corresponds to the notation.
         """
         notation_id = FileContext.get_notation_key(notation, scope)
-        regex = f"^{re.escape(notation_id).replace('_', '.')}$"
+        escaped = f"^{re.escape(notation_id)}$"
+        escaped_len = len(escaped)
+        regex = ""
+        for i, c in enumerate(escaped):
+            # Don't replace escaped underscore ('_')
+            if (
+                (i == 0 and c == "_")
+                or (i == escaped_len - 1 and c == "_")
+                or (c == "_" and (escaped[i - 1] != "'" or escaped[i + 1] != "'"))
+            ):
+                regex += "(.+)"
+            else:
+                regex += escaped[i]
+
         for term in self.terms.keys():
             if re.match(regex, term):
                 return self.terms[term]

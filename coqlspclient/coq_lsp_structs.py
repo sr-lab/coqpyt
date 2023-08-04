@@ -121,37 +121,6 @@ class RangedSpan(object):
         self.span = span
 
 
-class Step(object):
-    def __init__(self, text: str, ast: RangedSpan):
-        self.text = text
-        self.ast = ast
-
-
-class ProofStep(object):
-    def __init__(self, text: str, goals: GoalAnswer, context: List[str]):
-        self.text = text
-        self.goals = goals
-        self.context = context
-
-
-class FileContext(object):
-    def __init__(
-        self,
-        terms: Dict[str, str] = {},
-        notations: set[str] = set(),
-    ):
-        self.terms = terms
-        self.notations = notations
-
-    def update(
-        self,
-        terms: Dict[str, str] = {},
-        notations: set[str] = set(),
-    ):
-        self.terms.update(terms)
-        self.notations.update(notations)
-
-
 class CompletionStatus(object):
     def __init__(self, status: str, range: Range):
         self.status = status

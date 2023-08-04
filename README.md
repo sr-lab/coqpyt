@@ -13,16 +13,29 @@ pip install -r requirements.txt
 ```
 
 ## Usage
-
 ```python
 import os
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.proof_state import ProofState
+from coqlspclient.coq_structs import TermType
 
 # Open Coq file
 with CoqFile(os.path.join(os.getcwd(), "examples/example.v")) as coq_file:
     # Print AST
     print(coq_file.ast)
+    coq_file.exec(nsteps=2)
+    # Get all terms defined until now
+    print("Number of terms:", len(coq_file.context.terms))
+    # Filter by Tactics
+    print("Number of tactics:",
+        len(
+            list(filter(
+                lambda term: term.type == TermType.TACTIC,
+                coq_file.context.terms.values(),
+            ))
+        )
+    )
+
     # Enter proof
     coq_file.exec(nsteps=4)
     print("In proof:", coq_file.in_proof)
@@ -37,11 +50,13 @@ with CoqFile(os.path.join(os.getcwd(), "examples/example.v")) as coq_file:
     # Run remaining file
     coq_file.run()
     print("Checked:", coq_file.checked)
+    # Get all terms defined until now
+    print("Number of terms:", len(coq_file.context.terms))
 
 with CoqFile(os.path.join(os.getcwd(), "examples/example.v")) as coq_file:
     with ProofState(coq_file) as proof_state:
         # Number of proofs in the file
-        print(len(proof_state.proofs))
+        print("Number of proofs:", len(proof_state.proofs))
 
         # Print steps of proof
         for step in proof_state.proofs[0]:
@@ -54,9 +69,16 @@ with CoqFile(os.path.join(os.getcwd(), "examples/example.v")) as coq_file:
         print(proof_state.proofs[0][2].goals)
 
         # Print number of terms in context
-        print(len(proof_state.context.terms))
-        # Print number of notations in context
-        print(len(proof_state.context.notations))
+        print("Number of terms:", len(proof_state.context.terms))
+        # Filter for Notations only
+        print("Number of notations:",
+            len(
+                list(filter(
+                    lambda term: term.type == TermType.NOTATION,
+                    proof_state.context.terms.values(),
+                ))
+            )
+        )
 ```
 
 ### Run tests

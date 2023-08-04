@@ -11,11 +11,14 @@ state: ProofState = None
 workspace: str = None
 
 
-def compare_context(test_context: List[Tuple[str, TermType]], context: List[Term]):
+def compare_context(
+    test_context: List[Tuple[str, TermType, List[str]]], context: List[Term]
+):
     assert len(test_context) == len(context)
     for i in range(len(context)):
         assert test_context[i][0] == context[i].text
         assert test_context[i][1] == context[i].type
+        assert test_context[i][2] == context[i].module
 
 
 @pytest.fixture
@@ -89,12 +92,15 @@ def test_get_proofs(setup, teardown):
     contexts = [
         [],
         [],
-        [("Notation plus := Nat.add (only parsing).", TermType.NOTATION)],
+        [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
         [
-            ('Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
-            TermType.FIXPOINT)
+            (
+                'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
+                TermType.FIXPOINT,
+                [],
+            )
         ],
-        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC)],
+        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
         [],
     ]
 
@@ -163,13 +169,17 @@ def test_get_proofs(setup, teardown):
         [],
         [],
         [
-            ("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA),
-            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION),
-            ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE),
+            ("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, []),
+            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+            (
+                "Inductive nat : Set := | O : nat | S : nat -> nat.",
+                TermType.INDUCTIVE,
+                [],
+            ),
         ],
         [
-            ('Notation "A /\\ B" := (and A B) : type_scope', TermType.NOTATION),
-            ("Inductive True : Prop := I : True.", TermType.INDUCTIVE),
+            ('Notation "A /\\ B" := (and A B) : type_scope', TermType.NOTATION, []),
+            ("Inductive True : Prop := I : True.", TermType.INDUCTIVE, []),
         ],
         [],
         [],
@@ -228,9 +238,21 @@ def test_get_proofs(setup, teardown):
     ]
     contexts = [
         [],
-        [("Record example := mk_example { fst : nat; snd : nat }.", TermType.RECORD)],
-        [("Theorem plus_O_n : forall n:nat, 0 + n = n.", TermType.THEOREM)],
-        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC)],
+        [
+            (
+                "Record example := mk_example { fst : nat; snd : nat }.",
+                TermType.RECORD,
+                ["Extra", "Fst"],
+            )
+        ],
+        [
+            (
+                "Theorem plus_O_n : forall n:nat, 0 + n = n.",
+                TermType.THEOREM,
+                ["Out", "In"],
+            )
+        ],
+        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
         [],
     ]
 
@@ -303,11 +325,25 @@ def test_get_proofs(setup, teardown):
         [],
         [],
         [
-            ("Theorem plus_O_n : forall n:nat, n = 0 + n.", TermType.THEOREM),
-            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION),
-            ('Notation "| a |" := (S a) (at level 30, right associativity).', TermType.NOTATION),
+            (
+                "Theorem plus_O_n : forall n:nat, n = 0 + n.",
+                TermType.THEOREM,
+                ["Extra", "Fst"],
+            ),
+            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+            (
+                'Notation "| a |" := (S a) (at level 30, right associativity).',
+                TermType.NOTATION,
+                ["Extra", "Snd"],
+            ),
         ],
-        [("Record example := mk_example { fst : nat; snd : nat }.", TermType.RECORD)],
+        [
+            (
+                "Record example := mk_example { fst : nat; snd : nat }.",
+                TermType.RECORD,
+                ["Extra", "Fst"],
+            )
+        ],
         [],
         [],
     ]
@@ -328,12 +364,16 @@ def test_imports(setup, teardown):
         [],
         [],
         [
-            ("Local Theorem plus_O_n : forall n:nat, 0 + n = n.", TermType.THEOREM),
-            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION),
-            ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE),
+            ("Local Theorem plus_O_n : forall n:nat, 0 + n = n.", TermType.THEOREM, []),
+            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+            (
+                "Inductive nat : Set := | O : nat | S : nat -> nat.",
+                TermType.INDUCTIVE,
+                [],
+            ),
         ],
         [],  # FIXME: in the future we should get a Local Theorem from other file here
-        [("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA)],
+        [("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, [])],
         [],
         [],
     ]

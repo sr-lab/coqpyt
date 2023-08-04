@@ -149,7 +149,7 @@ class CoqFile(object):
         return self.__get_text(curr_step.range, trim=trim)
 
     def __add_term(self, name: str, ast: RangedSpan, text: str, term_type: TermType):
-        term = Term(text, ast, term_type, self.path)
+        term = Term(text, ast, term_type, self.path, self.curr_module[:])
         if term.type == TermType.NOTATION:
             self.context.update(terms={name: term})
             return
@@ -309,7 +309,7 @@ class CoqFile(object):
                     name, self.ast[self.steps_taken], text, TermType.NOTATION
                 )
             elif expr[0] == "VernacSyntacticDefinition":
-                name = text.split(' ')[1]
+                name = text.split(" ")[1]
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
                 self.__add_term(

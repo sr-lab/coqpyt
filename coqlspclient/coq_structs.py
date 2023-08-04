@@ -24,9 +24,15 @@ class TermType(Enum):
     OTHER = 100
 
 
-# FIXME: Add module?
 class Term:
-    def __init__(self, text: str, ast: RangedSpan, term_type: TermType, file_path: str):
+    def __init__(
+        self,
+        text: str,
+        ast: RangedSpan,
+        term_type: TermType,
+        file_path: str,
+        module: List[str],
+    ):
         """Term of a Coq file.
 
         Args:
@@ -34,11 +40,13 @@ class Term:
             ast (RangedSpan): The ast representation of the term.
             term_type (TermType): The type of the term.
             file_path (str): The file where the term is.
+            module (str): The module where the term is.
         """
         self.text = text
         self.ast = ast
         self.type = term_type
         self.file_path = file_path
+        self.module = module
 
     def __eq__(self, __value: object) -> bool:
         if not isinstance(__value, Term):

@@ -88,19 +88,11 @@ class FileContext:
             Term: Term that corresponds to the notation.
         """
         notation_id = FileContext.get_notation_key(notation, scope)
-        escaped = f"^{re.escape(notation_id)}$"
-        escaped_len = len(escaped)
-        regex = ""
-        for i, c in enumerate(escaped):
-            # Don't replace escaped underscore ('_')
-            if (
-                (i == 0 and c == "_")
-                or (i == escaped_len - 1 and c == "_")
-                or (c == "_" and (escaped[i - 1] != "'" or escaped[i + 1] != "'"))
-            ):
-                regex += "(.+)"
-            else:
-                regex += escaped[i]
+        regex = f"{re.escape(notation_id)}".split("\ ")
+        for i, sub in enumerate(regex):
+            if sub == "_":
+                regex[i] = "(.+)"
+        regex = "^" + "\ ".join(regex) + "$"
 
         for term in self.terms.keys():
             if re.match(regex, term):

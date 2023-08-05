@@ -245,6 +245,21 @@ class CoqFile(object):
             text = "Notation " + text
             self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
 
+    def __get_tactic_name(self, expr):
+        if (len(expr[2][0][2][0][1][0]) == 2 and expr[2][0][2][0][1][0][0] == "v"):
+            id, name = expr[2][0][2][0][1][0][1], ""
+            if id[0] == "Ser_Qualid" and id[1][0] == "DirPath" and id[2][0] == "Id":
+                for dir_el in id[1][1]:
+                    name += dir_el[1] + "."
+                name += id[2][1]
+            elif id[0] == "Id":
+                name = id[1]
+            
+            if name != "":
+                return name
+            
+            return None
+
     def __process_step(self, sign):
         def traverse_ast(el, inductive=False):
             if isinstance(el, dict):
@@ -299,7 +314,7 @@ class CoqFile(object):
                 and len(expr[1]) == 2
                 and expr[1][0] == "VernacDeclareTacticDefinition"
             ):
-                name = expr[2][0][2][0][1][0][1][1]
+                name = self.__get_tactic_name(expr)
                 self.__add_term(name, self.ast[self.steps_taken], text, TermType.TACTIC)
             elif expr[0] == "VernacNotation":
                 name = text.split('"')[1]

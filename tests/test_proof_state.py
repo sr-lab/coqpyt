@@ -381,3 +381,9 @@ def test_imports(setup, teardown):
     assert len(proofs[1]) == len(context)
     for i, step in enumerate(proofs[1]):
         compare_context(context[i], step.context)
+
+@pytest.mark.parametrize(
+    "setup", [("test_non_ending_proof.v", None)], indirect=True
+)
+def test_non_ending_proof(setup, teardown):
+    assert len(state.proofs) == 0

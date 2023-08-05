@@ -262,7 +262,7 @@ class ProofState(object):
 
     def __get_steps(self) -> List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]:
         steps = []
-        while self.coq_file.in_proof:
+        while self.coq_file.in_proof and not self.coq_file.checked:
             try:
                 goals = self.coq_file.current_goals()
             except Exception as e:
@@ -272,6 +272,10 @@ class ProofState(object):
             self.__step()
             context_calls = self.__step_context()
             steps.append((self.__current_step, goals, context_calls))
+
+        if self.coq_file.checked and self.coq_file.in_proof:
+            return None
+
         return steps
 
     def __get_proofs(self) -> List[List[ProofStep]]:
@@ -284,7 +288,9 @@ class ProofState(object):
         while not self.coq_file.checked:
             self.__step()
             if self.coq_file.in_proof:
-                proofs.append(self.__get_steps())
+                steps = self.__get_steps()
+                if steps is not None:
+                    proofs.append(steps)
 
         try:
             self.__aux_file.didOpen()

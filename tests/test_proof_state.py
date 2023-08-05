@@ -386,3 +386,14 @@ def test_imports(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_non_ending_proof.v", None)], indirect=True)
 def test_non_ending_proof(setup, teardown):
     assert len(state.proofs) == 0
+
+
+@pytest.mark.parametrize("setup", [("test_exists_notation.v", None)], indirect=True)
+def test_exists_notation(setup, teardown):
+    """Checks if the exists notation is handled. The exists notation is defined
+    with 'exists', but the search can be done without the '.
+    """
+    assert (
+        state.context.get_notation("exists _ .. _ , _", "type_scope").text
+        == "Notation \"'exists' x .. y , p\" := (ex (fun x => .. (ex (fun y => p)) ..)) (at level 200, x binder, right associativity, format \"'[' 'exists' '/ ' x .. y , '/ ' p ']'\") : type_scope."
+    )

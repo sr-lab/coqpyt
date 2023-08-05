@@ -246,7 +246,7 @@ class CoqFile(object):
             self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
 
     def __get_tactic_name(self, expr):
-        if (len(expr[2][0][2][0][1][0]) == 2 and expr[2][0][2][0][1][0][0] == "v"):
+        if len(expr[2][0][2][0][1][0]) == 2 and expr[2][0][2][0][1][0][0] == "v":
             id, name = expr[2][0][2][0][1][0][1], ""
             if id[0] == "Ser_Qualid" and id[1][0] == "DirPath" and id[2][0] == "Id":
                 for dir_el in id[1][1]:
@@ -254,10 +254,10 @@ class CoqFile(object):
                 name += id[2][1]
             elif id[0] == "Id":
                 name = id[1]
-            
+
             if name != "":
                 return name
-            
+
             return None
 
     def __process_step(self, sign):

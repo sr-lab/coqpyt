@@ -12,6 +12,10 @@ Abstraction to interact with Coq files, get their context, execute them, among o
 pip install -r requirements.txt
 ```
 
+```bash
+python -m pip install -e .
+```
+
 ## Usage
 ```python
 import os

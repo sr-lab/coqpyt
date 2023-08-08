@@ -61,16 +61,17 @@ with CoqFile(os.path.join(os.getcwd(), "examples/example.v")) as coq_file:
     with ProofState(coq_file) as proof_state:
         # Number of proofs in the file
         print("Number of proofs:", len(proof_state.proofs))
+        print("Proof:", proof_state.proofs[0].text)
 
         # Print steps of proof
-        for step in proof_state.proofs[0]:
+        for step in proof_state.proofs[0].steps:
             print(step.text, end="")
         print()
 
         # Get the context used in the third step
-        print(proof_state.proofs[0][2].context)
+        print(proof_state.proofs[0].steps[2].context)
         # Print the goals in the third step
-        print(proof_state.proofs[0][2].goals)
+        print(proof_state.proofs[0].steps[2].goals)
 
         # Print number of terms in context
         print("Number of terms:", len(proof_state.context.terms))

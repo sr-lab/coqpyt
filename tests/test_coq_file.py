@@ -51,7 +51,7 @@ def test_get_notation(setup, teardown):
     )
     assert (
         coq_file.context.get_notation("_ ++ _", "list_scope").text
-        == "Infix \"++\" := app (right associativity, at level 60) : list_scope."
+        == 'Infix "++" := app (right associativity, at level 60) : list_scope.'
     )
 
 

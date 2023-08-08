@@ -101,14 +101,14 @@ class FileContext:
         for term in self.terms.keys():
             if re.match(regex, term):
                 return self.terms[term]
-            
+
         # Search Infix
         if re.match("^_ ([^ ]*) _$", notation):
             op = notation[2:-2]
             key = FileContext.get_notation_key(op, scope)
             if key in self.terms:
                 return self.terms[key]
-        
+
         raise RuntimeError(f"Notation not found in context: {notation_id}")
 
     @staticmethod

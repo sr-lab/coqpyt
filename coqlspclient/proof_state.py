@@ -9,7 +9,7 @@ from pylspclient.lsp_structs import (
     ResponseError,
     ErrorCodes,
 )
-from coqlspclient.coq_structs import ProofStep, FileContext, Step, Term
+from coqlspclient.coq_structs import ProofStep, FileContext, Step, Term, ProofTerm
 from coqlspclient.coq_lsp_structs import (
     CoqError,
     CoqErrorCodes,
@@ -278,19 +278,34 @@ class ProofState(object):
 
         return steps
 
-    def __get_proofs(self) -> List[List[ProofStep]]:
+    def __get_last_term(self):
+        terms = self.coq_file.terms
+        if len(terms) == 0:
+            return None
+        last_term = terms[0]
+        for term in terms[1:]:
+            if (term.ast.range.end.line > last_term.ast.range.end.line) or (
+                term.ast.range.end.line == last_term.ast.range.end.line
+                and term.ast.range.end.character > last_term.ast.range.end.character
+            ):
+                last_term = term
+        return last_term
+
+    def __get_proofs(self) -> List[ProofTerm]:
         def get_proof_step(step: Tuple[Step, Optional[GoalAnswer], List[Tuple]]):
             context, calls = [], [call[0](*call[1:]) for call in step[2]]
             [context.append(call) for call in calls if call not in context]
             return ProofStep(step[0], step[1], context)
 
-        proofs: List[List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]] = []
+        proofs: List[
+            Tuple[Term, List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]]
+        ] = []
         while not self.coq_file.checked:
             self.__step()
             if self.coq_file.in_proof:
                 steps = self.__get_steps()
                 if steps is not None:
-                    proofs.append(steps)
+                    proofs.append((self.__get_last_term(), steps))
 
         try:
             self.__aux_file.didOpen()
@@ -298,10 +313,13 @@ class ProofState(object):
             self.coq_file.close()
             raise e
 
-        return [list(map(get_proof_step, steps)) for steps in proofs]
+        proof_steps = [
+            (term, list(map(get_proof_step, steps))) for term, steps in proofs
+        ]
+        return list(map(lambda t: ProofTerm(t[0], t[1]), proof_steps))
 
     @property
-    def proofs(self) -> List[List[ProofStep]]:
+    def proofs(self) -> List[ProofTerm]:
         """Gets all the proofs in the file and their corresponding steps.
 
         Returns:

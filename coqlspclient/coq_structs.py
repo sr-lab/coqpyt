@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Optional
 from coqlspclient.coq_lsp_structs import RangedSpan, GoalAnswer
 
 
@@ -62,6 +62,12 @@ class ProofStep(Step):
         super().__init__(step.text, step.ast)
         self.goals = goals
         self.context = context
+
+
+class ProofTerm(Term):
+    def __init__(self, term: Term, steps: List[ProofStep]):
+        super().__init__(term.text, term.ast, term.type, term.file_path, term.module)
+        self.steps = steps
 
 
 class FileContext:

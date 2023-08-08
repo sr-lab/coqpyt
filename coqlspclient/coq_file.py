@@ -369,6 +369,18 @@ class CoqFile(object):
         """
         return self.current_goals().goals is not None
 
+    @property
+    def terms(self) -> List[Term]:
+        """
+        Returns:
+            List[Term]: The terms of the file already executed
+        """
+        return list(
+            filter(
+                lambda term: term.file_path == self.path, self.context.terms.values()
+            )
+        )
+
     def exec(self, nsteps=1) -> List[Step]:
         """Execute steps in the file.
 

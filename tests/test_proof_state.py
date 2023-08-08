@@ -104,10 +104,11 @@ def test_get_proofs(setup, teardown):
         [],
     ]
 
+    assert proofs[0].text == "Theorem plus_O_n : forall n:nat, 0 + n = n."
     for i in range(6):
-        assert proofs[0][i].text == texts[i]
-        assert str(proofs[0][i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[0][i].context)
+        assert proofs[0].steps[i].text == texts[i]
+        assert str(proofs[0].steps[i].goals) == str(goals[i])
+        compare_context(contexts[i], proofs[0].steps[i].context)
 
     texts = [
         "\n  Proof.",
@@ -193,14 +194,15 @@ def test_get_proofs(setup, teardown):
         (26, 2, 26, 10),
     ]
 
+    assert proofs[1].text == "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
     for i in range(6):
-        assert proofs[1][i].ast.range.start.line == ranges[i][0]
-        assert proofs[1][i].ast.range.start.character == ranges[i][1]
-        assert proofs[1][i].ast.range.end.line == ranges[i][2]
-        assert proofs[1][i].ast.range.end.character == ranges[i][3]
-        assert proofs[1][i].text == texts[i]
-        assert str(proofs[1][i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[1][i].context)
+        assert proofs[1].steps[i].ast.range.start.line == ranges[i][0]
+        assert proofs[1].steps[i].ast.range.start.character == ranges[i][1]
+        assert proofs[1].steps[i].ast.range.end.line == ranges[i][2]
+        assert proofs[1].steps[i].ast.range.end.character == ranges[i][3]
+        assert proofs[1].steps[i].text == texts[i]
+        assert str(proofs[1].steps[i].goals) == str(goals[i])
+        compare_context(contexts[i], proofs[1].steps[i].context)
 
     texts = [
         "\n      intros n.",
@@ -256,10 +258,11 @@ def test_get_proofs(setup, teardown):
         [],
     ]
 
+    assert proofs[2].text == "Theorem plus_O_n : forall n:nat, n = 0 + n."
     for i in range(5):
-        assert proofs[2][i].text == texts[i]
-        assert str(proofs[2][i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[2][i].context)
+        assert proofs[2].steps[i].text == texts[i]
+        assert str(proofs[2].steps[i].goals) == str(goals[i])
+        compare_context(contexts[i], proofs[2].steps[i].context)
 
     texts = [
         "\n    Proof.",
@@ -348,10 +351,11 @@ def test_get_proofs(setup, teardown):
         [],
     ]
 
+    assert proofs[3].text == "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
     for i in range(6):
-        assert proofs[3][i].text == texts[i]
-        assert str(proofs[3][i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[3][i].context)
+        assert proofs[3].steps[i].text == texts[i]
+        assert str(proofs[3].steps[i].goals) == str(goals[i])
+        compare_context(contexts[i], proofs[3].steps[i].context)
 
 
 @pytest.mark.parametrize(
@@ -378,8 +382,8 @@ def test_imports(setup, teardown):
         [],
     ]
 
-    assert len(proofs[1]) == len(context)
-    for i, step in enumerate(proofs[1]):
+    assert len(proofs[1].steps) == len(context)
+    for i, step in enumerate(proofs[1].steps):
         compare_context(context[i], step.context)
 
 

@@ -6,11 +6,13 @@ import subprocess
 
 temp_path = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
 
+
 @pytest.fixture
 def teardown_aux():
     yield
     if os.path.exists(temp_path):
         os.remove(temp_path)
+
 
 def test_if_readme_runs(teardown_aux):
     with open("README.md", "r") as f:

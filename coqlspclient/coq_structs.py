@@ -65,9 +65,10 @@ class ProofStep(Step):
 
 
 class ProofTerm(Term):
-    def __init__(self, term: Term, steps: List[ProofStep]):
+    def __init__(self, term: Term, context: List[Term], steps: List[ProofStep]):
         super().__init__(term.text, term.ast, term.type, term.file_path, term.module)
         self.steps = steps
+        self.context = context
 
 
 class FileContext:

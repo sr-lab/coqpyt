@@ -103,7 +103,13 @@ def test_get_proofs(setup, teardown):
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
         [],
     ]
+    statement_context = [
+        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
+        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
+    ]
 
+    compare_context(statement_context, proofs[0].context)
     assert proofs[0].text == "Theorem plus_O_n : forall n:nat, 0 + n = n."
     for i in range(6):
         assert proofs[0].steps[i].text == texts[i]
@@ -193,8 +199,24 @@ def test_get_proofs(setup, teardown):
         (25, 4, 25, 16),
         (26, 2, 26, 10),
     ]
+    statement_context = [
+        (
+            "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , "
+            + "'/' P ']'\") : type_scope.",
+            TermType.NOTATION,
+            [],
+        ),
+        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
+        ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
+    ]
 
-    assert proofs[1].text == "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
+    compare_context(statement_context, proofs[1].context)
+    assert (
+        proofs[1].text
+        == "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
+    )
     for i in range(6):
         assert proofs[1].steps[i].ast.range.start.line == ranges[i][0]
         assert proofs[1].steps[i].ast.range.start.character == ranges[i][1]
@@ -257,7 +279,13 @@ def test_get_proofs(setup, teardown):
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
         [],
     ]
+    statement_context = [
+        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
+        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
+    ]
 
+    compare_context(statement_context, proofs[2].context)
     assert proofs[2].text == "Theorem plus_O_n : forall n:nat, n = 0 + n."
     for i in range(5):
         assert proofs[2].steps[i].text == texts[i]
@@ -350,8 +378,23 @@ def test_get_proofs(setup, teardown):
         [],
         [],
     ]
+    statement_context = [
+        (
+            "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , "
+            + "'/' P ']'\") : type_scope.",
+            TermType.NOTATION,
+            [],
+        ),
+        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
+        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
+    ]
 
-    assert proofs[3].text == "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
+    compare_context(statement_context, proofs[3].context)
+    assert (
+        proofs[3].text == "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
+    )
     for i in range(6):
         assert proofs[3].steps[i].text == texts[i]
         assert str(proofs[3].steps[i].goals) == str(goals[i])

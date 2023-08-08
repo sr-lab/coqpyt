@@ -228,10 +228,7 @@ class ProofState(object):
             "\n"
         )
         fun = lambda x: x.endswith("(default interpretation)")
-        if len(nots) > 1:
-            return list(filter(fun, nots))[0][:-25]
-        else:
-            return nots[0][:-25] if fun(nots[0]) else nots[0]
+        return nots[0][:-25] if fun(nots[0]) else nots[0]
 
     def __step_context(self):
         def traverse_ast(el):

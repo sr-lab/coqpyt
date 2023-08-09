@@ -444,3 +444,12 @@ def test_exists_notation(setup, teardown):
         state.context.get_notation("exists _ .. _ , _", "type_scope").text
         == "Notation \"'exists' x .. y , p\" := (ex (fun x => .. (ex (fun y => p)) ..)) (at level 200, x binder, right associativity, format \"'[' 'exists' '/ ' x .. y , '/ ' p ']'\") : type_scope."
     )
+
+
+@pytest.mark.parametrize("setup", [("test_unknown_notation.v", None)], indirect=True)
+def test_unknown_notation(setup, teardown):
+    """Checks if it is able to handle the notation { _ } that is unknown for the
+    Locate command because it is a default notation.
+    """
+    with pytest.raises(RuntimeError):
+        assert state.context.get_notation("{ _ }", "")

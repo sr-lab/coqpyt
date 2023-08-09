@@ -246,6 +246,8 @@ class ProofState(object):
                     notation_name = call[0]
                     scope = ""
                     notation = call[1](*call[2:])
+                    if notation == "Unknown notation":
+                        return None
                     if notation.split(":")[-1].endswith("_scope"):
                         scope = notation.split(":")[-1].strip()
                     return self.context.get_notation(notation_name, scope)
@@ -299,6 +301,7 @@ class ProofState(object):
         def call_context(calls: List[Tuple]):
             context, calls = [], [call[0](*call[1:]) for call in calls]
             [context.append(call) for call in calls if call not in context]
+            context = list(filter(lambda term: term is not None, context))
             return context
 
         def get_proof_step(step: Tuple[Step, Optional[GoalAnswer], List[Tuple]]):

@@ -266,7 +266,9 @@ class ProofState(object):
         self.__current_step = self.coq_file.exec()[0]
         self.__aux_file.append(self.__current_step.text)
 
-    def __get_steps(self, proofs) -> List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]:
+    def __get_steps(
+        self, proofs
+    ) -> List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]:
         steps = []
         while self.coq_file.in_proof and not self.coq_file.checked:
             try:
@@ -291,7 +293,7 @@ class ProofState(object):
             return None
 
         return steps
-    
+
     def __get_proof(self, proofs):
         statement_context = None
         if CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:

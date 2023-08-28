@@ -380,7 +380,7 @@ def test_imports(setup, teardown):
         ],
         [],  # FIXME: in the future we should get a Local Theorem from other file here
         [("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, [])],
-        []
+        [],
     ]
 
     assert len(proofs[1].steps) == len(context)
@@ -418,10 +418,7 @@ def test_nested_proofs(setup, teardown):
     proofs = state.proofs
     assert len(proofs) == 4
 
-    steps = [
-        "\n    intros n.",
-        "\n    simpl; reflexivity."
-    ]
+    steps = ["\n    intros n.", "\n    simpl; reflexivity."]
     assert len(proofs[0].steps) == 2
     for i, step in enumerate(proofs[0].steps):
         assert step.text == steps[i]
@@ -429,7 +426,7 @@ def test_nested_proofs(setup, teardown):
     steps = [
         "\nintros n m.",
         "\n\nrewrite <- (plus_O_n ((S n) * m)).",
-        "\nreflexivity."
+        "\nreflexivity.",
     ]
     assert len(proofs[1].steps) == 3
     for i, step in enumerate(proofs[1].steps):

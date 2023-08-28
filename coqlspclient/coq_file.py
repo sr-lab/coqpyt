@@ -113,7 +113,7 @@ class CoqFile(object):
         self.is_valid = True
 
     @staticmethod
-    def __expr(step: RangedSpan) -> Optional[List]:
+    def expr(step: RangedSpan) -> Optional[List]:
         if (
             step.span is not None
             and isinstance(step.span, dict)
@@ -127,7 +127,7 @@ class CoqFile(object):
 
     def __step_expr(self):
         curr_step = self.ast[self.steps_taken]
-        return CoqFile.__expr(curr_step)
+        return CoqFile.expr(curr_step)
 
     def __get_text(self, range: Range, trim: bool = False):
         end_line = range.end.line
@@ -373,7 +373,13 @@ class CoqFile(object):
         Returns:
             bool: True if the current step is inside a proof
         """
-        return self.current_goals().goals is not None
+        goals = self.current_goals().goals
+        return goals is not None and (
+            len(goals.goals) > 0
+            or len(goals.stack) > 0
+            or len(goals.shelf) > 0
+            or goals.bullet is not None
+        )
 
     @property
     def terms(self) -> List[Term]:
@@ -389,7 +395,7 @@ class CoqFile(object):
 
     @staticmethod
     def get_term_type(ast: RangedSpan) -> TermType:
-        expr = CoqFile.__expr(ast)
+        expr = CoqFile.expr(ast)
         if expr is not None:
             return CoqFile.__get_term_type(expr)
         return TermType.OTHER

@@ -276,6 +276,8 @@ class ProofState(object):
                 raise e
 
             self.__step()
+            if CoqFile.expr(self.__current_step.ast)[0] == "VernacProof":
+                continue
             context_calls = self.__step_context()
             steps.append((self.__current_step, goals, context_calls))
 

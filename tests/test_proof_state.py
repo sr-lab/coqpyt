@@ -49,20 +49,12 @@ def test_get_proofs(setup, teardown):
     assert len(proofs) == 4
 
     texts = [
-        "\n    Proof.",
         "\n      intros n.",
         "\n      Print plus.",
         "\n      Print Nat.add.",
         "\n      reduce_eq.",
-        "\n    Qed.",
     ]
     goals = [
-        GoalAnswer(
-            versionId,
-            Position(8, 47),
-            [],
-            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
-        ),
         GoalAnswer(
             versionId,
             Position(9, 10),
@@ -87,10 +79,8 @@ def test_get_proofs(setup, teardown):
             [],
             GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
         ),
-        GoalAnswer(versionId, Position(13, 16), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
-        [],
         [],
         [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
         [
@@ -101,7 +91,6 @@ def test_get_proofs(setup, teardown):
             )
         ],
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
-        [],
     ]
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
@@ -111,26 +100,18 @@ def test_get_proofs(setup, teardown):
 
     compare_context(statement_context, proofs[0].context)
     assert proofs[0].text == "Theorem plus_O_n : forall n:nat, 0 + n = n."
-    for i in range(6):
+    for i in range(4):
         assert proofs[0].steps[i].text == texts[i]
         assert str(proofs[0].steps[i].goals) == str(goals[i])
         compare_context(contexts[i], proofs[0].steps[i].context)
 
     texts = [
-        "\n  Proof.",
         "\n    intros n m.",
         "\n    rewrite -> (plus_O_n (S n * m)).",
         "\n    Compute True /\\ True.",
         "\n    reflexivity.",
-        "\n  Defined.",
     ]
     goals = [
-        GoalAnswer(
-            versionId,
-            Position(20, 28),
-            [],
-            GoalConfig([Goal([], "∀ n m : nat, 0 + S n * m = S n * m")], [], [], []),
-        ),
         GoalAnswer(
             versionId,
             Position(21, 8),
@@ -170,10 +151,8 @@ def test_get_proofs(setup, teardown):
                 [],
             ),
         ),
-        GoalAnswer(versionId, Position(25, 16), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
-        [],
         [],
         [
             ("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, []),
@@ -189,15 +168,12 @@ def test_get_proofs(setup, teardown):
             ("Inductive True : Prop := I : True.", TermType.INDUCTIVE, []),
         ],
         [],
-        [],
     ]
     ranges = [
-        (21, 2, 21, 8),
         (22, 4, 22, 15),
         (23, 4, 23, 36),
         (24, 4, 24, 25),
         (25, 4, 25, 16),
-        (26, 2, 26, 10),
     ]
     statement_context = [
         (
@@ -217,7 +193,7 @@ def test_get_proofs(setup, teardown):
         proofs[1].text
         == "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
     )
-    for i in range(6):
+    for i in range(4):
         assert proofs[1].steps[i].ast.range.start.line == ranges[i][0]
         assert proofs[1].steps[i].ast.range.start.character == ranges[i][1]
         assert proofs[1].steps[i].ast.range.end.line == ranges[i][2]
@@ -231,7 +207,6 @@ def test_get_proofs(setup, teardown):
         "\n      Compute mk_example n n.",
         "\n      Compute Out.In.plus_O_n.",
         "\n      reduce_eq.",
-        "\n    Qed.",
     ]
     goals = [
         GoalAnswer(
@@ -258,7 +233,6 @@ def test_get_proofs(setup, teardown):
             [],
             GoalConfig([Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], []),
         ),
-        GoalAnswer(versionId, Position(37, 16), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
         [],
@@ -277,7 +251,6 @@ def test_get_proofs(setup, teardown):
             )
         ],
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
-        [],
     ]
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
@@ -287,28 +260,18 @@ def test_get_proofs(setup, teardown):
 
     compare_context(statement_context, proofs[2].context)
     assert proofs[2].text == "Theorem plus_O_n : forall n:nat, n = 0 + n."
-    for i in range(5):
+    for i in range(4):
         assert proofs[2].steps[i].text == texts[i]
         assert str(proofs[2].steps[i].goals) == str(goals[i])
         compare_context(contexts[i], proofs[2].steps[i].context)
 
     texts = [
-        "\n    Proof.",
         "\n      intros n m.",
         "\n      rewrite <- (Fst.plus_O_n (|n| * m)).",
         "\n      Compute {| Fst.fst := n; Fst.snd := n |}.",
         "\n      reflexivity.",
-        "\n    Admitted.",
     ]
     goals = [
-        GoalAnswer(
-            versionId,
-            Position(45, 30),
-            [],
-            GoalConfig(
-                [Goal([], "∀ n m : nat, | n | * m = 0 + | n | * m")], [], [], []
-            ),
-        ),
         GoalAnswer(
             versionId,
             Position(46, 10),
@@ -350,10 +313,8 @@ def test_get_proofs(setup, teardown):
                 [],
             ),
         ),
-        GoalAnswer(versionId, Position(50, 18), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
-        [],
         [],
         [
             (
@@ -376,7 +337,6 @@ def test_get_proofs(setup, teardown):
             )
         ],
         [],
-        [],
     ]
     statement_context = [
         (
@@ -395,7 +355,7 @@ def test_get_proofs(setup, teardown):
     assert (
         proofs[3].text == "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
     )
-    for i in range(6):
+    for i in range(4):
         assert proofs[3].steps[i].text == texts[i]
         assert str(proofs[3].steps[i].goals) == str(goals[i])
         compare_context(contexts[i], proofs[3].steps[i].context)
@@ -409,7 +369,6 @@ def test_imports(setup, teardown):
     assert len(proofs) == 2
     context = [
         [],
-        [],
         [
             ("Local Theorem plus_O_n : forall n:nat, 0 + n = n.", TermType.THEOREM, []),
             ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
@@ -421,8 +380,7 @@ def test_imports(setup, teardown):
         ],
         [],  # FIXME: in the future we should get a Local Theorem from other file here
         [("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, [])],
-        [],
-        [],
+        []
     ]
 
     assert len(proofs[1].steps) == len(context)

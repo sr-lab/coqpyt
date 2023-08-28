@@ -266,7 +266,7 @@ class ProofState(object):
         self.__current_step = self.coq_file.exec()[0]
         self.__aux_file.append(self.__current_step.text)
 
-    def __get_steps(self) -> List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]:
+    def __get_steps(self, proofs) -> List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]:
         steps = []
         while self.coq_file.in_proof and not self.coq_file.checked:
             try:
@@ -276,6 +276,12 @@ class ProofState(object):
                 raise e
 
             self.__step()
+            if CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
+                self.__get_proof(proofs)
+                # Pass Qed if it exists
+                while not self.coq_file.in_proof and not self.coq_file.checked:
+                    self.__step()
+                continue
             if CoqFile.expr(self.__current_step.ast)[0] == "VernacProof":
                 continue
             context_calls = self.__step_context()
@@ -285,6 +291,15 @@ class ProofState(object):
             return None
 
         return steps
+    
+    def __get_proof(self, proofs):
+        statement_context = None
+        if CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
+            statement_context = self.__step_context()
+        if self.coq_file.in_proof:
+            steps = self.__get_steps(proofs)
+            if steps is not None:
+                proofs.append((self.__get_last_term(), statement_context, steps))
 
     def __get_last_term(self):
         terms = self.coq_file.terms
@@ -312,16 +327,10 @@ class ProofState(object):
         proofs: List[
             Tuple[Term, List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]]
         ] = []
-        statement_context = None
         while not self.coq_file.checked:
             self.__step()
             # Get context from initial statement
-            if CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
-                statement_context = self.__step_context()
-            if self.coq_file.in_proof:
-                steps = self.__get_steps()
-                if steps is not None:
-                    proofs.append((self.__get_last_term(), statement_context, steps))
+            self.__get_proof(proofs)
 
         try:
             self.__aux_file.didOpen()

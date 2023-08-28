@@ -411,3 +411,42 @@ def test_unknown_notation(setup, teardown):
     """
     with pytest.raises(RuntimeError):
         assert state.context.get_notation("{ _ }", "")
+
+
+@pytest.mark.parametrize("setup", [("test_nested_proofs.v", None)], indirect=True)
+def test_nested_proofs(setup, teardown):
+    proofs = state.proofs
+    assert len(proofs) == 4
+
+    steps = [
+        "\n    intros n.",
+        "\n    simpl; reflexivity."
+    ]
+    assert len(proofs[0].steps) == 2
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == steps[i]
+
+    steps = [
+        "\nintros n m.",
+        "\n\nrewrite <- (plus_O_n ((S n) * m)).",
+        "\nreflexivity."
+    ]
+    assert len(proofs[1].steps) == 3
+    for i, step in enumerate(proofs[1].steps):
+        assert step.text == steps[i]
+
+    steps = [
+        "\n    intros n.",
+        "\n    simpl; reflexivity.",
+    ]
+    assert len(proofs[2].steps) == 2
+    for i, step in enumerate(proofs[2].steps):
+        assert step.text == steps[i]
+
+    steps = [
+        "\n    intros n.",
+        "\n    simpl; reflexivity.",
+    ]
+    assert len(proofs[3].steps) == 2
+    for i, step in enumerate(proofs[3].steps):
+        assert step.text == steps[i]

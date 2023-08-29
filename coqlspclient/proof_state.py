@@ -344,7 +344,7 @@ class ProofState(object):
             (term, call_context(context), list(map(get_proof_step, steps)))
             for term, context, steps in proofs
         ]
-        return list(map(lambda t: ProofTerm(t[0], t[1], t[2]), proof_steps))
+        return list(map(lambda t: ProofTerm(*t), proof_steps))
 
     @property
     def proofs(self) -> List[ProofTerm]:

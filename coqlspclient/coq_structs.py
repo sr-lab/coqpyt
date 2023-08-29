@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Optional
 from coqlspclient.coq_lsp_structs import RangedSpan, GoalAnswer
 
 
@@ -64,6 +64,13 @@ class ProofStep(Step):
         self.context = context
 
 
+class ProofTerm(Term):
+    def __init__(self, term: Term, context: List[Term], steps: List[ProofStep]):
+        super().__init__(term.text, term.ast, term.type, term.file_path, term.module)
+        self.steps = steps
+        self.context = context
+
+
 class FileContext:
     def __init__(self, terms: Dict[str, Term] = None):
         self.terms = {} if terms is None else terms
@@ -88,15 +95,27 @@ class FileContext:
             Term: Term that corresponds to the notation.
         """
         notation_id = FileContext.get_notation_key(notation, scope)
-        regex = f"{re.escape(notation_id)}".split("\ ")
+        regex = f"{re.escape(notation_id)}".split("\\ ")
         for i, sub in enumerate(regex):
             if sub == "_":
                 regex[i] = "(.+)"
-        regex = "^" + "\ ".join(regex) + "$"
+            else:
+                # Handle '_'
+                regex[i] = f"({sub}|('{sub}'))"
+        regex = "^" + "\\ ".join(regex) + "$"
 
+        # Search notations
         for term in self.terms.keys():
             if re.match(regex, term):
                 return self.terms[term]
+
+        # Search Infix
+        if re.match("^_ ([^ ]*) _$", notation):
+            op = notation[2:-2]
+            key = FileContext.get_notation_key(op, scope)
+            if key in self.terms:
+                return self.terms[key]
+
         raise RuntimeError(f"Notation not found in context: {notation_id}")
 
     @staticmethod

@@ -9,7 +9,14 @@ from pylspclient.lsp_structs import (
     ResponseError,
     ErrorCodes,
 )
-from coqlspclient.coq_structs import ProofStep, FileContext, Step, Term
+from coqlspclient.coq_structs import (
+    ProofStep,
+    FileContext,
+    Step,
+    Term,
+    ProofTerm,
+    TermType,
+)
 from coqlspclient.coq_lsp_structs import (
     CoqError,
     CoqErrorCodes,
@@ -221,10 +228,7 @@ class ProofState(object):
             "\n"
         )
         fun = lambda x: x.endswith("(default interpretation)")
-        if len(nots) > 1:
-            return list(filter(fun, nots))[0][:-25]
-        else:
-            return nots[0][:-25] if fun(nots[0]) else nots[0]
+        return nots[0][:-25] if fun(nots[0]) else nots[0]
 
     def __step_context(self):
         def traverse_ast(el):
@@ -242,6 +246,8 @@ class ProofState(object):
                     notation_name = call[0]
                     scope = ""
                     notation = call[1](*call[2:])
+                    if notation == "Unknown notation":
+                        return None
                     if notation.split(":")[-1].endswith("_scope"):
                         scope = notation.split(":")[-1].strip()
                     return self.context.get_notation(notation_name, scope)
@@ -260,9 +266,11 @@ class ProofState(object):
         self.__current_step = self.coq_file.exec()[0]
         self.__aux_file.append(self.__current_step.text)
 
-    def __get_steps(self) -> List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]:
+    def __get_steps(
+        self, proofs
+    ) -> List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]:
         steps = []
-        while self.coq_file.in_proof:
+        while self.coq_file.in_proof and not self.coq_file.checked:
             try:
                 goals = self.coq_file.current_goals()
             except Exception as e:
@@ -270,21 +278,61 @@ class ProofState(object):
                 raise e
 
             self.__step()
+            if CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
+                self.__get_proof(proofs)
+                # Pass Qed if it exists
+                while not self.coq_file.in_proof and not self.coq_file.checked:
+                    self.__step()
+                continue
+            if CoqFile.expr(self.__current_step.ast)[0] == "VernacProof":
+                continue
             context_calls = self.__step_context()
             steps.append((self.__current_step, goals, context_calls))
+
+        if self.coq_file.checked and self.coq_file.in_proof:
+            return None
+
         return steps
 
-    def __get_proofs(self) -> List[List[ProofStep]]:
-        def get_proof_step(step: Tuple[Step, Optional[GoalAnswer], List[Tuple]]):
-            context, calls = [], [call[0](*call[1:]) for call in step[2]]
-            [context.append(call) for call in calls if call not in context]
-            return ProofStep(step[0], step[1], context)
+    def __get_proof(self, proofs):
+        statement_context = None
+        if CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
+            statement_context = self.__step_context()
+        if self.coq_file.in_proof:
+            steps = self.__get_steps(proofs)
+            if steps is not None:
+                proofs.append((self.__get_last_term(), statement_context, steps))
 
-        proofs: List[List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]] = []
+    def __get_last_term(self):
+        terms = self.coq_file.terms
+        if len(terms) == 0:
+            return None
+        last_term = terms[0]
+        for term in terms[1:]:
+            if (term.ast.range.end.line > last_term.ast.range.end.line) or (
+                term.ast.range.end.line == last_term.ast.range.end.line
+                and term.ast.range.end.character > last_term.ast.range.end.character
+            ):
+                last_term = term
+        return last_term
+
+    def __get_proofs(self) -> List[ProofTerm]:
+        def call_context(calls: List[Tuple]):
+            context, calls = [], [call[0](*call[1:]) for call in calls]
+            [context.append(call) for call in calls if call not in context]
+            context = list(filter(lambda term: term is not None, context))
+            return context
+
+        def get_proof_step(step: Tuple[Step, Optional[GoalAnswer], List[Tuple]]):
+            return ProofStep(step[0], step[1], call_context(step[2]))
+
+        proofs: List[
+            Tuple[Term, List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]]
+        ] = []
         while not self.coq_file.checked:
             self.__step()
-            if self.coq_file.in_proof:
-                proofs.append(self.__get_steps())
+            # Get context from initial statement
+            self.__get_proof(proofs)
 
         try:
             self.__aux_file.didOpen()
@@ -292,10 +340,14 @@ class ProofState(object):
             self.coq_file.close()
             raise e
 
-        return [list(map(get_proof_step, steps)) for steps in proofs]
+        proof_steps = [
+            (term, call_context(context), list(map(get_proof_step, steps)))
+            for term, context, steps in proofs
+        ]
+        return list(map(lambda t: ProofTerm(*t), proof_steps))
 
     @property
-    def proofs(self) -> List[List[ProofStep]]:
+    def proofs(self) -> List[ProofTerm]:
         """Gets all the proofs in the file and their corresponding steps.
 
         Returns:

@@ -1,17 +1,20 @@
 from enum import Enum
-from typing import Dict, Optional, Any, List
+from typing import Dict, Optional, Any, List, Tuple
 from pylspclient.lsp_structs import Range, VersionedTextDocumentIdentifier, Position
 
 
 class Hyp(object):
-    def __init__(self, names, ty, definition=None):
+    def __init__(self, names: List[str], ty: str, definition: Optional[str] = None):
         self.names = names
         self.ty = ty
         self.definition = definition
 
+    def __repr__(self) -> str:
+        return ", ".join(self.names) + f": {self.ty}"
+
 
 class Goal(object):
-    def __init__(self, hyps, ty):
+    def __init__(self, hyps: List[Hyp], ty: str):
         self.hyps = hyps
         self.ty = ty
 
@@ -27,9 +30,23 @@ class Goal(object):
         ty = None if "ty" not in goal else goal["ty"]
         return Goal(hyps, ty)
 
+    def __repr__(self) -> str:
+        hyps = list(map(lambda hyp: repr(hyp), self.hyps))
+        if len(hyps) > 0:
+            return "\n".join(hyps) + f"\n\n{self.ty}"
+        else:
+            return self.ty
+
 
 class GoalConfig(object):
-    def __init__(self, goals, stack, shelf, given_up, bullet=None):
+    def __init__(
+        self,
+        goals: List[Goal],
+        stack: List[Tuple[List[Goal], List[Goal]]],
+        shelf: List[Goal],
+        given_up: List[Goal],
+        bullet: Any = None,
+    ):
         self.goals = goals
         self.stack = stack
         self.shelf = shelf
@@ -56,7 +73,13 @@ class Message(object):
 
 class GoalAnswer(object):
     def __init__(
-        self, textDocument, position, messages, goals=None, error=None, program=[]
+        self,
+        textDocument: VersionedTextDocumentIdentifier,
+        position: Position,
+        messages: List[Message],
+        goals: Optional[GoalConfig] = None,
+        error: Any = None,
+        program: List = [],
     ):
         self.textDocument = textDocument
         self.position = position

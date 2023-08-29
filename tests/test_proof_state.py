@@ -49,20 +49,12 @@ def test_get_proofs(setup, teardown):
     assert len(proofs) == 4
 
     texts = [
-        "\n    Proof.",
         "\n      intros n.",
         "\n      Print plus.",
         "\n      Print Nat.add.",
         "\n      reduce_eq.",
-        "\n    Qed.",
     ]
     goals = [
-        GoalAnswer(
-            versionId,
-            Position(8, 47),
-            [],
-            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
-        ),
         GoalAnswer(
             versionId,
             Position(9, 10),
@@ -87,10 +79,8 @@ def test_get_proofs(setup, teardown):
             [],
             GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
         ),
-        GoalAnswer(versionId, Position(13, 16), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
-        [],
         [],
         [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
         [
@@ -101,29 +91,27 @@ def test_get_proofs(setup, teardown):
             )
         ],
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
-        [],
+    ]
+    statement_context = [
+        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
+        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
     ]
 
-    for i in range(6):
-        assert proofs[0][i].text == texts[i]
-        assert str(proofs[0][i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[0][i].context)
+    compare_context(statement_context, proofs[0].context)
+    assert proofs[0].text == "Theorem plus_O_n : forall n:nat, 0 + n = n."
+    for i in range(4):
+        assert proofs[0].steps[i].text == texts[i]
+        assert str(proofs[0].steps[i].goals) == str(goals[i])
+        compare_context(contexts[i], proofs[0].steps[i].context)
 
     texts = [
-        "\n  Proof.",
         "\n    intros n m.",
         "\n    rewrite -> (plus_O_n (S n * m)).",
         "\n    Compute True /\\ True.",
         "\n    reflexivity.",
-        "\n  Defined.",
     ]
     goals = [
-        GoalAnswer(
-            versionId,
-            Position(20, 28),
-            [],
-            GoalConfig([Goal([], "∀ n m : nat, 0 + S n * m = S n * m")], [], [], []),
-        ),
         GoalAnswer(
             versionId,
             Position(21, 8),
@@ -163,10 +151,8 @@ def test_get_proofs(setup, teardown):
                 [],
             ),
         ),
-        GoalAnswer(versionId, Position(25, 16), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
-        [],
         [],
         [
             ("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, []),
@@ -182,32 +168,45 @@ def test_get_proofs(setup, teardown):
             ("Inductive True : Prop := I : True.", TermType.INDUCTIVE, []),
         ],
         [],
-        [],
     ]
     ranges = [
-        (21, 2, 21, 8),
         (22, 4, 22, 15),
         (23, 4, 23, 36),
         (24, 4, 24, 25),
         (25, 4, 25, 16),
-        (26, 2, 26, 10),
+    ]
+    statement_context = [
+        (
+            "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , "
+            + "'/' P ']'\") : type_scope.",
+            TermType.NOTATION,
+            [],
+        ),
+        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
+        ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
     ]
 
-    for i in range(6):
-        assert proofs[1][i].ast.range.start.line == ranges[i][0]
-        assert proofs[1][i].ast.range.start.character == ranges[i][1]
-        assert proofs[1][i].ast.range.end.line == ranges[i][2]
-        assert proofs[1][i].ast.range.end.character == ranges[i][3]
-        assert proofs[1][i].text == texts[i]
-        assert str(proofs[1][i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[1][i].context)
+    compare_context(statement_context, proofs[1].context)
+    assert (
+        proofs[1].text
+        == "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
+    )
+    for i in range(4):
+        assert proofs[1].steps[i].ast.range.start.line == ranges[i][0]
+        assert proofs[1].steps[i].ast.range.start.character == ranges[i][1]
+        assert proofs[1].steps[i].ast.range.end.line == ranges[i][2]
+        assert proofs[1].steps[i].ast.range.end.character == ranges[i][3]
+        assert proofs[1].steps[i].text == texts[i]
+        assert str(proofs[1].steps[i].goals) == str(goals[i])
+        compare_context(contexts[i], proofs[1].steps[i].context)
 
     texts = [
         "\n      intros n.",
         "\n      Compute mk_example n n.",
         "\n      Compute Out.In.plus_O_n.",
         "\n      reduce_eq.",
-        "\n    Qed.",
     ]
     goals = [
         GoalAnswer(
@@ -234,7 +233,6 @@ def test_get_proofs(setup, teardown):
             [],
             GoalConfig([Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], []),
         ),
-        GoalAnswer(versionId, Position(37, 16), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
         [],
@@ -253,31 +251,27 @@ def test_get_proofs(setup, teardown):
             )
         ],
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
-        [],
+    ]
+    statement_context = [
+        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
+        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
     ]
 
-    for i in range(5):
-        assert proofs[2][i].text == texts[i]
-        assert str(proofs[2][i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[2][i].context)
+    compare_context(statement_context, proofs[2].context)
+    assert proofs[2].text == "Theorem plus_O_n : forall n:nat, n = 0 + n."
+    for i in range(4):
+        assert proofs[2].steps[i].text == texts[i]
+        assert str(proofs[2].steps[i].goals) == str(goals[i])
+        compare_context(contexts[i], proofs[2].steps[i].context)
 
     texts = [
-        "\n    Proof.",
         "\n      intros n m.",
         "\n      rewrite <- (Fst.plus_O_n (|n| * m)).",
         "\n      Compute {| Fst.fst := n; Fst.snd := n |}.",
         "\n      reflexivity.",
-        "\n    Admitted.",
     ]
     goals = [
-        GoalAnswer(
-            versionId,
-            Position(45, 30),
-            [],
-            GoalConfig(
-                [Goal([], "∀ n m : nat, | n | * m = 0 + | n | * m")], [], [], []
-            ),
-        ),
         GoalAnswer(
             versionId,
             Position(46, 10),
@@ -319,10 +313,8 @@ def test_get_proofs(setup, teardown):
                 [],
             ),
         ),
-        GoalAnswer(versionId, Position(50, 18), [], GoalConfig([], [], [], [])),
     ]
     contexts = [
-        [],
         [],
         [
             (
@@ -345,13 +337,28 @@ def test_get_proofs(setup, teardown):
             )
         ],
         [],
-        [],
+    ]
+    statement_context = [
+        (
+            "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , "
+            + "'/' P ']'\") : type_scope.",
+            TermType.NOTATION,
+            [],
+        ),
+        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
+        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
     ]
 
-    for i in range(6):
-        assert proofs[3][i].text == texts[i]
-        assert str(proofs[3][i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[3][i].context)
+    compare_context(statement_context, proofs[3].context)
+    assert (
+        proofs[3].text == "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
+    )
+    for i in range(4):
+        assert proofs[3].steps[i].text == texts[i]
+        assert str(proofs[3].steps[i].goals) == str(goals[i])
+        compare_context(contexts[i], proofs[3].steps[i].context)
 
 
 @pytest.mark.parametrize(
@@ -361,7 +368,6 @@ def test_imports(setup, teardown):
     proofs = state.proofs
     assert len(proofs) == 2
     context = [
-        [],
         [],
         [
             ("Local Theorem plus_O_n : forall n:nat, 0 + n = n.", TermType.THEOREM, []),
@@ -375,9 +381,69 @@ def test_imports(setup, teardown):
         [],  # FIXME: in the future we should get a Local Theorem from other file here
         [("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, [])],
         [],
-        [],
     ]
 
-    assert len(proofs[1]) == len(context)
-    for i, step in enumerate(proofs[1]):
+    assert len(proofs[1].steps) == len(context)
+    for i, step in enumerate(proofs[1].steps):
         compare_context(context[i], step.context)
+
+
+@pytest.mark.parametrize("setup", [("test_non_ending_proof.v", None)], indirect=True)
+def test_non_ending_proof(setup, teardown):
+    assert len(state.proofs) == 0
+
+
+@pytest.mark.parametrize("setup", [("test_exists_notation.v", None)], indirect=True)
+def test_exists_notation(setup, teardown):
+    """Checks if the exists notation is handled. The exists notation is defined
+    with 'exists', but the search can be done without the '.
+    """
+    assert (
+        state.context.get_notation("exists _ .. _ , _", "type_scope").text
+        == "Notation \"'exists' x .. y , p\" := (ex (fun x => .. (ex (fun y => p)) ..)) (at level 200, x binder, right associativity, format \"'[' 'exists' '/ ' x .. y , '/ ' p ']'\") : type_scope."
+    )
+
+
+@pytest.mark.parametrize("setup", [("test_unknown_notation.v", None)], indirect=True)
+def test_unknown_notation(setup, teardown):
+    """Checks if it is able to handle the notation { _ } that is unknown for the
+    Locate command because it is a default notation.
+    """
+    with pytest.raises(RuntimeError):
+        assert state.context.get_notation("{ _ }", "")
+
+
+@pytest.mark.parametrize("setup", [("test_nested_proofs.v", None)], indirect=True)
+def test_nested_proofs(setup, teardown):
+    proofs = state.proofs
+    assert len(proofs) == 4
+
+    steps = ["\n    intros n.", "\n    simpl; reflexivity."]
+    assert len(proofs[0].steps) == 2
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == steps[i]
+
+    steps = [
+        "\nintros n m.",
+        "\n\nrewrite <- (plus_O_n ((S n) * m)).",
+        "\nreflexivity.",
+    ]
+    assert len(proofs[1].steps) == 3
+    for i, step in enumerate(proofs[1].steps):
+        assert step.text == steps[i]
+
+    steps = [
+        "\n    intros n.",
+        "\n    simpl; reflexivity.",
+    ]
+    assert len(proofs[2].steps) == 2
+    for i, step in enumerate(proofs[2].steps):
+        assert step.text == steps[i]
+
+    steps = [
+        "\n    intros n.",
+        "\n    simpl; reflexivity.",
+    ]
+    assert len(proofs[3].steps) == 2
+    for i, step in enumerate(proofs[3].steps):
+        assert step.text == steps[i]

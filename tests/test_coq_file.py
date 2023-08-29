@@ -49,6 +49,10 @@ def test_get_notation(setup, teardown):
         coq_file.context.get_notation("'C_D' _ 'C_D'", "test_scope").text
         == "Notation \"'C_D' A_B 'C_D'\" := (plus A_B A_B) : test_scope."
     )
+    assert (
+        coq_file.context.get_notation("_ ++ _", "list_scope").text
+        == 'Infix "++" := app (right associativity, at level 60) : list_scope.'
+    )
 
 
 @pytest.mark.parametrize("setup", ["test_invalid_1.v"], indirect=True)

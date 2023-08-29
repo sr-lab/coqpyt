@@ -112,17 +112,22 @@ class CoqFile(object):
                 return
         self.is_valid = True
 
+    @staticmethod
+    def expr(step: RangedSpan) -> Optional[List]:
+        if (
+            step.span is not None
+            and isinstance(step.span, dict)
+            and "v" in step.span
+            and isinstance(step.span["v"], dict)
+            and "expr" in step.span["v"]
+        ):
+            return step.span["v"]["expr"]
+
+        return [None]
+
     def __step_expr(self):
         curr_step = self.ast[self.steps_taken]
-        if (
-            curr_step.span is not None
-            and isinstance(curr_step.span, dict)
-            and "v" in curr_step.span
-            and isinstance(curr_step.span["v"], dict)
-            and "expr" in curr_step.span["v"]
-        ):
-            return curr_step.span["v"]["expr"]
-        return [None]
+        return CoqFile.expr(curr_step)
 
     def __get_text(self, range: Range, trim: bool = False):
         end_line = range.end.line
@@ -162,7 +167,8 @@ class CoqFile(object):
             curr_file_module = module + "." + curr_file_module
             self.context.update(terms={curr_file_module + name: term})
 
-    def __get_term_type(self, expr: List) -> TermType:
+    @staticmethod
+    def __get_term_type(expr: List) -> TermType:
         if expr[0] == "VernacStartTheoremProof" and expr[1][0] == "Theorem":
             return TermType.THEOREM
         elif expr[0] == "VernacStartTheoremProof" and expr[1][0] == "Lemma":
@@ -245,6 +251,21 @@ class CoqFile(object):
             text = "Notation " + text
             self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
 
+    def __get_tactic_name(self, expr):
+        if len(expr[2][0][2][0][1][0]) == 2 and expr[2][0][2][0][1][0][0] == "v":
+            id, name = expr[2][0][2][0][1][0][1], ""
+            if id[0] == "Ser_Qualid" and id[1][0] == "DirPath" and id[2][0] == "Id":
+                for dir_el in id[1][1]:
+                    name += dir_el[1] + "."
+                name += id[2][1]
+            elif id[0] == "Id":
+                name = id[1]
+
+            if name != "":
+                return name
+
+            return None
+
     def __process_step(self, sign):
         def traverse_ast(el, inductive=False):
             if isinstance(el, dict):
@@ -291,7 +312,7 @@ class CoqFile(object):
             expr = self.__step_expr()
             if expr == [None]:
                 return
-            term_type = self.__get_term_type(expr)
+            term_type = CoqFile.__get_term_type(expr)
 
             if (
                 len(expr) >= 2
@@ -299,7 +320,7 @@ class CoqFile(object):
                 and len(expr[1]) == 2
                 and expr[1][0] == "VernacDeclareTacticDefinition"
             ):
-                name = expr[2][0][2][0][1][0][1][1]
+                name = self.__get_tactic_name(expr)
                 self.__add_term(name, self.ast[self.steps_taken], text, TermType.TACTIC)
             elif expr[0] == "VernacNotation":
                 name = text.split('"')[1]
@@ -352,7 +373,32 @@ class CoqFile(object):
         Returns:
             bool: True if the current step is inside a proof
         """
-        return self.current_goals().goals is not None
+        goals = self.current_goals().goals
+        return goals is not None and (
+            len(goals.goals) > 0
+            or len(goals.stack) > 0
+            or len(goals.shelf) > 0
+            or goals.bullet is not None
+        )
+
+    @property
+    def terms(self) -> List[Term]:
+        """
+        Returns:
+            List[Term]: The terms of the file already executed
+        """
+        return list(
+            filter(
+                lambda term: term.file_path == self.path, self.context.terms.values()
+            )
+        )
+
+    @staticmethod
+    def get_term_type(ast: RangedSpan) -> TermType:
+        expr = CoqFile.expr(ast)
+        if expr is not None:
+            return CoqFile.__get_term_type(expr)
+        return TermType.OTHER
 
     def exec(self, nsteps=1) -> List[Step]:
         """Execute steps in the file.

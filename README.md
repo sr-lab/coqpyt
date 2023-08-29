@@ -6,7 +6,7 @@ Abstraction to interact with Coq files, get their context, execute them, among o
 
 ## Installation
 
-[coq-lsp](https://github.com/ejgallego/coq-lsp) must be installed. Follow the installaton instructions provided [here](https://github.com/ejgallego/coq-lsp#%EF%B8%8F-installation).
+[coq-lsp](https://github.com/ejgallego/coq-lsp) must be installed on version >= 0.1.7. Follow the installaton instructions provided [here](https://github.com/ejgallego/coq-lsp#%EF%B8%8F-installation).
 
 ```bash
 pip install -r requirements.txt

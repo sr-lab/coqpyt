@@ -447,3 +447,16 @@ def test_nested_proofs(setup, teardown):
     assert len(proofs[3].steps) == 2
     for i, step in enumerate(proofs[3].steps):
         assert step.text == steps[i]
+
+
+@pytest.mark.parametrize("setup", [("test_theorem_tokens.v", None)], indirect=True)
+def test_theorem_tokens(setup, teardown):
+    proofs = state.proofs
+    assert len(proofs) == 7
+    assert proofs[0].type == TermType.REMARK
+    assert proofs[1].type == TermType.FACT
+    assert proofs[2].type == TermType.COROLLARY
+    assert proofs[3].type == TermType.PROPOSITION
+    assert proofs[4].type == TermType.PROPERTY
+    assert proofs[5].type == TermType.THEOREM
+    assert proofs[6].type == TermType.LEMMA

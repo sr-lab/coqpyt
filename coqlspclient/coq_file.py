@@ -169,10 +169,8 @@ class CoqFile(object):
 
     @staticmethod
     def __get_term_type(expr: List) -> TermType:
-        if expr[0] == "VernacStartTheoremProof" and expr[1][0] == "Theorem":
-            return TermType.THEOREM
-        elif expr[0] == "VernacStartTheoremProof" and expr[1][0] == "Lemma":
-            return TermType.LEMMA
+        if expr[0] == "VernacStartTheoremProof":
+            return getattr(TermType, expr[1][0].upper())
         elif expr[0] == "VernacDefinition":
             return TermType.DEFINITION
         elif expr[0] in ["VernacNotation", "VernacSyntacticDefinition"]:

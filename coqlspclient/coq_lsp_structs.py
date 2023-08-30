@@ -92,7 +92,7 @@ class GoalAnswer(object):
         def recursive_vars(obj):
             if obj is None or isinstance(obj, int) or isinstance(obj, str):
                 return obj
-            elif isinstance(obj, list):
+            elif isinstance(obj, (list, tuple)):
                 res = []
                 for v in obj:
                     res.append(recursive_vars(v))

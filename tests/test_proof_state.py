@@ -460,3 +460,20 @@ def test_theorem_tokens(setup, teardown):
     assert proofs[4].type == TermType.PROPERTY
     assert proofs[5].type == TermType.THEOREM
     assert proofs[6].type == TermType.LEMMA
+
+
+@pytest.mark.parametrize("setup", [("test_bullets.v", None)], indirect=True)
+def test_bullets(setup, teardown):
+    proofs = state.proofs
+    assert len(proofs) == 1
+    steps = [
+        "\n    intros x y. ",
+        " split.",
+        "\n    - ",
+        " reflexivity.",
+        "\n    - ",
+        " reflexivity.",
+    ]
+    assert len(proofs[0].steps) == 6
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == steps[i]

@@ -371,10 +371,18 @@ class CoqFile(object):
         Returns:
             bool: True if the current step is inside a proof
         """
+
+        def empty_stack(stack):
+            # e.g. [([], [])]
+            for tuple in stack:
+                if len(tuple[0]) > 0 or len(tuple[1]) > 0:
+                    return False
+            return True
+
         goals = self.current_goals().goals
         return goals is not None and (
             len(goals.goals) > 0
-            or len(goals.stack) > 0
+            or not empty_stack(goals.stack)
             or len(goals.shelf) > 0
             or goals.bullet is not None
         )

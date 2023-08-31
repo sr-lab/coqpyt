@@ -175,6 +175,8 @@ class CoqFile(object):
             return TermType.DEFINITION
         elif expr[0] in ["VernacNotation", "VernacSyntacticDefinition"]:
             return TermType.NOTATION
+        elif expr[0] == "VernacExtend" and expr[1][0] == "Obligations":
+            return TermType.OBLIGATION
         elif expr[0] == "VernacInductive" and expr[1][0] == "Record":
             return TermType.RECORD
         elif expr[0] == "VernacInductive" and expr[1][0] == "Variant":

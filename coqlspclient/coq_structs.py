@@ -26,6 +26,7 @@ class TermType(Enum):
     COROLLARY = 13
     PROPOSITION = 14
     PROPERTY = 15
+    OBLIGATION = 16
     OTHER = 100
 
 

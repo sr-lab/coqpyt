@@ -277,17 +277,42 @@ class ProofState(object):
         return last_term
 
     def __get_program_context(self):
+        def traverse_ast(el, keep_id=False):
+            if (
+                isinstance(el, list)
+                and len(el) == 2
+                and (
+                    (el[0] == "Id" and keep_id)
+                    or (el[0] == "ExtraArg" and el[1] == "identref")
+                )
+            ):
+                return el[1]
+            elif isinstance(el, list):
+                for x in el:
+                    id = traverse_ast(x, keep_id=keep_id)
+                    if id == "identref":
+                        keep_id = True
+                    elif id is not None:
+                        return id
+                return "identref" if keep_id else None
+            return None
+
+        # Tags:
+        # 0 - Obligation N of id : type
+        # 1 - Obligation N of id
+        # 2 - Obligation N : type
+        # 3 - Obligation N
+        # 4 - Next Obligation of id
+        # 5 - Next Obligation
         tag = CoqFile.expr(self.__current_step.ast)[1][1]
-        if tag == 1:
-            # Obligation N of id
-            id = CoqFile.expr(self.__current_step.ast)[2][1][2][0][1][1]
+        if tag in [0, 1, 4]:
+            id = traverse_ast(CoqFile.expr(self.__current_step.ast))
             return self.__program_context[id]
-        elif tag in [3, 5]:
-            # Next Obligation / Obligation N
+        elif tag in [2, 3, 5]:
             id = self.coq_file.current_goals().program[0][0][1]
             return self.__program_context[id]
-        else:
-            return None
+        text = self.__get_last_term().text
+        raise RuntimeError(f"Unknown obligation command with tag number {tag}: {text}")
 
     def __check_program(self):
         goals = self.coq_file.current_goals()

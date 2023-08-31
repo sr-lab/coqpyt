@@ -1,42 +1,61 @@
-(** Heaps and heap assertions for separation logics. *)
-
-From Coq Require Import ZArith Lia Bool String List.
-From Coq Require Import FunctionalExtensionality PropExtensionality.
 Require Import Program Arith.
 
-Local Open Scope Z_scope.
+Ltac dummy_tactic n e := destruct n; try reflexivity; inversion e.
 
-(** * 1. Memory heaps *)
-
-(** A memory heap is a partial function from addresses (memory locations) 
-    to values, with a finite domain. *)
-
-Definition addr := Z.
-
-Record heap : Type := {
-  contents :> addr -> option Z;
-  isfinite :  exists i, forall j, i <= j -> contents j = None
-}.
-
-Program Definition hempty : heap :=
-  {| contents := fun l => None |}.
-
-Program Definition id (n : nat) : { x : nat | x = n } :=
+Program Definition id1 (n : nat) : { x : nat | x = n } :=
+  if dec (leb n 0) then 0%nat
+  else S (pred n).
+Program Definition id2 (n : nat) : { x : nat | x = n } :=
+  if dec (leb n 0) then 0%nat
+  else S (pred n).
+Program Definition id3 (n : nat) : { x : nat | x = n } :=
+  if dec (leb n 0) then 0%nat
+  else S (pred n).
+Program Definition id4 (n : nat) : { x : nat | x = n } :=
   if dec (leb n 0) then 0%nat
   else S (pred n).
 
-Obligation 2 of id.
-  destruct n.
-  + inversion e.
-  + reflexivity.
+Obligation 2 of id1.
+  dummy_tactic n e.
 Qed.
-  
+Next Obligation of id1.
+  dummy_tactic n e.
+Qed.
+Obligation 2 of id2 : type with reflexivity.
+  dummy_tactic n e.
+Qed.
+Next Obligation of id2 with reflexivity.
+  dummy_tactic n e.
+Qed.
 Next Obligation.
-  exists 0; auto.
+  dummy_tactic n e.
+Qed.
+Next Obligation with reflexivity.
+  dummy_tactic n e.
+Qed.
+Obligation 1.
+  dummy_tactic n e.
+Qed.
+Obligation 2 : type with reflexivity.
+  dummy_tactic n e.
 Qed.
 
-Obligation 1.
-  destruct n.
-  - reflexivity.
-  - inversion e.
+Program Definition id5 (n : nat) : { x : nat | x = n } :=
+  if dec (leb n 0) then 0%nat
+  else S (pred n).
+Obligation 1 of id5 : type.
+  dummy_tactic n e.
+Qed.
+Obligation 2 : type.
+  dummy_tactic n e.
+Qed.
+
+Program Definition id6 (n : nat) : { x : nat | x = n } :=
+  if dec (leb n 0) then 0%nat
+  else S (pred n).
+Obligation 1 of id6 with reflexivity.
+  dummy_tactic n e.
+Qed.
+Obligation 2 with reflexivity.
+  dummy_tactic n e.
 Qed.

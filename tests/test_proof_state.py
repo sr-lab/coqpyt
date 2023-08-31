@@ -482,23 +482,14 @@ def test_bullets(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_obligation.v", None)], indirect=True)
 def test_obligation(setup, teardown):
     proofs = state.proofs
-    assert len(proofs) == 3
+    assert len(proofs) == 12
 
-    steps = ["\n  destruct n.", "\n  + ", " inversion e.", "\n  + ", " reflexivity."]
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ("Notation dec := sumbool_of_bool.", TermType.NOTATION, []),
-        (
-            "Definition leb (s1 s2 : string) : bool := if compare s1 s2 is Gt then false else true.",
-            TermType.DEFINITION,
-            [],
-        ),
+        ("Notation leb := Nat.leb (only parsing).", TermType.NOTATION, []),
         ("Notation S := succ.", TermType.NOTATION, []),
-        (
-            "Class InjTyp (S : Type) (T : Type) := mkinj { (* [inj] is the injection function *) inj : S -> T; pred : T -> Prop; (* [cstr] states that [pred] holds for any injected element. [cstr (inj x)] is introduced in the goal for any leaf term of the form [inj x] *) cstr : forall x, pred (inj x) }.",
-            TermType.INDUCTIVE,
-            [],
-        ),
+        ("Parameter Inline pred : t -> t.", TermType.OTHER, []),
         (
             'Notation "{ x : A | P }" := (sig (A:=A) (fun x => P)) : type_scope.',
             TermType.NOTATION,
@@ -507,66 +498,13 @@ def test_obligation(setup, teardown):
         ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
     ]
 
-    compare_context(statement_context, proofs[0].context)
-    assert (
-        proofs[0].text
-        == "Program Definition id (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else S (pred n)."
-    )
-    assert len(proofs[0].steps) == len(steps)
-    for i, step in enumerate(proofs[0].steps):
-        assert step.text == steps[i]
-
-    steps = ["\n  exists 0; auto."]
-    statement_context = [
-        (
-            "Record heap : Type := { contents :> addr -> option Z; isfinite : exists i, forall j, i <= j -> contents j = None }.",
-            TermType.RECORD,
-            [],
-        ),
-        (
-            "#[universes(template)] Inductive option (A:Type) : Type := | Some : A -> option A | None : option A.",
-            TermType.INDUCTIVE,
-            [],
-        ),
-    ]
-
-    compare_context(statement_context, proofs[1].context)
-    assert (
-        proofs[1].text
-        == "Program Definition hempty : heap := {| contents := fun l => None |}."
-    )
-    assert len(proofs[1].steps) == len(steps)
-    for i, step in enumerate(proofs[1].steps):
-        assert step.text == steps[i]
-
-    steps = ["\n  destruct n.", "\n  - ", " reflexivity.", "\n  - ", " inversion e."]
-    statement_context = [
-        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
-        ("Notation dec := sumbool_of_bool.", TermType.NOTATION, []),
-        (
-            "Definition leb (s1 s2 : string) : bool := if compare s1 s2 is Gt then false else true.",
-            TermType.DEFINITION,
-            [],
-        ),
-        ("Notation S := succ.", TermType.NOTATION, []),
-        (
-            "Class InjTyp (S : Type) (T : Type) := mkinj { (* [inj] is the injection function *) inj : S -> T; pred : T -> Prop; (* [cstr] states that [pred] holds for any injected element. [cstr (inj x)] is introduced in the goal for any leaf term of the form [inj x] *) cstr : forall x, pred (inj x) }.",
-            TermType.INDUCTIVE,
-            [],
-        ),
-        (
-            'Notation "{ x : A | P }" := (sig (A:=A) (fun x => P)) : type_scope.',
-            TermType.NOTATION,
-            [],
-        ),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
-    ]
-
-    compare_context(statement_context, proofs[2].context)
-    assert (
-        proofs[2].text
-        == "Program Definition id (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else S (pred n)."
-    )
-    assert len(proofs[2].steps) == len(steps)
-    for i, step in enumerate(proofs[2].steps):
-        assert step.text == steps[i]
+    for i, proof in enumerate(proofs):
+        compare_context(statement_context, proof.context)
+        assert (
+            proof.text
+            == "Program Definition id"
+            + str(i // 2 + 1)
+            + " (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else S (pred n)."
+        )
+        assert len(proof.steps) == 1
+        assert proof.steps[0].text == "\n  dummy_tactic n e."

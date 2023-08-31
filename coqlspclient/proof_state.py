@@ -26,7 +26,7 @@ from coqlspclient.coq_lsp_structs import (
 )
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.coq_lsp_client import CoqLspClient
-from typing import List, Optional, Tuple
+from typing import List, Dict, Optional, Tuple
 
 
 class _AuxFile(object):
@@ -208,6 +208,7 @@ class ProofState(object):
         self.coq_file.context = _AuxFile.get_context(coq_file.path, coq_file.timeout)
         self.__aux_file = _AuxFile(timeout=coq_file.timeout)
         self.__current_step = None
+        self.__program_context: Dict[str, Tuple[Term, List]] = {}
         self.__proofs = self.__get_proofs()
 
     def __enter__(self):
@@ -262,9 +263,70 @@ class ProofState(object):
 
         return traverse_ast(self.__current_step.ast.span)
 
+    def __get_last_term(self):
+        terms = self.coq_file.terms
+        if len(terms) == 0:
+            return None
+        last_term = terms[0]
+        for term in terms[1:]:
+            if (term.ast.range.end.line > last_term.ast.range.end.line) or (
+                term.ast.range.end.line == last_term.ast.range.end.line
+                and term.ast.range.end.character > last_term.ast.range.end.character
+            ):
+                last_term = term
+        return last_term
+
+    def __get_program_context(self):
+        def traverse_ast(el, keep_id=False):
+            if (
+                isinstance(el, list)
+                and len(el) == 2
+                and (
+                    (el[0] == "Id" and keep_id)
+                    or (el[0] == "ExtraArg" and el[1] == "identref")
+                )
+            ):
+                return el[1]
+            elif isinstance(el, list):
+                for x in el:
+                    id = traverse_ast(x, keep_id=keep_id)
+                    if id == "identref":
+                        keep_id = True
+                    elif id is not None:
+                        return id
+                return "identref" if keep_id else None
+            return None
+
+        # Tags:
+        # 0 - Obligation N of id : type
+        # 1 - Obligation N of id
+        # 2 - Obligation N : type
+        # 3 - Obligation N
+        # 4 - Next Obligation of id
+        # 5 - Next Obligation
+        tag = CoqFile.expr(self.__current_step.ast)[1][1]
+        if tag in [0, 1, 4]:
+            id = traverse_ast(CoqFile.expr(self.__current_step.ast))
+            return self.__program_context[id]
+        elif tag in [2, 3, 5]:
+            id = self.coq_file.current_goals().program[0][0][1]
+            return self.__program_context[id]
+        text = self.__get_last_term().text
+        raise RuntimeError(f"Unknown obligation command with tag number {tag}: {text}")
+
+    def __check_program(self):
+        goals = self.coq_file.current_goals()
+        if len(goals.program) == 0:
+            return
+        id = goals.program[-1][0][1]
+        if id in self.__program_context:
+            return
+        self.__program_context[id] = (self.__get_last_term(), self.__step_context())
+
     def __step(self):
         self.__current_step = self.coq_file.exec()[0]
         self.__aux_file.append(self.__current_step.text)
+        self.__check_program()
 
     def __get_steps(
         self, proofs
@@ -295,26 +357,16 @@ class ProofState(object):
         return steps
 
     def __get_proof(self, proofs):
-        statement_context = None
-        if CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
+        term, statement_context = None, None
+        if CoqFile.get_term_type(self.__current_step.ast) == TermType.OBLIGATION:
+            term, statement_context = self.__get_program_context()
+        elif CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
+            term = self.__get_last_term()
             statement_context = self.__step_context()
         if self.coq_file.in_proof:
             steps = self.__get_steps(proofs)
             if steps is not None:
-                proofs.append((self.__get_last_term(), statement_context, steps))
-
-    def __get_last_term(self):
-        terms = self.coq_file.terms
-        if len(terms) == 0:
-            return None
-        last_term = terms[0]
-        for term in terms[1:]:
-            if (term.ast.range.end.line > last_term.ast.range.end.line) or (
-                term.ast.range.end.line == last_term.ast.range.end.line
-                and term.ast.range.end.character > last_term.ast.range.end.character
-            ):
-                last_term = term
-        return last_term
+                proofs.append((term, statement_context, steps))
 
     def __get_proofs(self) -> List[ProofTerm]:
         def call_context(calls: List[Tuple]):

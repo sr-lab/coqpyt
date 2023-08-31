@@ -169,14 +169,14 @@ class CoqFile(object):
 
     @staticmethod
     def __get_term_type(expr: List) -> TermType:
-        if expr[0] == "VernacStartTheoremProof" and expr[1][0] == "Theorem":
-            return TermType.THEOREM
-        elif expr[0] == "VernacStartTheoremProof" and expr[1][0] == "Lemma":
-            return TermType.LEMMA
+        if expr[0] == "VernacStartTheoremProof":
+            return getattr(TermType, expr[1][0].upper())
         elif expr[0] == "VernacDefinition":
             return TermType.DEFINITION
         elif expr[0] in ["VernacNotation", "VernacSyntacticDefinition"]:
             return TermType.NOTATION
+        elif expr[0] == "VernacExtend" and expr[1][0] == "Obligations":
+            return TermType.OBLIGATION
         elif expr[0] == "VernacInductive" and expr[1][0] == "Record":
             return TermType.RECORD
         elif expr[0] == "VernacInductive" and expr[1][0] == "Variant":
@@ -373,10 +373,18 @@ class CoqFile(object):
         Returns:
             bool: True if the current step is inside a proof
         """
+
+        def empty_stack(stack):
+            # e.g. [([], [])]
+            for tuple in stack:
+                if len(tuple[0]) > 0 or len(tuple[1]) > 0:
+                    return False
+            return True
+
         goals = self.current_goals().goals
         return goals is not None and (
             len(goals.goals) > 0
-            or len(goals.stack) > 0
+            or not empty_stack(goals.stack)
             or len(goals.shelf) > 0
             or goals.bullet is not None
         )

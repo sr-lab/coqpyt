@@ -21,6 +21,12 @@ class TermType(Enum):
     TACTIC = 8
     SCHEME = 9
     VARIANT = 10
+    FACT = 11
+    REMARK = 12
+    COROLLARY = 13
+    PROPOSITION = 14
+    PROPERTY = 15
+    OBLIGATION = 16
     OTHER = 100
 
 

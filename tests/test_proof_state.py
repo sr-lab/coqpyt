@@ -447,3 +447,64 @@ def test_nested_proofs(setup, teardown):
     assert len(proofs[3].steps) == 2
     for i, step in enumerate(proofs[3].steps):
         assert step.text == steps[i]
+
+
+@pytest.mark.parametrize("setup", [("test_theorem_tokens.v", None)], indirect=True)
+def test_theorem_tokens(setup, teardown):
+    proofs = state.proofs
+    assert len(proofs) == 7
+    assert proofs[0].type == TermType.REMARK
+    assert proofs[1].type == TermType.FACT
+    assert proofs[2].type == TermType.COROLLARY
+    assert proofs[3].type == TermType.PROPOSITION
+    assert proofs[4].type == TermType.PROPERTY
+    assert proofs[5].type == TermType.THEOREM
+    assert proofs[6].type == TermType.LEMMA
+
+
+@pytest.mark.parametrize("setup", [("test_bullets.v", None)], indirect=True)
+def test_bullets(setup, teardown):
+    proofs = state.proofs
+    assert len(proofs) == 1
+    steps = [
+        "\n    intros x y. ",
+        " split.",
+        "\n    - ",
+        " reflexivity.",
+        "\n    - ",
+        " reflexivity.",
+    ]
+    assert len(proofs[0].steps) == 6
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == steps[i]
+
+
+@pytest.mark.parametrize("setup", [("test_obligation.v", None)], indirect=True)
+def test_obligation(setup, teardown):
+    proofs = state.proofs
+    assert len(proofs) == 12
+
+    statement_context = [
+        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
+        ("Notation dec := sumbool_of_bool.", TermType.NOTATION, []),
+        ("Notation leb := Nat.leb (only parsing).", TermType.NOTATION, []),
+        ("Notation S := succ.", TermType.NOTATION, []),
+        ("Parameter Inline pred : t -> t.", TermType.OTHER, []),
+        (
+            'Notation "{ x : A | P }" := (sig (A:=A) (fun x => P)) : type_scope.',
+            TermType.NOTATION,
+            [],
+        ),
+        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+    ]
+
+    for i, proof in enumerate(proofs):
+        compare_context(statement_context, proof.context)
+        assert (
+            proof.text
+            == "Program Definition id"
+            + str(i // 2 + 1)
+            + " (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else S (pred n)."
+        )
+        assert len(proof.steps) == 1
+        assert proof.steps[0].text == "\n  dummy_tactic n e."

@@ -489,7 +489,7 @@ def test_obligation(setup, teardown):
         ("Notation dec := sumbool_of_bool.", TermType.NOTATION, []),
         ("Notation leb := Nat.leb (only parsing).", TermType.NOTATION, []),
         ("Notation S := succ.", TermType.NOTATION, []),
-        ("Parameter Inline pred : t -> t.", TermType.OTHER, []),
+        ("Notation pred := Nat.pred (only parsing).", TermType.NOTATION, []),
         (
             'Notation "{ x : A | P }" := (sig (A:=A) (fun x => P)) : type_scope.',
             TermType.NOTATION,
@@ -508,3 +508,10 @@ def test_obligation(setup, teardown):
         )
         assert len(proof.steps) == 1
         assert proof.steps[0].text == "\n  dummy_tactic n e."
+
+
+@pytest.mark.parametrize("setup", [("test_module_type.v", None)], indirect=True)
+def test_module_type(setup, teardown):
+    # We ignore proofs inside a Module Type since they can't be used outside
+    # and should be overriden.
+    assert len(state.proofs) == 1

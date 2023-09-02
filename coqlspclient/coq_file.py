@@ -68,6 +68,8 @@ class CoqFile(object):
         self.__validate()
         self.steps_taken: int = 0
         self.curr_module: List[str] = []
+        self.curr_module_type: List[str] = []
+        self.__is_module_stack: List[bool] = []
         self.context = FileContext()
 
     def __enter__(self):
@@ -338,10 +340,22 @@ class CoqFile(object):
                 )
             elif expr[0] == "VernacDefineModule":
                 self.curr_module.append(expr[2]["v"][1])
+                self.__is_module_stack.append(True)
+            elif expr[0] == "VernacDeclareModuleType":
+                self.curr_module_type.append(expr[1]["v"][1])
+                self.__is_module_stack.append(False)
             elif expr[0] == "VernacEndSegment":
-                if [expr[1]["v"][1]] == self.curr_module[-1:]:
+                if [expr[1]["v"][1]] == self.curr_module[
+                    -1:
+                ] and self.__is_module_stack[-1]:
                     self.curr_module.pop()
-            elif expr[0] != "VernacBeginSection":
+                    self.__is_module_stack.pop()
+                elif [expr[1]["v"][1]] == self.curr_module_type[-1:]:
+                    self.curr_module_type.pop()
+                    self.__is_module_stack.pop()
+            # HACK: We ignore terms inside a Module Type since they can't be used outside
+            # and should be overriden.
+            elif expr[0] != "VernacBeginSection" and len(self.curr_module_type) == 0:
                 names = traverse_ast(expr)
                 for name in names:
                     self.__add_term(name, self.ast[self.steps_taken], text, term_type)

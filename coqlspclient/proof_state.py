@@ -363,7 +363,9 @@ class ProofState(object):
         elif CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
             term = self.__get_last_term()
             statement_context = self.__step_context()
-        if self.coq_file.in_proof:
+        # HACK: We ignore proofs inside a Module Type since they can't be used outside
+        # and should be overriden.
+        if self.coq_file.in_proof and len(self.coq_file.curr_module_type) == 0:
             steps = self.__get_steps(proofs)
             if steps is not None:
                 proofs.append((term, statement_context, steps))

@@ -63,3 +63,11 @@ def test_is_invalid_1(setup, teardown):
 @pytest.mark.parametrize("setup", ["test_invalid_2.v"], indirect=True)
 def test_is_invalid_2(setup, teardown):
     assert not coq_file.is_valid
+
+
+@pytest.mark.parametrize("setup", ["test_module_type.v"], indirect=True)
+def test_module_type(setup, teardown):
+    coq_file.run()
+    # We ignore terms inside a Module Type since they can't be used outside
+    # and should be overriden.
+    assert len(coq_file.context.terms) == 1

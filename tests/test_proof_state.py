@@ -488,7 +488,6 @@ def test_obligation(setup, teardown):
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ("Notation dec := sumbool_of_bool.", TermType.NOTATION, []),
         ("Notation leb := Nat.leb (only parsing).", TermType.NOTATION, []),
-        ("Notation S := succ.", TermType.NOTATION, []),
         ("Notation pred := Nat.pred (only parsing).", TermType.NOTATION, []),
         (
             'Notation "{ x : A | P }" := (sig (A:=A) (fun x => P)) : type_scope.',

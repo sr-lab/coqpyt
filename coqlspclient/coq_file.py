@@ -316,7 +316,27 @@ class CoqFile(object):
                 return
             term_type = CoqFile.__get_term_type(expr)
 
-            if (
+            if expr[0] == "VernacEndSegment":
+                if [expr[1]["v"][1]] == self.curr_module[
+                    -1:
+                ] and self.__is_module_stack[-1]:
+                    self.curr_module.pop()
+                    self.__is_module_stack.pop()
+                elif [expr[1]["v"][1]] == self.curr_module_type[-1:]:
+                    self.curr_module_type.pop()
+                    self.__is_module_stack.pop()
+            elif expr[0] == "VernacDefineModule":
+                self.curr_module.append(expr[2]["v"][1])
+                self.__is_module_stack.append(True)
+            elif expr[0] == "VernacDeclareModuleType":
+                self.curr_module_type.append(expr[1]["v"][1])
+                self.__is_module_stack.append(False)
+            # HACK: We ignore terms inside a Module Type since they can't be used outside
+            # and should be overriden.
+            elif len(self.curr_module_type) > 0:
+                return
+
+            elif (
                 len(expr) >= 2
                 and isinstance(expr[1], list)
                 and len(expr[1]) == 2
@@ -338,24 +358,7 @@ class CoqFile(object):
                 self.__add_term(
                     name, self.ast[self.steps_taken], text, TermType.NOTATION
                 )
-            elif expr[0] == "VernacDefineModule":
-                self.curr_module.append(expr[2]["v"][1])
-                self.__is_module_stack.append(True)
-            elif expr[0] == "VernacDeclareModuleType":
-                self.curr_module_type.append(expr[1]["v"][1])
-                self.__is_module_stack.append(False)
-            elif expr[0] == "VernacEndSegment":
-                if [expr[1]["v"][1]] == self.curr_module[
-                    -1:
-                ] and self.__is_module_stack[-1]:
-                    self.curr_module.pop()
-                    self.__is_module_stack.pop()
-                elif [expr[1]["v"][1]] == self.curr_module_type[-1:]:
-                    self.curr_module_type.pop()
-                    self.__is_module_stack.pop()
-            # HACK: We ignore terms inside a Module Type since they can't be used outside
-            # and should be overriden.
-            elif expr[0] != "VernacBeginSection" and len(self.curr_module_type) == 0:
+            elif expr[0] != "VernacBeginSection":
                 names = traverse_ast(expr)
                 for name in names:
                     self.__add_term(name, self.ast[self.steps_taken], text, term_type)

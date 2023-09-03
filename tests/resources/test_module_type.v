@@ -2,6 +2,9 @@ Module Type TestModuleType.
     Module TestModuleType.
     End TestModuleType.
 
+    Section TestModuleType.
+    End TestModuleType.
+
     Parameter NAT_MIN : nat.
     Definition x := 2.
     

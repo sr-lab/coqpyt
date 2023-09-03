@@ -30,6 +30,12 @@ class TermType(Enum):
     OTHER = 100
 
 
+class SegmentType(Enum):
+    MODULE = 1
+    MODULE_TYPE = 2
+    SECTION = 3
+
+
 class Term:
     def __init__(
         self,

@@ -5,7 +5,7 @@ import tempfile
 from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier
 from pylspclient.lsp_structs import ResponseError, ErrorCodes
 from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
-from coqlspclient.coq_structs import Step, FileContext, Term, TermType
+from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentType
 from coqlspclient.coq_lsp_client import CoqLspClient
 from typing import List, Optional
 
@@ -69,7 +69,8 @@ class CoqFile(object):
         self.steps_taken: int = 0
         self.curr_module: List[str] = []
         self.curr_module_type: List[str] = []
-        self.__is_module_stack: List[bool] = []
+        self.curr_section: List[str] = []
+        self.__segment_stack: List[SegmentType] = []
         self.context = FileContext()
 
     def __enter__(self):
@@ -317,25 +318,28 @@ class CoqFile(object):
             term_type = CoqFile.__get_term_type(expr)
 
             if expr[0] == "VernacEndSegment":
-                if [expr[1]["v"][1]] == self.curr_module[
-                    -1:
-                ] and self.__is_module_stack[-1]:
-                    self.curr_module.pop()
-                    self.__is_module_stack.pop()
-                elif [expr[1]["v"][1]] == self.curr_module_type[-1:]:
-                    self.curr_module_type.pop()
-                    self.__is_module_stack.pop()
+                segment_type = self.__segment_stack.pop()
+                match segment_type:
+                    case SegmentType.MODULE:
+                        self.curr_module.pop()
+                    case SegmentType.MODULE_TYPE:
+                        self.curr_module_type.pop()
+                    case SegmentType.SECTION:
+                        self.curr_section.pop()
             elif expr[0] == "VernacDefineModule":
                 self.curr_module.append(expr[2]["v"][1])
-                self.__is_module_stack.append(True)
+                self.__segment_stack.append(SegmentType.MODULE)
             elif expr[0] == "VernacDeclareModuleType":
                 self.curr_module_type.append(expr[1]["v"][1])
-                self.__is_module_stack.append(False)
+                self.__segment_stack.append(SegmentType.MODULE_TYPE)
+            elif expr[0] == "VernacBeginSection":
+                self.curr_section.append(expr[1]["v"][1])
+                self.__segment_stack.append(SegmentType.SECTION)
+
             # HACK: We ignore terms inside a Module Type since they can't be used outside
             # and should be overriden.
             elif len(self.curr_module_type) > 0:
                 return
-
             elif (
                 len(expr) >= 2
                 and isinstance(expr[1], list)
@@ -358,7 +362,7 @@ class CoqFile(object):
                 self.__add_term(
                     name, self.ast[self.steps_taken], text, TermType.NOTATION
                 )
-            elif expr[0] != "VernacBeginSection":
+            else:
                 names = traverse_ast(expr)
                 for name in names:
                     self.__add_term(name, self.ast[self.steps_taken], text, term_type)

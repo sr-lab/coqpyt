@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 from coqlspclient.coq_lsp_structs import RangedSpan, GoalAnswer
 
 
@@ -8,6 +8,12 @@ class Step(object):
     def __init__(self, text: str, ast: RangedSpan):
         self.text = text
         self.ast = ast
+
+
+class SegmentType(Enum):
+    MODULE = 1
+    MODULE_TYPE = 2
+    SECTION = 3
 
 
 class TermType(Enum):
@@ -28,12 +34,6 @@ class TermType(Enum):
     PROPERTY = 15
     OBLIGATION = 16
     OTHER = 100
-
-
-class SegmentType(Enum):
-    MODULE = 1
-    MODULE_TYPE = 2
-    SECTION = 3
 
 
 class Term:

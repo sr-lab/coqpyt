@@ -318,7 +318,7 @@ class CoqFile(object):
             term_type = CoqFile.__get_term_type(expr)
 
             if expr[0] == "VernacEndSegment":
-                if (len(self.__segment_stack) == 0):
+                if len(self.__segment_stack) == 0:
                     return
                 match self.__segment_stack.pop():
                     case SegmentType.MODULE:

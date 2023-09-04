@@ -117,14 +117,11 @@ class CoqFile(object):
 
     @staticmethod
     def get_id(id: List) -> str:
-        name = ""
-        if id[0] == "Ser_Qualid" and id[1][0] == "DirPath" and id[2][0] == "Id":
-            for dir_el in id[1][1]:
-                name += dir_el[1] + "."
-            name += id[2][1]
+        if id[0] == "Ser_Qualid":
+            return ".".join([l[1] for l in id[1][1][::-1]] + [id[2][1]])
         elif id[0] == "Id":
-            name = id[1]
-        return name
+            return id[1]
+        return ""
 
     @staticmethod
     def expr(step: RangedSpan) -> Optional[List]:

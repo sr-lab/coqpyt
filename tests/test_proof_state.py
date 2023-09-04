@@ -482,7 +482,7 @@ def test_bullets(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_obligation.v", None)], indirect=True)
 def test_obligation(setup, teardown):
     proofs = state.proofs
-    assert len(proofs) == 12
+    assert len(proofs) == 11
 
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
@@ -496,14 +496,21 @@ def test_obligation(setup, teardown):
         ),
         ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
     ]
+    programs = [
+        ("id1", "S (pred n)"), ("id1", "S (pred n)"), ("id2", "S (pred n)"), 
+        ("id2", "S (pred n)"), ("id3", "S (pred n)"), ("id3", "S (pred n)"), 
+        ("id4", "S (pred n)"), ("id4", "S (pred n)"), ("id", "pred (S n)"), 
+        ("id", "S (pred n)"), ("id", "S (pred n)")
+    ]
 
     for i, proof in enumerate(proofs):
         compare_context(statement_context, proof.context)
         assert (
             proof.text
-            == "Program Definition id"
-            + str(i // 2 + 1)
-            + " (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else S (pred n)."
+            == "Program Definition "
+            + programs[i][0]
+            + " (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else "
+            + programs[i][1] + "."
         )
         assert len(proof.steps) == 1
         assert proof.steps[0].text == "\n  dummy_tactic n e."

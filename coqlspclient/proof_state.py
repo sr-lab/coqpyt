@@ -279,12 +279,12 @@ class ProofState(object):
         return last_term
 
     def __get_instance_context(self):
-        instance_expr = CoqFile.expr(self.__get_last_term().ast)
-        class_id = instance_expr[3]["v"][1]["v"][1]["v"][2][1]
+        term = self.__get_last_term()
+        instance_expr = CoqFile.expr(term.ast)
+        class_id = CoqFile.get_id(instance_expr[3]["v"][1]["v"][1]["v"])
         class_term = self.__get_term(class_id)
-        class_context = self.__step_context(class_term.ast)
-        not_class = lambda x: not isinstance(x[1], Term) or x[1].text != class_term.text
-        return class_term, list(filter(not_class, class_context))
+        statement_context = self.__step_context() + self.__step_context(class_term.ast)
+        return term, statement_context
 
     def __get_program_context(self):
         def traverse_ast(el, keep_id=False):

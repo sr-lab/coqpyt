@@ -116,6 +116,17 @@ class CoqFile(object):
         self.is_valid = True
 
     @staticmethod
+    def get_id(id: List) -> str:
+        name = ""
+        if id[0] == "Ser_Qualid" and id[1][0] == "DirPath" and id[2][0] == "Id":
+            for dir_el in id[1][1]:
+                name += dir_el[1] + "."
+            name += id[2][1]
+        elif id[0] == "Id":
+            name = id[1]
+        return name
+
+    @staticmethod
     def expr(step: RangedSpan) -> Optional[List]:
         if (
             step.span is not None
@@ -259,14 +270,7 @@ class CoqFile(object):
 
     def __get_tactic_name(self, expr):
         if len(expr[2][0][2][0][1][0]) == 2 and expr[2][0][2][0][1][0][0] == "v":
-            id, name = expr[2][0][2][0][1][0][1], ""
-            if id[0] == "Ser_Qualid" and id[1][0] == "DirPath" and id[2][0] == "Id":
-                for dir_el in id[1][1]:
-                    name += dir_el[1] + "."
-                name += id[2][1]
-            elif id[0] == "Id":
-                name = id[1]
-
+            name = CoqFile.get_id(expr[2][0][2][0][1][0][1])
             if name != "":
                 return name
 

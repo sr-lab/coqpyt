@@ -522,18 +522,28 @@ def test_type_class(setup, teardown):
     assert len(state.proofs[0].steps) == 2
     assert (
         state.proofs[0].text
-        == "Class EqDecNew (A : Type) := { eqb_new : A -> A -> bool ; eqb_leibniz_new : forall x y, eqb_new x y = true -> x = y ; eqb_ident_new : forall x, eqb_new x x = true }."
+        == "#[refine] Global Instance unit_EqDec : TypeClass.EqDecNew unit := { eqb_new x y := true }."
     )
 
     class_context = [
         (
-            'Notation "A -> B" := (forall (_ : A), B) : type_scope.',
-            TermType.NOTATION,
-            [],
+            "Class EqDecNew (A : Type) := { eqb_new : A -> A -> bool ; eqb_leibniz_new : forall x y, eqb_new x y = true -> x = y ; eqb_ident_new : forall x, eqb_new x x = true }.",
+            TermType.CLASS,
+            ["TypeClass"]
+        ),
+        (
+            "Inductive unit : Set := tt : unit.",
+            TermType.INDUCTIVE,
+            []
         ),
         (
             "Inductive bool : Set := | true : bool | false : bool.",
             TermType.INDUCTIVE,
+            [],
+        ),
+        (
+            'Notation "A -> B" := (forall (_ : A), B) : type_scope.',
+            TermType.NOTATION,
             [],
         ),
         ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),

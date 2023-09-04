@@ -231,7 +231,7 @@ class ProofState(object):
         fun = lambda x: x.endswith("(default interpretation)")
         return nots[0][:-25] if fun(nots[0]) else nots[0]
 
-    def __step_context(self):
+    def __step_context(self, step=None):
         def traverse_ast(el):
             if isinstance(el, dict):
                 return [x for v in el.values() for x in traverse_ast(v)]
@@ -261,7 +261,9 @@ class ProofState(object):
 
             return []
 
-        return traverse_ast(self.__current_step.ast.span)
+        if step is None:
+            step = self.__current_step.ast
+        return traverse_ast(step.span)
 
     def __get_last_term(self):
         terms = self.coq_file.terms
@@ -275,6 +277,14 @@ class ProofState(object):
             ):
                 last_term = term
         return last_term
+
+    def __get_instance_context(self):
+        term = self.__get_last_term()
+        instance_expr = CoqFile.expr(term.ast)
+        class_id = CoqFile.get_id(instance_expr[3]["v"][1]["v"][1]["v"])
+        class_term = self.__get_term(class_id)
+        statement_context = self.__step_context() + self.__step_context(class_term.ast)
+        return term, statement_context
 
     def __get_program_context(self):
         def traverse_ast(el, keep_id=False):
@@ -307,9 +317,15 @@ class ProofState(object):
         tag = CoqFile.expr(self.__current_step.ast)[1][1]
         if tag in [0, 1, 4]:
             id = traverse_ast(CoqFile.expr(self.__current_step.ast))
+            # This works because the obligation must be in the
+            # same module as the program
+            id = ".".join(self.coq_file.curr_module + [id])
             return self.__program_context[id]
         elif tag in [2, 3, 5]:
             id = self.coq_file.current_goals().program[0][0][1]
+            # This works because the obligation must be in the
+            # same module as the program
+            id = ".".join(self.coq_file.curr_module + [id])
             return self.__program_context[id]
         text = self.__get_last_term().text
         raise RuntimeError(f"Unknown obligation command with tag number {tag}: {text}")
@@ -318,7 +334,7 @@ class ProofState(object):
         goals = self.coq_file.current_goals()
         if len(goals.program) == 0:
             return
-        id = goals.program[-1][0][1]
+        id = ".".join(self.coq_file.curr_module + [goals.program[-1][0][1]])
         if id in self.__program_context:
             return
         self.__program_context[id] = (self.__get_last_term(), self.__step_context())
@@ -360,6 +376,8 @@ class ProofState(object):
         term, statement_context = None, None
         if CoqFile.get_term_type(self.__current_step.ast) == TermType.OBLIGATION:
             term, statement_context = self.__get_program_context()
+        elif CoqFile.get_term_type(self.__current_step.ast) == TermType.INSTANCE:
+            term, statement_context = self.__get_instance_context()
         elif CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
             term = self.__get_last_term()
             statement_context = self.__step_context()
@@ -374,8 +392,7 @@ class ProofState(object):
         def call_context(calls: List[Tuple]):
             context, calls = [], [call[0](*call[1:]) for call in calls]
             [context.append(call) for call in calls if call not in context]
-            context = list(filter(lambda term: term is not None, context))
-            return context
+            return list(filter(lambda term: term is not None, context))
 
         def get_proof_step(step: Tuple[Step, Optional[GoalAnswer], List[Tuple]]):
             return ProofStep(step[0], step[1], call_context(step[2]))
@@ -395,8 +412,8 @@ class ProofState(object):
             raise e
 
         proof_steps = [
-            (term, call_context(context), list(map(get_proof_step, steps)))
-            for term, context, steps in proofs
+            (term, call_context(calls), list(map(get_proof_step, steps)))
+            for term, calls, steps in proofs
         ]
         return list(map(lambda t: ProofTerm(*t), proof_steps))
 

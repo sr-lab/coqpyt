@@ -482,7 +482,7 @@ def test_bullets(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_obligation.v", None)], indirect=True)
 def test_obligation(setup, teardown):
     proofs = state.proofs
-    assert len(proofs) == 12
+    assert len(proofs) == 11
 
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
@@ -496,14 +496,29 @@ def test_obligation(setup, teardown):
         ),
         ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
     ]
+    programs = [
+        ("id1", "S (pred n)"),
+        ("id1", "S (pred n)"),
+        ("id2", "S (pred n)"),
+        ("id2", "S (pred n)"),
+        ("id3", "S (pred n)"),
+        ("id3", "S (pred n)"),
+        ("id4", "S (pred n)"),
+        ("id4", "S (pred n)"),
+        ("id", "pred (S n)"),
+        ("id", "S (pred n)"),
+        ("id", "S (pred n)"),
+    ]
 
     for i, proof in enumerate(proofs):
         compare_context(statement_context, proof.context)
         assert (
             proof.text
-            == "Program Definition id"
-            + str(i // 2 + 1)
-            + " (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else S (pred n)."
+            == "Program Definition "
+            + programs[i][0]
+            + " (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else "
+            + programs[i][1]
+            + "."
         )
         assert len(proof.steps) == 1
         assert proof.steps[0].text == "\n  dummy_tactic n e."
@@ -514,3 +529,34 @@ def test_module_type(setup, teardown):
     # We ignore proofs inside a Module Type since they can't be used outside
     # and should be overriden.
     assert len(state.proofs) == 1
+
+
+@pytest.mark.parametrize("setup", [("test_type_class.v", None)], indirect=True)
+def test_type_class(setup, teardown):
+    assert len(state.proofs) == 1
+    assert len(state.proofs[0].steps) == 2
+    assert (
+        state.proofs[0].text
+        == "#[refine] Global Instance unit_EqDec : TypeClass.EqDecNew unit := { eqb_new x y := true }."
+    )
+
+    class_context = [
+        (
+            "Class EqDecNew (A : Type) := { eqb_new : A -> A -> bool ; eqb_leibniz_new : forall x y, eqb_new x y = true -> x = y ; eqb_ident_new : forall x, eqb_new x x = true }.",
+            TermType.CLASS,
+            ["TypeClass"],
+        ),
+        ("Inductive unit : Set := tt : unit.", TermType.INDUCTIVE, []),
+        (
+            "Inductive bool : Set := | true : bool | false : bool.",
+            TermType.INDUCTIVE,
+            [],
+        ),
+        (
+            'Notation "A -> B" := (forall (_ : A), B) : type_scope.',
+            TermType.NOTATION,
+            [],
+        ),
+        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+    ]
+    compare_context(class_context, state.proofs[0].context)

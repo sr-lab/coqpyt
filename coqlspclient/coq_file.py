@@ -116,6 +116,14 @@ class CoqFile(object):
         self.is_valid = True
 
     @staticmethod
+    def get_id(id: List) -> str:
+        if id[0] == "Ser_Qualid":
+            return ".".join([l[1] for l in id[1][1][::-1]] + [id[2][1]])
+        elif id[0] == "Id":
+            return id[1]
+        return ""
+
+    @staticmethod
     def expr(step: RangedSpan) -> Optional[List]:
         if (
             step.span is not None
@@ -180,12 +188,16 @@ class CoqFile(object):
             return TermType.NOTATION
         elif expr[0] == "VernacExtend" and expr[1][0] == "Obligations":
             return TermType.OBLIGATION
-        elif expr[0] == "VernacInductive" and expr[1][0] == "Record":
+        elif expr[0] == "VernacInductive" and expr[1][0] == "Class":
+            return TermType.CLASS
+        elif expr[0] == "VernacInductive" and expr[1][0] in ["Record", "Structure"]:
             return TermType.RECORD
         elif expr[0] == "VernacInductive" and expr[1][0] == "Variant":
             return TermType.VARIANT
         elif expr[0] == "VernacInductive":
             return TermType.INDUCTIVE
+        elif expr[0] == "VernacInstance":
+            return TermType.INSTANCE
         elif expr[0] == "VernacFixpoint":
             return TermType.FIXPOINT
         elif expr[0] == "VernacScheme":
@@ -206,7 +218,6 @@ class CoqFile(object):
         if (
             term_type
             in [
-                TermType.RECORD,
                 TermType.VARIANT,
                 TermType.INDUCTIVE,
             ]
@@ -256,14 +267,7 @@ class CoqFile(object):
 
     def __get_tactic_name(self, expr):
         if len(expr[2][0][2][0][1][0]) == 2 and expr[2][0][2][0][1][0][0] == "v":
-            id, name = expr[2][0][2][0][1][0][1], ""
-            if id[0] == "Ser_Qualid" and id[1][0] == "DirPath" and id[2][0] == "Id":
-                for dir_el in id[1][1]:
-                    name += dir_el[1] + "."
-                name += id[2][1]
-            elif id[0] == "Id":
-                name = id[1]
-
+            name = CoqFile.get_id(expr[2][0][2][0][1][0][1])
             if name != "":
                 return name
 

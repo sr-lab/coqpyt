@@ -1,9 +1,9 @@
-Class EqDec (A : Type) :=
-  { eqb : A -> A -> bool ;
-    eqb_leibniz : forall x y, eqb x y = true -> x = y ;
-    eqb_ident : forall x, eqb x x = true }.
+Class EqDecNew (A : Type) :=
+  { eqb_new : A -> A -> bool ;
+    eqb_leibniz_new : forall x y, eqb_new x y = true -> x = y ;
+    eqb_ident_new : forall x, eqb_new x x = true }.
 
-#[refine] Global Instance unit_EqDec : EqDec unit := { eqb x y := true }.
+#[refine] Global Instance unit_EqDec : EqDecNew unit := { eqb_new x y := true }.
 Proof.
   intros [] []; reflexivity.
   intros []; reflexivity.

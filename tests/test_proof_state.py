@@ -520,3 +520,22 @@ def test_module_type(setup, teardown):
 def test_type_class(setup, teardown):
     assert len(state.proofs) == 1
     assert len(state.proofs[0].steps) == 2
+    assert (
+        state.proofs[0].text
+        == "Class EqDecNew (A : Type) := { eqb_new : A -> A -> bool ; eqb_leibniz_new : forall x y, eqb_new x y = true -> x = y ; eqb_ident_new : forall x, eqb_new x x = true }."
+    )
+
+    class_context = [
+        (
+            'Notation "A -> B" := (forall (_ : A), B) : type_scope.',
+            TermType.NOTATION,
+            [],
+        ),
+        (
+            "Inductive bool : Set := | true : bool | false : bool.",
+            TermType.INDUCTIVE,
+            [],
+        ),
+        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+    ]
+    compare_context(class_context, state.proofs[0].context)

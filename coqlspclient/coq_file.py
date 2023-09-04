@@ -180,12 +180,16 @@ class CoqFile(object):
             return TermType.NOTATION
         elif expr[0] == "VernacExtend" and expr[1][0] == "Obligations":
             return TermType.OBLIGATION
-        elif expr[0] == "VernacInductive" and expr[1][0] == "Record":
+        elif expr[0] == "VernacInductive" and expr[1][0] == "Class":
+            return TermType.CLASS
+        elif expr[0] == "VernacInductive" and expr[1][0] in ["Record", "Structure"]:
             return TermType.RECORD
         elif expr[0] == "VernacInductive" and expr[1][0] == "Variant":
             return TermType.VARIANT
         elif expr[0] == "VernacInductive":
             return TermType.INDUCTIVE
+        elif expr[0] == "VernacInstance":
+            return TermType.INSTANCE
         elif expr[0] == "VernacFixpoint":
             return TermType.FIXPOINT
         elif expr[0] == "VernacScheme":
@@ -206,7 +210,6 @@ class CoqFile(object):
         if (
             term_type
             in [
-                TermType.RECORD,
                 TermType.VARIANT,
                 TermType.INDUCTIVE,
             ]

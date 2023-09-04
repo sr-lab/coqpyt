@@ -23,16 +23,18 @@ class TermType(Enum):
     NOTATION = 4
     INDUCTIVE = 5
     RECORD = 6
-    FIXPOINT = 7
-    TACTIC = 8
-    SCHEME = 9
-    VARIANT = 10
-    FACT = 11
-    REMARK = 12
-    COROLLARY = 13
-    PROPOSITION = 14
-    PROPERTY = 15
-    OBLIGATION = 16
+    CLASS = 7
+    INSTANCE = 8
+    FIXPOINT = 9
+    TACTIC = 10
+    SCHEME = 11
+    VARIANT = 12
+    FACT = 13
+    REMARK = 14
+    COROLLARY = 15
+    PROPOSITION = 16
+    PROPERTY = 17
+    OBLIGATION = 18
     OTHER = 100
 
 

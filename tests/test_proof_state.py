@@ -514,3 +514,9 @@ def test_module_type(setup, teardown):
     # We ignore proofs inside a Module Type since they can't be used outside
     # and should be overriden.
     assert len(state.proofs) == 1
+
+
+@pytest.mark.parametrize("setup", [("test_type_class.v", None)], indirect=True)
+def test_type_class(setup, teardown):
+    assert len(state.proofs) == 1
+    assert len(state.proofs[0].steps) == 2

@@ -1,5 +1,7 @@
 Require Import Program Arith.
 
+Module TestObligation.
+
 Ltac dummy_tactic n e := destruct n; try reflexivity; inversion e.
 
 Program Definition id1 (n : nat) : { x : nat | x = n } :=
@@ -59,3 +61,5 @@ Qed.
 Obligation 2 with reflexivity.
   dummy_tactic n e.
 Qed.
+
+End TestObligation.

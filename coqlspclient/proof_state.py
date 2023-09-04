@@ -317,9 +317,15 @@ class ProofState(object):
         tag = CoqFile.expr(self.__current_step.ast)[1][1]
         if tag in [0, 1, 4]:
             id = traverse_ast(CoqFile.expr(self.__current_step.ast))
+            # This works because the obligation must be in the 
+            # same module as the program
+            id = '.'.join(self.coq_file.curr_module + [id])
             return self.__program_context[id]
         elif tag in [2, 3, 5]:
             id = self.coq_file.current_goals().program[0][0][1]
+            # This works because the obligation must be in the 
+            # same module as the program
+            id = '.'.join(self.coq_file.curr_module + [id])
             return self.__program_context[id]
         text = self.__get_last_term().text
         raise RuntimeError(f"Unknown obligation command with tag number {tag}: {text}")
@@ -328,7 +334,7 @@ class ProofState(object):
         goals = self.coq_file.current_goals()
         if len(goals.program) == 0:
             return
-        id = goals.program[-1][0][1]
+        id = '.'.join(self.coq_file.curr_module + [goals.program[-1][0][1]]) 
         if id in self.__program_context:
             return
         self.__program_context[id] = (self.__get_last_term(), self.__step_context())

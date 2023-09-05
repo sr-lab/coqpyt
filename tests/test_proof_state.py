@@ -533,14 +533,14 @@ def test_module_type(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_type_class.v", None)], indirect=True)
 def test_type_class(setup, teardown):
-    assert len(state.proofs) == 1
+    assert len(state.proofs) == 2
     assert len(state.proofs[0].steps) == 2
     assert (
         state.proofs[0].text
         == "#[refine] Global Instance unit_EqDec : TypeClass.EqDecNew unit := { eqb_new x y := true }."
     )
 
-    class_context = [
+    context = [
         (
             "Class EqDecNew (A : Type) := { eqb_new : A -> A -> bool ; eqb_leibniz_new : forall x y, eqb_new x y = true -> x = y ; eqb_ident_new : forall x, eqb_new x x = true }.",
             TermType.CLASS,
@@ -552,11 +552,25 @@ def test_type_class(setup, teardown):
             TermType.INDUCTIVE,
             [],
         ),
+    ]
+    compare_context(context, state.proofs[0].context)
+
+    assert (
+        state.proofs[1].text
+        == "Instance test : TypeClass.EqDecNew unit -> TypeClass.EqDecNew unit."
+    )
+
+    context = [
         (
             'Notation "A -> B" := (forall (_ : A), B) : type_scope.',
             TermType.NOTATION,
-            [],
+            []
         ),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        (
+            "Class EqDecNew (A : Type) := { eqb_new : A -> A -> bool ; eqb_leibniz_new : forall x y, eqb_new x y = true -> x = y ; eqb_ident_new : forall x, eqb_new x x = true }.",
+            TermType.CLASS,
+            ["TypeClass"],
+        ),
+        ("Inductive unit : Set := tt : unit.", TermType.INDUCTIVE, []),
     ]
-    compare_context(class_context, state.proofs[0].context)
+    compare_context(context, state.proofs[1].context)

@@ -10,3 +10,12 @@ Proof.
 intros [] []; reflexivity.
 intros []; reflexivity.
 Defined.
+
+Section test.
+
+Instance test : TypeClass.EqDecNew unit -> TypeClass.EqDecNew unit.
+Proof.
+  auto.
+Defined.
+
+End test.

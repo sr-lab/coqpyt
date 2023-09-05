@@ -278,14 +278,6 @@ class ProofState(object):
                 last_term = term
         return last_term
 
-    def __get_instance_context(self):
-        term = self.__get_last_term()
-        instance_expr = CoqFile.expr(term.ast)
-        class_id = CoqFile.get_id(instance_expr[3]["v"][1]["v"][1]["v"])
-        class_term = self.__get_term(class_id)
-        statement_context = self.__step_context() + self.__step_context(class_term.ast)
-        return term, statement_context
-
     def __get_program_context(self):
         def traverse_ast(el, keep_id=False):
             if (
@@ -376,8 +368,6 @@ class ProofState(object):
         term, statement_context = None, None
         if CoqFile.get_term_type(self.__current_step.ast) == TermType.OBLIGATION:
             term, statement_context = self.__get_program_context()
-        elif CoqFile.get_term_type(self.__current_step.ast) == TermType.INSTANCE:
-            term, statement_context = self.__get_instance_context()
         elif CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
             term = self.__get_last_term()
             statement_context = self.__step_context()

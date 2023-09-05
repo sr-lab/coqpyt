@@ -206,6 +206,7 @@ class CoqFile(object):
         elif (
             len(expr) > 1
             and isinstance(expr[1], list)
+            and len(expr[1]) > 0
             and expr[1][0] == "VernacDeclareTacticDefinition"
         ):
             return TermType.TACTIC
@@ -347,9 +348,9 @@ class CoqFile(object):
             elif len(self.curr_module_type) > 0:
                 return
             elif (
-                len(expr) >= 2
+                len(expr) > 1
                 and isinstance(expr[1], list)
-                and len(expr[1]) == 2
+                and len(expr[1]) > 0
                 and expr[1][0] == "VernacDeclareTacticDefinition"
             ):
                 name = self.__get_tactic_name(expr)

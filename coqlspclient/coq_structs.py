@@ -112,7 +112,9 @@ class FileContext:
         regex = f"{re.escape(notation_id)}".split("\\ ")
         for i, sub in enumerate(regex):
             if sub == "_":
-                regex[i] = "(.+)"
+                # We match the wildcard with the description from here:
+                # https://coq.inria.fr/distrib/current/refman/language/core/basic.html#grammar-token-ident
+                regex[i] = "([a-zA-Z][a-zA-Z0-9_']*|_[a-zA-Z0-9_']+)"
             else:
                 # Handle '_'
                 regex[i] = f"({sub}|('{sub}'))"
@@ -121,6 +123,11 @@ class FileContext:
         # Search notations
         for term in self.terms.keys():
             if re.match(regex, term):
+                return self.terms[term]
+        # We search again in case the stored id contains the scope but no scope is provided
+        for term in self.terms.keys():
+            unscoped = term.split(":")[0].strip()
+            if re.match(regex, unscoped):
                 return self.terms[term]
 
         # Search Infix

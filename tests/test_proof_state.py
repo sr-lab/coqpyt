@@ -94,7 +94,7 @@ def test_get_proofs(setup, teardown):
     ]
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
     ]
 
@@ -182,7 +182,7 @@ def test_get_proofs(setup, teardown):
             TermType.NOTATION,
             [],
         ),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
         ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
@@ -254,7 +254,7 @@ def test_get_proofs(setup, teardown):
     ]
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
     ]
 
@@ -345,7 +345,7 @@ def test_get_proofs(setup, teardown):
             TermType.NOTATION,
             [],
         ),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
@@ -402,6 +402,18 @@ def test_exists_notation(setup, teardown):
         state.context.get_notation("exists _ .. _ , _", "type_scope").text
         == "Notation \"'exists' x .. y , p\" := (ex (fun x => .. (ex (fun y => p)) ..)) (at level 200, x binder, right associativity, format \"'[' 'exists' '/ ' x .. y , '/ ' p ']'\") : type_scope."
     )
+
+
+@pytest.mark.parametrize("setup", [("test_list_notation.v", None)], indirect=True)
+def test_list_notation(setup, teardown):
+    assert len(state.proofs) == 1
+    context = [
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
+        ('Infix "++" := app (right associativity, at level 60) : list_scope.', TermType.NOTATION, []),
+        ('Notation "[ x ]" := (cons x nil) : list_scope.', TermType.NOTATION, ['ListNotations']),
+        ('Notation "[ x ; y ; .. ; z ]" := (cons x (cons y .. (cons z nil) ..)) (format "[ \'[\' x ; \'/\' y ; \'/\' .. ; \'/\' z \']\' ]") : list_scope.', TermType.NOTATION, ['ListNotations']),
+    ]
+    compare_context(context, state.proofs[0].context)
 
 
 @pytest.mark.parametrize("setup", [("test_unknown_notation.v", None)], indirect=True)
@@ -494,7 +506,7 @@ def test_obligation(setup, teardown):
             TermType.NOTATION,
             [],
         ),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
     ]
     programs = [
         ("id1", "S (pred n)"),
@@ -579,8 +591,13 @@ def test_type_class(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_goal.v", None)], indirect=True)
 def test_goal(setup, teardown):
     assert len(state.proofs) == 3
-    for proof in state.proofs:
-        assert proof.text == "Goal forall P Q: Prop, (P -> Q) -> P -> Q."
+    goals = [
+        "Definition ignored : forall P Q: Prop, (P -> Q) -> P -> Q.",
+        "Goal forall P Q: Prop, (P -> Q) -> P -> Q.",
+        "Goal forall P Q: Prop, (P -> Q) -> P -> Q.",
+    ]
+    for i, proof in enumerate(state.proofs):
+        assert proof.text == goals[i]
         compare_context(
             [
                 (

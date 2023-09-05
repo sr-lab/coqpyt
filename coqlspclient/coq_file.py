@@ -72,6 +72,7 @@ class CoqFile(object):
         self.curr_section: List[str] = []
         self.__segment_stack: List[SegmentType] = []
         self.context = FileContext()
+        self.__anonymous_id: Optional[int] = None
 
     def __enter__(self):
         return self
@@ -367,6 +368,14 @@ class CoqFile(object):
                 self.__add_term(
                     name, self.ast[self.steps_taken], text, TermType.NOTATION
                 )
+            elif expr[0] == "VernacDefinition" and expr[2][0]["v"][0] == "Anonymous":
+                # We associate the anonymous term to the same name used internally by Coq
+                if self.__anonymous_id is None:
+                    name, self.__anonymous_id = "Unnamed_thm", 0
+                else:
+                    name = f"Unnamed_thm{self.__anonymous_id}"
+                    self.__anonymous_id += 1
+                self.__add_term(name, self.ast[self.steps_taken], text, term_type)
             else:
                 names = traverse_ast(expr)
                 for name in names:

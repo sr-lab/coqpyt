@@ -574,3 +574,20 @@ def test_type_class(setup, teardown):
         ("Inductive unit : Set := tt : unit.", TermType.INDUCTIVE, []),
     ]
     compare_context(context, state.proofs[1].context)
+
+
+@pytest.mark.parametrize("setup", [("test_goal.v", None)], indirect=True)
+def test_goal(setup, teardown):
+    assert len(state.proofs) == 3
+    for proof in state.proofs:
+        assert proof.text == "Goal forall P Q: Prop, (P -> Q) -> P -> Q."
+        compare_context(
+            [
+                (
+                    'Notation "A -> B" := (forall (_ : A), B) : type_scope.',
+                    TermType.NOTATION,
+                    [],
+                )
+            ],
+            proof.context,
+        )

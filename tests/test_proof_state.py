@@ -564,7 +564,7 @@ def test_type_class(setup, teardown):
         (
             'Notation "A -> B" := (forall (_ : A), B) : type_scope.',
             TermType.NOTATION,
-            []
+            [],
         ),
         (
             "Class EqDecNew (A : Type) := { eqb_new : A -> A -> bool ; eqb_leibniz_new : forall x y, eqb_new x y = true -> x = y ; eqb_ident_new : forall x, eqb_new x x = true }.",

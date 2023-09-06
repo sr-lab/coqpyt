@@ -356,7 +356,7 @@ class CoqFile(object):
                 name = self.__get_tactic_name(expr)
                 self.__add_term(name, self.ast[self.steps_taken], text, TermType.TACTIC)
             elif expr[0] == "VernacNotation":
-                name = text.split('"')[1]
+                name = text.split('"')[1].strip()
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
                 self.__add_term(

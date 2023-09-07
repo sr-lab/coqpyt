@@ -27,6 +27,7 @@ from coqlspclient.coq_lsp_structs import (
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.coq_lsp_client import CoqLspClient
 from typing import List, Dict, Optional, Tuple
+from collections import deque
 
 
 class _AuxFile(object):
@@ -232,34 +233,42 @@ class ProofState(object):
         return nots[0][:-25] if fun(nots[0]) else nots[0]
 
     def __step_context(self, step=None):
-        def traverse_ast(el):
-            if isinstance(el, dict):
-                return [x for v in el.values() for x in traverse_ast(v)]
-            elif isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
-                id = ".".join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
-                term = self.__get_term(id)
-                return [] if term is None else [(lambda x: x, term)]
-            elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
-                line = len(self.__aux_file.read().split("\n"))
-                self.__aux_file.append(f'\nLocate "{el[2][1]}".')
+        def traverse_ast(ast):
+            stack, res = deque([ast]), []
+            while len(stack) > 0:
+                el = stack.popleft()
+                if isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
+                    id = ".".join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
+                    term = self.__get_term(id)
+                    if term is not None:
+                        res.append((lambda x: x, term))
+                elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
+                    line = len(self.__aux_file.read().split("\n"))
+                    self.__aux_file.append(f'\nLocate "{el[2][1]}".')
 
-                def __search_notation(call):
-                    notation_name = call[0]
-                    scope = ""
-                    notation = call[1](*call[2:])
-                    if notation == "Unknown notation":
-                        return None
-                    if notation.split(":")[-1].endswith("_scope"):
-                        scope = notation.split(":")[-1].strip()
-                    return self.context.get_notation(notation_name, scope)
+                    def __search_notation(call):
+                        notation_name = call[0]
+                        scope = ""
+                        notation = call[1](*call[2:])
+                        if notation == "Unknown notation":
+                            return None
+                        if notation.split(":")[-1].endswith("_scope"):
+                            scope = notation.split(":")[-1].strip()
+                        return self.context.get_notation(notation_name, scope)
 
-                return [
-                    (__search_notation, (el[2][1], self.__locate, el[2][1], line))
-                ] + traverse_ast(el[1:])
-            elif isinstance(el, list):
-                return [x for v in el for x in traverse_ast(v)]
-
-            return []
+                    res.append(
+                        (__search_notation, (el[2][1], self.__locate, el[2][1], line))
+                    )
+                    stack.appendleft(el[1:])
+                elif isinstance(el, list):
+                    for v in reversed(el):
+                        if isinstance(v, (dict, list)):
+                            stack.appendleft(v)
+                elif isinstance(el, dict):
+                    for v in reversed(el.values()):
+                        if isinstance(v, (dict, list)):
+                            stack.appendleft(v)
+            return res
 
         if step is None:
             step = self.__current_step.ast
@@ -279,24 +288,22 @@ class ProofState(object):
         return last_term
 
     def __get_program_context(self):
-        def traverse_ast(el, keep_id=False):
-            if (
-                isinstance(el, list)
-                and len(el) == 2
-                and (
-                    (el[0] == "Id" and keep_id)
-                    or (el[0] == "ExtraArg" and el[1] == "identref")
-                )
-            ):
-                return el[1]
-            elif isinstance(el, list):
-                for x in el:
-                    id = traverse_ast(x, keep_id=keep_id)
-                    if id == "identref":
-                        keep_id = True
-                    elif id is not None:
-                        return id
-                return "identref" if keep_id else None
+        def traverse_ast(ast):
+            stack = deque(ast)
+            while len(stack) > 0:
+                el = stack.popleft()
+                if (
+                    isinstance(el, list)
+                    and len(el) == 3
+                    and el[0] == "GenArg"
+                    and el[1][0] == "Rawwit"
+                    and el[1][1][1] == "identref"
+                ):
+                    return el[2][0][1][1]
+                elif isinstance(el, list):
+                    for v in reversed(el):
+                        if isinstance(v, list):
+                            stack.appendleft(v)
             return None
 
         # Tags:

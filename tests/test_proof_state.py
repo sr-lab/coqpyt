@@ -409,9 +409,21 @@ def test_list_notation(setup, teardown):
     assert len(state.proofs) == 1
     context = [
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        ('Infix "++" := app (right associativity, at level 60) : list_scope.', TermType.NOTATION, []),
-        ('Notation "[ x ]" := (cons x nil) : list_scope.', TermType.NOTATION, ['ListNotations']),
-        ('Notation "[ x ; y ; .. ; z ]" := (cons x (cons y .. (cons z nil) ..)) (format "[ \'[\' x ; \'/\' y ; \'/\' .. ; \'/\' z \']\' ]") : list_scope.', TermType.NOTATION, ['ListNotations']),
+        (
+            'Infix "++" := app (right associativity, at level 60) : list_scope.',
+            TermType.NOTATION,
+            [],
+        ),
+        (
+            'Notation "[ x ]" := (cons x nil) : list_scope.',
+            TermType.NOTATION,
+            ["ListNotations"],
+        ),
+        (
+            "Notation \"[ x ; y ; .. ; z ]\" := (cons x (cons y .. (cons z nil) ..)) (format \"[ '[' x ; '/' y ; '/' .. ; '/' z ']' ]\") : list_scope.",
+            TermType.NOTATION,
+            ["ListNotations"],
+        ),
     ]
     compare_context(context, state.proofs[0].context)
 

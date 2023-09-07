@@ -8,6 +8,7 @@ from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
 from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentType
 from coqlspclient.coq_lsp_client import CoqLspClient
 from typing import List, Optional
+from collections import deque
 
 
 class CoqFile(object):
@@ -276,30 +277,33 @@ class CoqFile(object):
             return None
 
     def __process_step(self, sign):
-        def traverse_ast(el, inductive=False):
-            if isinstance(el, dict):
-                if "v" in el and isinstance(el["v"], list) and len(el["v"]) == 2:
-                    if el["v"][0] == "Id":
-                        return [el["v"][1]]
-                    if el["v"][0] == "Name":
-                        return [el["v"][1][1]]
+        def traverse_ast(ast):
+            inductive = True if ast[0] == "VernacInductive" else False
+            stack, res = deque(ast[1:]), []
+            while len(stack) > 0:
+                el = stack.popleft()
+                if isinstance(el, dict):
+                    if "v" in el and isinstance(el["v"], list) and len(el["v"]) == 2:
+                        if el["v"][0] == "Id":
+                            if not inductive:
+                                return [el["v"][1]]
+                            res.append(el["v"][1])
+                        elif el["v"][0] == "Name":
+                            if not inductive:
+                                return [el["v"][1][1]]
+                            res.append(el["v"][1][1])
 
-                return [x for v in el.values() for x in traverse_ast(v, inductive)]
-            elif isinstance(el, list):
-                if len(el) > 0:
-                    if el[0] == "CLocalAssum":
-                        return []
-                    if el[0] == "VernacInductive":
-                        inductive = True
+                    for v in reversed(el.values()):
+                        if isinstance(v, (dict, list)):
+                            stack.appendleft(v)
+                elif isinstance(el, list):
+                    if len(el) > 0 and el[0] == "CLocalAssum":
+                        continue
 
-                res = []
-                for v in el:
-                    res.extend(traverse_ast(v, inductive))
-                    if not inductive and len(res) > 0:
-                        return [res[0]]
-                return res
-
-            return []
+                    for v in reversed(el):
+                        if isinstance(v, (dict, list)):
+                            stack.appendleft(v)
+            return res
 
         try:
             # TODO: A negative sign should handle things differently. For example:

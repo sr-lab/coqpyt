@@ -36,6 +36,8 @@ def test_where_notation(setup, teardown):
     assert coq_file.context.terms["n - m"].text == 'Notation "n - m" := (minus n m)'
     assert "A & B" in coq_file.context.terms
     assert coq_file.context.terms["A & B"].text == 'Notation "A & B" := (and\' A B)'
+    assert "'ONE'" in coq_file.context.terms
+    assert coq_file.context.terms["'ONE'"].text == "Notation \"'ONE'\" := 1"
 
 
 @pytest.mark.parametrize("setup", ["test_get_notation.v"], indirect=True)

@@ -156,7 +156,7 @@ class CoqFile(object):
             start_character = 0 if prev_step is None else prev_step.range.end.character
 
         lines = self.__lines[start_line : end_line + 1]
-        lines[-1] = lines[-1][: end_character + 1]
+        lines[-1] = lines[-1][:end_character]
         lines[0] = lines[0][start_character:]
         text = "\n".join(lines)
         return " ".join(text.split()) if trim else text
@@ -246,18 +246,19 @@ class CoqFile(object):
 
         # handles when multiple notations are defined
         for span in spans:
-            range = Range(
-                Position(
-                    span["decl_ntn_string"]["loc"]["line_nb"] - 1,
-                    span["decl_ntn_string"]["loc"]["bp"]
-                    - span["decl_ntn_string"]["loc"]["bol_pos"],
-                ),
-                Position(
-                    span["decl_ntn_interp"]["loc"]["line_nb_last"] - 1,
-                    span["decl_ntn_interp"]["loc"]["ep"]
-                    - span["decl_ntn_interp"]["loc"]["bol_pos"],
-                ),
+            start = Position(
+                span["decl_ntn_string"]["loc"]["line_nb"] - 1,
+                span["decl_ntn_string"]["loc"]["bp"]
+                - span["decl_ntn_string"]["loc"]["bol_pos"],
             )
+            end = Position(
+                span["decl_ntn_interp"]["loc"]["line_nb_last"] - 1,
+                span["decl_ntn_interp"]["loc"]["ep"]
+                - span["decl_ntn_interp"]["loc"]["bol_pos"],
+            )
+            if self.__lines[end.line][end.character] == ")":
+                end.character += 1
+            range = Range(start, end)
             text = self.__get_text(range, trim=True)
             name = FileContext.get_notation_key(
                 span["decl_ntn_string"]["v"], span["decl_ntn_scope"]

@@ -491,11 +491,11 @@ def test_bullets(setup, teardown):
     proofs = state.proofs
     assert len(proofs) == 1
     steps = [
-        "\n    intros x y. ",
+        "\n    intros x y.",
         " split.",
-        "\n    - ",
-        " reflexivity.",
-        "\n    - ",
+        "\n    -",
+        "reflexivity.",
+        "\n    -",
         " reflexivity.",
     ]
     assert len(proofs[0].steps) == 6

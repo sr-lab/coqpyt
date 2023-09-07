@@ -27,7 +27,6 @@ from coqlspclient.coq_lsp_structs import (
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.coq_lsp_client import CoqLspClient
 from typing import List, Dict, Optional, Tuple
-from collections import deque
 
 
 class _AuxFile(object):
@@ -232,11 +231,11 @@ class ProofState(object):
         fun = lambda x: x.endswith("(default interpretation)")
         return nots[0][:-25] if fun(nots[0]) else nots[0]
 
-    def __step_context(self, step=None):
-        def traverse_ast(ast):
-            stack, res = deque([ast]), []
+    def __step_context(self):
+        def traverse_expr(expr):
+            stack, res = expr[:0:-1], []
             while len(stack) > 0:
-                el = stack.popleft()
+                el = stack.pop()
                 if isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
                     id = ".".join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
                     term = self.__get_term(id)
@@ -259,20 +258,18 @@ class ProofState(object):
                     res.append(
                         (__search_notation, (el[2][1], self.__locate, el[2][1], line))
                     )
-                    stack.appendleft(el[1:])
+                    stack.append(el[1:])
                 elif isinstance(el, list):
                     for v in reversed(el):
                         if isinstance(v, (dict, list)):
-                            stack.appendleft(v)
+                            stack.append(v)
                 elif isinstance(el, dict):
                     for v in reversed(el.values()):
                         if isinstance(v, (dict, list)):
-                            stack.appendleft(v)
+                            stack.append(v)
             return res
 
-        if step is None:
-            step = self.__current_step.ast
-        return traverse_ast(step.span)
+        return traverse_expr(CoqFile.expr(self.__current_step.ast))
 
     def __get_last_term(self):
         terms = self.coq_file.terms
@@ -288,10 +285,10 @@ class ProofState(object):
         return last_term
 
     def __get_program_context(self):
-        def traverse_ast(ast):
-            stack = deque(ast)
+        def traverse_expr(expr):
+            stack = expr[:0:-1]
             while len(stack) > 0:
-                el = stack.popleft()
+                el = stack.pop()
                 if (
                     isinstance(el, list)
                     and len(el) == 3
@@ -303,7 +300,7 @@ class ProofState(object):
                 elif isinstance(el, list):
                     for v in reversed(el):
                         if isinstance(v, list):
-                            stack.appendleft(v)
+                            stack.append(v)
             return None
 
         # Tags:
@@ -315,7 +312,7 @@ class ProofState(object):
         # 5 - Next Obligation
         tag = CoqFile.expr(self.__current_step.ast)[1][1]
         if tag in [0, 1, 4]:
-            id = traverse_ast(CoqFile.expr(self.__current_step.ast))
+            id = traverse_expr(CoqFile.expr(self.__current_step.ast))
             # This works because the obligation must be in the
             # same module as the program
             id = ".".join(self.coq_file.curr_module + [id])

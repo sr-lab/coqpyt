@@ -8,7 +8,6 @@ from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
 from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentType
 from coqlspclient.coq_lsp_client import CoqLspClient
 from typing import List, Optional
-from collections import deque
 
 
 class CoqFile(object):
@@ -277,11 +276,11 @@ class CoqFile(object):
             return None
 
     def __process_step(self, sign):
-        def traverse_ast(ast):
-            inductive = True if ast[0] == "VernacInductive" else False
-            stack, res = deque(ast[1:]), []
+        def traverse_expr(expr):
+            inductive = True if expr[0] == "VernacInductive" else False
+            stack, res = expr[:0:-1], []
             while len(stack) > 0:
-                el = stack.popleft()
+                el = stack.pop()
                 if isinstance(el, dict):
                     if "v" in el and isinstance(el["v"], list) and len(el["v"]) == 2:
                         if el["v"][0] == "Id":
@@ -295,14 +294,14 @@ class CoqFile(object):
 
                     for v in reversed(el.values()):
                         if isinstance(v, (dict, list)):
-                            stack.appendleft(v)
+                            stack.append(v)
                 elif isinstance(el, list):
                     if len(el) > 0 and el[0] == "CLocalAssum":
                         continue
 
                     for v in reversed(el):
                         if isinstance(v, (dict, list)):
-                            stack.appendleft(v)
+                            stack.append(v)
             return res
 
         try:
@@ -382,7 +381,7 @@ class CoqFile(object):
                     self.__anonymous_id += 1
                 self.__add_term(name, self.ast[self.steps_taken], text, term_type)
             else:
-                names = traverse_ast(expr)
+                names = traverse_expr(expr)
                 for name in names:
                     self.__add_term(name, self.ast[self.steps_taken], text, term_type)
 

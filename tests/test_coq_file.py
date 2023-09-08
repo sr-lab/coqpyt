@@ -38,6 +38,8 @@ def test_where_notation(setup, teardown):
     assert coq_file.context.terms["A & B"].text == 'Notation "A & B" := (and\' A B)'
     assert "'ONE'" in coq_file.context.terms
     assert coq_file.context.terms["'ONE'"].text == "Notation \"'ONE'\" := 1"
+    assert "x 🀄 y" in coq_file.context.terms
+    assert coq_file.context.terms["x 🀄 y"].text == 'Notation "x 🀄 y" := (plus_test x y)'
 
 
 @pytest.mark.parametrize("setup", ["test_get_notation.v"], indirect=True)

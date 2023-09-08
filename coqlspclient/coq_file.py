@@ -55,12 +55,9 @@ class CoqFile(object):
             self.__lines = f.read().split("\n")
 
         try:
-            self.coq_lsp_client.didOpen(
-                TextDocumentItem(uri, "coq", 1, "\n".join(self.__lines))
-            )
-            self.ast = self.coq_lsp_client.get_document(
-                TextDocumentIdentifier(uri)
-            ).spans
+            text, text_id = "\n".join(self.__lines), TextDocumentIdentifier(uri)
+            self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
+            self.ast = self.coq_lsp_client.get_document(text_id).spans
         except Exception as e:
             self.__handle_exception(e)
             raise e
@@ -141,7 +138,20 @@ class CoqFile(object):
         curr_step = self.ast[self.steps_taken]
         return CoqFile.expr(curr_step)
 
-    def __get_text(self, range: Range, trim: bool = False):
+    def __get_text(self, range: Range, trim: bool = False, encode: bool = False):
+        def slice_line(
+            line: str, start: Optional[int] = None, stop: Optional[int] = None
+        ):
+            # The encode flag indicates if range.character is measured in bytes,
+            # rather than characters. If true, the string must be encoded before
+            # indexing. This special treatment is necessary for handling Unicode
+            # characters which take up more than 1 byte.
+            return (
+                line.encode("utf-8")[start:stop].decode()
+                if encode
+                else line[start:stop]
+            )
+
         end_line = range.end.line
         end_character = range.end.character
 
@@ -156,8 +166,8 @@ class CoqFile(object):
             start_character = 0 if prev_step is None else prev_step.range.end.character
 
         lines = self.__lines[start_line : end_line + 1]
-        lines[-1] = lines[-1][:end_character]
-        lines[0] = lines[0][start_character:]
+        lines[-1] = slice_line(lines[-1], stop=end_character)
+        lines[0] = slice_line(lines[0], start=start_character)
         text = "\n".join(lines)
         return " ".join(text.split()) if trim else text
 
@@ -256,10 +266,10 @@ class CoqFile(object):
                 span["decl_ntn_interp"]["loc"]["ep"]
                 - span["decl_ntn_interp"]["loc"]["bol_pos"],
             )
-            if self.__lines[end.line][end.character] == ")":
+            if chr(self.__lines[end.line].encode("utf-8")[end.character]) == ")":
                 end.character += 1
             range = Range(start, end)
-            text = self.__get_text(range, trim=True)
+            text = self.__get_text(range, trim=True, encode=True)
             name = FileContext.get_notation_key(
                 span["decl_ntn_string"]["v"], span["decl_ntn_scope"]
             )
@@ -278,7 +288,7 @@ class CoqFile(object):
 
     def __process_step(self, sign):
         def traverse_expr(expr):
-            inductive = True if expr[0] == "VernacInductive" else False
+            inductive = expr[0] == "VernacInductive"
             stack, res = expr[:0:-1], []
             while len(stack) > 0:
                 el = stack.pop()

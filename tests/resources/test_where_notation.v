@@ -1,5 +1,6 @@
 Reserved Notation "A & B" (at level 80).
 Reserved Notation "'ONE'" (at level 80).
+Reserved Notation "x 🀄 y" (at level 80).
 
 Fixpoint plus_test (n m : nat) {struct n} : nat :=
 match n with
@@ -13,3 +14,6 @@ where "A & B" := (and' A B).
 
 Fixpoint incr (n : nat) : nat := n + ONE
 where "'ONE'" := 1.
+
+Fixpoint unicode x y := x 🀄 y
+where "x 🀄 y" := (plus_test x y).

@@ -114,7 +114,10 @@ class FileContext:
             if sub == "_":
                 # We match the wildcard with the description from here:
                 # https://coq.inria.fr/distrib/current/refman/language/core/basic.html#grammar-token-ident
-                regex[i] = "([a-zA-Z][a-zA-Z0-9_']*|_[a-zA-Z0-9_']+)"
+                # Coq accepts more characters, but no one should need more than these...
+                # chars = "A-Za-zÀ-ÖØ-öø-ˁˆ-ˑˠ-ˤˬˮͰ-ʹͶͷͺ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-Ֆՙա-և"
+                chars = "A-Za-z"
+                regex[i] = f"([{chars}][{chars}0-9_']*|_[{chars}0-9_']+)"
             else:
                 # Handle '_'
                 regex[i] = f"({sub}|('{sub}'))"

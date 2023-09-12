@@ -237,8 +237,7 @@ class ProofState(object):
             while len(stack) > 0:
                 el = stack.pop()
                 if isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
-                    id = ".".join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
-                    term = self.__get_term(id)
+                    term = self.__get_term(CoqFile.get_id(el))
                     if term is not None:
                         res.append((lambda x: x, term))
                 elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":

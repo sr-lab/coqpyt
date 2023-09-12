@@ -116,10 +116,10 @@ class CoqFile(object):
     @staticmethod
     def get_id(id: List) -> str:
         if id[0] == "Ser_Qualid":
-            return ".".join([l[1] for l in id[1][1][::-1]] + [id[2][1]])
+            return ".".join([l[1] for l in reversed(id[1][1])] + [id[2][1]])
         elif id[0] == "Id":
             return id[1]
-        return ""
+        return None
 
     @staticmethod
     def get_identref(el: List) -> Optional[str]:
@@ -197,7 +197,7 @@ class CoqFile(object):
         self.context.update(terms={full_name(name): term})
 
         curr_file_module = ""
-        for module in self.file_module[::-1]:
+        for module in reversed(self.file_module):
             curr_file_module = module + "." + curr_file_module
             self.context.update(terms={curr_file_module + name: term})
 
@@ -293,14 +293,6 @@ class CoqFile(object):
             text = "Notation " + text
             self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
 
-    def __get_tactic_name(self, expr):
-        if len(expr[2][0][2][0][1][0]) == 2 and expr[2][0][2][0][1][0][0] == "v":
-            name = CoqFile.get_id(expr[2][0][2][0][1][0][1])
-            if name != "":
-                return name
-
-            return None
-
     def __process_step(self, sign):
         def traverse_expr(expr):
             inductive = expr[0] == "VernacInductive"
@@ -387,7 +379,7 @@ class CoqFile(object):
                 expr[0] == "VernacExtend"
                 and expr[1][0] == "VernacDeclareTacticDefinition"
             ):
-                name = self.__get_tactic_name(expr)
+                name = CoqFile.get_id(expr[2][0][2][0][1][0][1])
                 self.__add_term(name, self.ast[self.steps_taken], text, TermType.TACTIC)
             elif expr[0] == "VernacNotation":
                 name = text.split('"')[1].strip()

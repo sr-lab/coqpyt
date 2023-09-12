@@ -35,6 +35,8 @@ class TermType(Enum):
     PROPOSITION = 16
     PROPERTY = 17
     OBLIGATION = 18
+    RELATION = 19
+    SETOID = 20
     OTHER = 100
 
 

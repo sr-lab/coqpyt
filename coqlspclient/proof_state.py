@@ -289,15 +289,11 @@ class ProofState(object):
             stack = expr[:0:-1]
             while len(stack) > 0:
                 el = stack.pop()
-                if (
-                    isinstance(el, list)
-                    and len(el) == 3
-                    and el[0] == "GenArg"
-                    and el[1][0] == "Rawwit"
-                    and el[1][1][1] == "identref"
-                ):
-                    return el[2][0][1][1]
-                elif isinstance(el, list):
+                if isinstance(el, list):
+                    identref = CoqFile.get_identref(el)
+                    if identref is not None:
+                        return identref
+
                     for v in reversed(el):
                         if isinstance(v, list):
                             stack.append(v)

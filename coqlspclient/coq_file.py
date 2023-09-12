@@ -122,6 +122,18 @@ class CoqFile(object):
         return ""
 
     @staticmethod
+    def get_identref(el: List) -> Optional[str]:
+        if (
+            len(el) == 3
+            and el[0] == "GenArg"
+            and el[1][0] == "Rawwit"
+            and el[1][1][0] == "ExtraArg"
+            and el[1][1][1] == "identref"
+        ):
+            return el[2][0][1][1]
+        return None
+
+    @staticmethod
     def expr(step: RangedSpan) -> Optional[List]:
         if (
             step.span is not None
@@ -213,11 +225,14 @@ class CoqFile(object):
             return TermType.FIXPOINT
         elif expr[0] == "VernacScheme":
             return TermType.SCHEME
+        elif expr[0] == "VernacExtend" and expr[1][0].startswith("AddSetoid"):
+            return TermType.SETOID
+        elif expr[0] == "VernacExtend" and expr[1][0].startswith(
+            ("AddRelation", "AddParametricRelation")
+        ):
+            return TermType.RELATION
         elif (
-            len(expr) > 1
-            and isinstance(expr[1], list)
-            and len(expr[1]) > 0
-            and expr[1][0] == "VernacDeclareTacticDefinition"
+            expr[0] == "VernacExtend" and expr[1][0] == "VernacDeclareTacticDefinition"
         ):
             return TermType.TACTIC
         else:
@@ -289,6 +304,9 @@ class CoqFile(object):
     def __process_step(self, sign):
         def traverse_expr(expr):
             inductive = expr[0] == "VernacInductive"
+            add_cmd = expr[0] == "VernacExtend" and expr[1][0].startswith(
+                ("AddSetoid", "AddRelation", "AddParametricRelation")
+            )
             stack, res = expr[:0:-1], []
             while len(stack) > 0:
                 el = stack.pop()
@@ -309,6 +327,10 @@ class CoqFile(object):
                 elif isinstance(el, list):
                     if len(el) > 0 and el[0] == "CLocalAssum":
                         continue
+
+                    identref = CoqFile.get_identref(el)
+                    if identref is not None and add_cmd:
+                        return [identref]
 
                     for v in reversed(el):
                         if isinstance(v, (dict, list)):
@@ -362,9 +384,7 @@ class CoqFile(object):
             elif len(self.curr_module_type) > 0:
                 return
             elif (
-                len(expr) > 1
-                and isinstance(expr[1], list)
-                and len(expr[1]) > 0
+                expr[0] == "VernacExtend"
                 and expr[1][0] == "VernacDeclareTacticDefinition"
             ):
                 name = self.__get_tactic_name(expr)

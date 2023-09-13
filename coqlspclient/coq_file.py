@@ -134,6 +134,14 @@ class CoqFile(object):
         return None
 
     @staticmethod
+    def get_v(el):
+        if isinstance(el, dict) and "v" in el:
+            return el["v"]
+        elif isinstance(el, list) and len(el) == 2 and el[0] == "v":
+            return el[1]
+        return None
+
+    @staticmethod
     def expr(step: RangedSpan) -> Optional[List]:
         if (
             step.span is not None
@@ -217,10 +225,14 @@ class CoqFile(object):
             return TermType.RECORD
         elif expr[0] == "VernacInductive" and expr[1][0] == "Variant":
             return TermType.VARIANT
+        elif expr[0] == "VernacInductive" and expr[1][0] == "CoInductive":
+            return TermType.COINDUCTIVE
         elif expr[0] == "VernacInductive":
             return TermType.INDUCTIVE
         elif expr[0] == "VernacInstance":
             return TermType.INSTANCE
+        elif expr[0] == "VernacCoFixpoint":
+            return TermType.COFIXPOINT
         elif expr[0] == "VernacFixpoint":
             return TermType.FIXPOINT
         elif expr[0] == "VernacScheme":
@@ -235,6 +247,8 @@ class CoqFile(object):
             expr[0] == "VernacExtend" and expr[1][0] == "VernacDeclareTacticDefinition"
         ):
             return TermType.TACTIC
+        elif expr[0] == "VernacExtend" and expr[1][0] == "Function":
+            return TermType.FUNCTION
         else:
             return TermType.OTHER
 
@@ -296,23 +310,23 @@ class CoqFile(object):
     def __process_step(self, sign):
         def traverse_expr(expr):
             inductive = expr[0] == "VernacInductive"
-            add_cmd = expr[0] == "VernacExtend" and expr[1][0].startswith(
-                ("AddSetoid", "AddRelation", "AddParametricRelation")
-            )
+            extend = expr[0] == "VernacExtend"
             stack, res = expr[:0:-1], []
             while len(stack) > 0:
                 el = stack.pop()
-                if isinstance(el, dict):
-                    if "v" in el and isinstance(el["v"], list) and len(el["v"]) == 2:
-                        if el["v"][0] == "Id":
-                            if not inductive:
-                                return [el["v"][1]]
-                            res.append(el["v"][1])
-                        elif el["v"][0] == "Name":
-                            if not inductive:
-                                return [el["v"][1][1]]
-                            res.append(el["v"][1][1])
+                v = CoqFile.get_v(el)
+                if v is not None and isinstance(v, list) and len(v) == 2:
+                    id = CoqFile.get_id(v)
+                    if id is not None:
+                        if not inductive:
+                            return [id]
+                        res.append(id)
+                    elif v[0] == "Name":
+                        if not inductive:
+                            return [v[1][1]]
+                        res.append(v[1][1])
 
+                if isinstance(el, dict):
                     for v in reversed(el.values()):
                         if isinstance(v, (dict, list)):
                             stack.append(v)
@@ -321,7 +335,7 @@ class CoqFile(object):
                         continue
 
                     identref = CoqFile.get_identref(el)
-                    if identref is not None and add_cmd:
+                    if identref is not None and extend:
                         return [identref]
 
                     for v in reversed(el):
@@ -349,6 +363,8 @@ class CoqFile(object):
             expr = self.__step_expr()
             if expr == [None]:
                 return
+            if expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve":
+                return
             term_type = CoqFile.__get_term_type(expr)
 
             if expr[0] == "VernacEndSegment":
@@ -375,12 +391,9 @@ class CoqFile(object):
             # and should be overriden.
             elif len(self.curr_module_type) > 0:
                 return
-            elif (
-                expr[0] == "VernacExtend"
-                and expr[1][0] == "VernacDeclareTacticDefinition"
-            ):
-                name = CoqFile.get_id(expr[2][0][2][0][1][0][1])
-                self.__add_term(name, self.ast[self.steps_taken], text, TermType.TACTIC)
+            elif expr[0] == "VernacExtend" and expr[1][0] == "VernacTacticNotation":
+                # FIXME: Handle this case
+                return
             elif expr[0] == "VernacNotation":
                 name = text.split('"')[1].strip()
                 if text[:-1].split(":")[-1].endswith("_scope"):

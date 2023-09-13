@@ -75,3 +75,19 @@ def test_module_type(setup, teardown):
     # We ignore terms inside a Module Type since they can't be used outside
     # and should be overriden.
     assert len(coq_file.context.terms) == 1
+
+
+@pytest.mark.parametrize("setup", ["test_derive.v"], indirect=True)
+def test_derive(setup, teardown):
+    coq_file.run()
+    for key in ["incr", "incr_correct"]:
+        assert key in coq_file.context.terms
+        assert (
+            coq_file.context.terms[key].text
+            == "Derive incr SuchThat (forall n, incr n = plus 1 n) As incr_correct."
+        )
+    keywords = ["Inversion", "Inversion_clear", "Dependent Inversion", "Dependent Inversion_clear"]
+    for i in range(4):
+        key = f"leminv{i + 1}"
+        assert key in coq_file.context.terms
+        assert coq_file.context.terms[key].text == f"Derive {keywords[i]} {key} with (forall n m:nat, Le (S n) m) Sort Prop."

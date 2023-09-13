@@ -289,9 +289,9 @@ class ProofState(object):
             while len(stack) > 0:
                 el = stack.pop()
                 if isinstance(el, list):
-                    identref = CoqFile.get_identref(el)
-                    if identref is not None:
-                        return identref
+                    ident = CoqFile.get_ident(el)
+                    if ident is not None:
+                        return ident
 
                     for v in reversed(el):
                         if isinstance(v, list):

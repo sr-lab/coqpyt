@@ -40,6 +40,7 @@ class TermType(Enum):
     RELATION = 21
     SETOID = 22
     FUNCTION = 23
+    DERIVE = 24
     OTHER = 100
 
 

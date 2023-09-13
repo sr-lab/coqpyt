@@ -122,15 +122,17 @@ class CoqFile(object):
         return None
 
     @staticmethod
-    def get_identref(el: List) -> Optional[str]:
+    def get_ident(el: List) -> Optional[str]:
         if (
             len(el) == 3
             and el[0] == "GenArg"
             and el[1][0] == "Rawwit"
             and el[1][1][0] == "ExtraArg"
-            and el[1][1][1] == "identref"
         ):
-            return el[2][0][1][1]
+            if el[1][1][1] == "identref":
+                return el[2][0][1][1]
+            elif el[1][1][1] == "ident":
+                return el[2][1]
         return None
 
     @staticmethod
@@ -237,6 +239,8 @@ class CoqFile(object):
             return TermType.FIXPOINT
         elif expr[0] == "VernacScheme":
             return TermType.SCHEME
+        elif expr[0] == "VernacExtend" and expr[1][0].startswith("Derive"):
+            return TermType.DERIVE
         elif expr[0] == "VernacExtend" and expr[1][0].startswith("AddSetoid"):
             return TermType.SETOID
         elif expr[0] == "VernacExtend" and expr[1][0].startswith(
@@ -334,9 +338,9 @@ class CoqFile(object):
                     if len(el) > 0 and el[0] == "CLocalAssum":
                         continue
 
-                    identref = CoqFile.get_identref(el)
-                    if identref is not None and extend:
-                        return [identref]
+                    ident = CoqFile.get_ident(el)
+                    if ident is not None and extend:
+                        return [ident]
 
                     for v in reversed(el):
                         if isinstance(v, (dict, list)):
@@ -416,6 +420,12 @@ class CoqFile(object):
                     name = f"Unnamed_thm{self.__anonymous_id}"
                     self.__anonymous_id += 1
                 self.__add_term(name, self.ast[self.steps_taken], text, term_type)
+            elif term_type == TermType.DERIVE:
+                name = CoqFile.get_ident(expr[2][0])
+                self.__add_term(name, self.ast[self.steps_taken], text, term_type)
+                if expr[1][0] == "Derive":
+                    prop = CoqFile.get_ident(expr[2][2])
+                    self.__add_term(prop, self.ast[self.steps_taken], text, term_type)
             else:
                 names = traverse_expr(expr)
                 for name in names:

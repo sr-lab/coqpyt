@@ -31,7 +31,7 @@ class CoqFile(object):
         self,
         file_path: str,
         library: Optional[str] = None,
-        timeout: int = 2,
+        timeout: int = 30,
         workspace: Optional[str] = None,
     ):
         """Creates a CoqFile.
@@ -95,7 +95,10 @@ class CoqFile(object):
         self.__path = new_path
 
     def __handle_exception(self, e):
-        if not (isinstance(e, ResponseError) and e.code == ErrorCodes.ServerQuit.value):
+        if not isinstance(e, ResponseError) or e.code not in [
+            ErrorCodes.ServerQuit.value,
+            ErrorCodes.ServerTimeout.value,
+        ]:
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
         if self.__from_lib:

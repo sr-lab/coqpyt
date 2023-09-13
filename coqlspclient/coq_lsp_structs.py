@@ -214,13 +214,3 @@ class CoqFileProgressParams(object):
                 )
             )
         return CoqFileProgressParams(textDocument, processing)
-
-
-class CoqErrorCodes(Enum):
-    InvalidFile = 0
-
-
-class CoqError(Exception):
-    def __init__(self, code: CoqErrorCodes, message: str):
-        self.code = code
-        self.message = message

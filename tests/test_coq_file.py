@@ -86,8 +86,16 @@ def test_derive(setup, teardown):
             coq_file.context.terms[key].text
             == "Derive incr SuchThat (forall n, incr n = plus 1 n) As incr_correct."
         )
-    keywords = ["Inversion", "Inversion_clear", "Dependent Inversion", "Dependent Inversion_clear"]
+    keywords = [
+        "Inversion",
+        "Inversion_clear",
+        "Dependent Inversion",
+        "Dependent Inversion_clear",
+    ]
     for i in range(4):
         key = f"leminv{i + 1}"
         assert key in coq_file.context.terms
-        assert coq_file.context.terms[key].text == f"Derive {keywords[i]} {key} with (forall n m:nat, Le (S n) m) Sort Prop."
+        assert (
+            coq_file.context.terms[key].text
+            == f"Derive {keywords[i]} {key} with (forall n m:nat, Le (S n) m) Sort Prop."
+        )

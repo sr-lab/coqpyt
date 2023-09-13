@@ -4,12 +4,6 @@ from typing import Dict, List
 from coqlspclient.coq_lsp_structs import RangedSpan, GoalAnswer
 
 
-class Step(object):
-    def __init__(self, text: str, ast: RangedSpan):
-        self.text = text
-        self.ast = ast
-
-
 class SegmentType(Enum):
     MODULE = 1
     MODULE_TYPE = 2
@@ -42,6 +36,23 @@ class TermType(Enum):
     FUNCTION = 23
     DERIVE = 24
     OTHER = 100
+
+
+class CoqErrorCodes(Enum):
+    InvalidFile = 0
+    NotationNotFound = 1
+
+
+class CoqError(Exception):
+    def __init__(self, code: CoqErrorCodes, message: str):
+        self.code = code
+        self.message = message
+
+
+class Step(object):
+    def __init__(self, text: str, ast: RangedSpan):
+        self.text = text
+        self.ast = ast
 
 
 class Term:
@@ -145,7 +156,10 @@ class FileContext:
             if key in self.terms:
                 return self.terms[key]
 
-        raise RuntimeError(f"Notation not found in context: {notation_id}")
+        raise CoqError(
+            CoqErrorCodes.NotationNotFound,
+            f"Notation not found in context: {notation_id}",
+        )
 
     @staticmethod
     def get_notation_key(notation: str, scope: str):

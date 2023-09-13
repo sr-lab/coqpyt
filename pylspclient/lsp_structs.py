@@ -609,6 +609,7 @@ class ErrorCodes(enum.Enum):
     InternalError = -32603
     serverErrorStart = -32099
     serverErrorEnd = -32000
+    ServerTimeout = -32004
     ServerQuit = -32003
     ServerNotInitialized = -32002
     UnknownErrorCode = -32001

@@ -10,27 +10,23 @@ from pylspclient.lsp_structs import (
     ErrorCodes,
 )
 from coqlspclient.coq_structs import (
-    ProofStep,
-    FileContext,
+    TermType,
+    CoqErrorCodes,
+    CoqError,
     Step,
     Term,
+    ProofStep,
     ProofTerm,
-    TermType,
+    FileContext,
 )
-from coqlspclient.coq_lsp_structs import (
-    CoqError,
-    CoqErrorCodes,
-    Result,
-    Query,
-    GoalAnswer,
-)
+from coqlspclient.coq_lsp_structs import Result, Query, GoalAnswer
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.coq_lsp_client import CoqLspClient
 from typing import List, Dict, Optional, Tuple
 
 
 class _AuxFile(object):
-    def __init__(self, file_path: Optional[str] = None, timeout: int = 2):
+    def __init__(self, file_path: Optional[str] = None, timeout: int = 30):
         self.__init_path(file_path)
         uri = f"file://{self.path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
@@ -69,7 +65,10 @@ class _AuxFile(object):
             f.write(text)
 
     def __handle_exception(self, e):
-        if not (isinstance(e, ResponseError) and e.code == ErrorCodes.ServerQuit.value):
+        if not isinstance(e, ResponseError) or e.code not in [
+            ErrorCodes.ServerQuit.value,
+            ErrorCodes.ServerTimeout.value,
+        ]:
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
         os.remove(self.path)

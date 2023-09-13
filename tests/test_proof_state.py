@@ -3,7 +3,7 @@ import subprocess
 import pytest
 from typing import List, Tuple
 from coqlspclient.coq_lsp_structs import *
-from coqlspclient.coq_structs import TermType, Term
+from coqlspclient.coq_structs import TermType, Term, CoqError, CoqErrorCodes
 from coqlspclient.proof_state import ProofState, CoqFile
 
 versionId: VersionedTextDocumentIdentifier = None
@@ -433,8 +433,9 @@ def test_unknown_notation(setup, teardown):
     """Checks if it is able to handle the notation { _ } that is unknown for the
     Locate command because it is a default notation.
     """
-    with pytest.raises(RuntimeError):
+    with pytest.raises(CoqError) as e_info:
         assert state.context.get_notation("{ _ }", "")
+    assert e_info.value.code == CoqErrorCodes.NotationNotFound
 
 
 @pytest.mark.parametrize("setup", [("test_nested_proofs.v", None)], indirect=True)

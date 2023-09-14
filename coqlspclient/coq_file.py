@@ -333,7 +333,7 @@ class CoqFile(object):
                             return [v[1][1]]
                         res.append(v[1][1])
 
-                if isinstance(el, dict):
+                elif isinstance(el, dict):
                     for v in reversed(el.values()):
                         if isinstance(v, (dict, list)):
                             stack.append(v)

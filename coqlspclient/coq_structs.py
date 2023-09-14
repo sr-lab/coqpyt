@@ -140,14 +140,15 @@ class FileContext:
         regex = "^" + "\\ ".join(regex) + "$"
 
         # Search notations
+        unscoped = None
         for term in self.terms.keys():
             if re.match(regex, term):
                 return self.terms[term]
-        # We search again in case the stored id contains the scope but no scope is provided
-        for term in self.terms.keys():
-            unscoped = term.split(":")[0].strip()
-            if re.match(regex, unscoped):
-                return self.terms[term]
+            if re.match(regex, term.split(":")[0].strip()):
+                unscoped = term
+        # In case the stored id contains the scope but no scope is provided
+        if unscoped is not None:
+            return self.terms[unscoped]
 
         # Search Infix
         if re.match("^_ ([^ ]*) _$", notation):

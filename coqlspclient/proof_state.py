@@ -102,18 +102,15 @@ class _AuxFile(object):
         lines = self.read().split("\n")
         for diagnostic in self.coq_lsp_client.lsp_endpoint.diagnostics[uri]:
             command = lines[
-                diagnostic.range["start"]["line"] : diagnostic.range["end"]["line"] + 1
+                diagnostic.range.start.line : diagnostic.range.end.line + 1
             ]
             if len(command) == 1:
                 command[0] = command[0][
-                    diagnostic.range["start"]["character"] : diagnostic.range["end"][
-                        "character"
-                    ]
-                    + 1
+                    diagnostic.range.start.character : diagnostic.range.end.character + 1
                 ]
             else:
-                command[0] = command[0][diagnostic.range["start"]["character"] :]
-                command[-1] = command[-1][: diagnostic.range["end"]["character"] + 1]
+                command[0] = command[0][diagnostic.range.start.character :]
+                command[-1] = command[-1][: diagnostic.range.end.character + 1]
             command = "".join(command).strip()
 
             if command.startswith(keyword):
@@ -132,7 +129,7 @@ class _AuxFile(object):
         for query in self.__get_queries(keyword):
             if query.query == f"{search}":
                 for result in query.results:
-                    if result.range["start"]["line"] == line:
+                    if result.range.start.line == line:
                         return result.message
                 break
         return None

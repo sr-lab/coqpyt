@@ -3,7 +3,7 @@ import shutil
 import uuid
 import tempfile
 from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier
-from pylspclient.lsp_structs import ResponseError, ErrorCodes
+from pylspclient.lsp_structs import ResponseError, ErrorCodes, Diagnostic
 from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
 from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentType
 from coqlspclient.coq_lsp_client import CoqLspClient
@@ -62,6 +62,7 @@ class CoqFile(object):
             self.__handle_exception(e)
             raise e
 
+        self.__first_error: Optional[Diagnostic] = None
         self.__validate()
         self.steps_taken: int = 0
         self.curr_module: List[str] = []
@@ -110,9 +111,13 @@ class CoqFile(object):
             self.is_valid = True
             return
 
+        self.coq_lsp_client.lsp_endpoint.diagnostics[uri].sort(
+            key=lambda d: d.range.start.line
+        )
         for diagnostic in self.coq_lsp_client.lsp_endpoint.diagnostics[uri]:
             if diagnostic.severity == 1:
                 self.is_valid = False
+                self.__first_error = diagnostic
                 return
         self.is_valid = True
 
@@ -489,6 +494,16 @@ class CoqFile(object):
             )
         )
 
+    @property
+    def diagnostics(self) -> List[Diagnostic]:
+        """
+        Returns:
+            List[Diagnostic]: The diagnostics of the file.
+                Includes all messages given by Coq.
+        """
+        uri = f"file://{self.__path}"
+        return self.coq_lsp_client.lsp_endpoint.diagnostics[uri]
+
     @staticmethod
     def get_term_type(ast: RangedSpan) -> TermType:
         expr = CoqFile.expr(ast)
@@ -512,7 +527,17 @@ class CoqFile(object):
             len(self.ast) - self.steps_taken if sign > 0 else self.steps_taken,
         )
         for _ in range(nsteps):
-            steps.append(Step(self.__step_text(), self.ast[self.steps_taken]))
+            ast = self.ast[self.steps_taken]
+            if not self.is_valid and (
+                (ast.range.end.line > self.__first_error.range.start.line)
+                or (
+                    ast.range.end.line == self.__first_error.range.start.line
+                    and ast.range.end.character
+                    >= self.__first_error.range.start.character
+                )
+            ):
+                raise RuntimeError(self.__first_error.message)
+            steps.append(Step(self.__step_text(), ast))
             self.__process_step(sign)
         return steps
 

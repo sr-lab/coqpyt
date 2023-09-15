@@ -82,7 +82,18 @@ class LocationLink(object):
 
 
 class Diagnostic(object):
-    def __init__(self, range, severity, code, source, message, relatedInformation):
+    def __init__(
+        self,
+        range,
+        message,
+        severity=None,
+        code=None,
+        codeDescription=None,
+        source=None,
+        tags=None,
+        relatedInformation=None,
+        data=None,
+    ):
         """
         Constructs a new Diagnostic instance.
         :param Range range: The range at which the message applies.Resource file.
@@ -95,7 +106,7 @@ class Diagnostic(object):
         :param list relatedInformation: An array of related diagnostic information, e.g. when symbol-names within
                                         a scope collide all definitions can be marked via this property.
         """
-        self.range = range
+        self.range: Range = Range(**range)
         self.severity = severity
         self.code = code
         self.source = source
@@ -530,30 +541,6 @@ class CompletionItem(object):
         self.command = command
         self.data = data
         self.score = score
-
-
-class Diagnostic(object):
-    def __init__(
-        self,
-        range,
-        message,
-        severity=None,
-        code=None,
-        codeDescription=None,
-        source=None,
-        tags=None,
-        relatedInformation=None,
-        data=None,
-    ):
-        self.range = range
-        self.message = message
-        self.severity = severity
-        self.code = code
-        self.codeDescription = codeDescription
-        self.source = source
-        self.tags = tags
-        self.relatedInformation = relatedInformation
-        self.data = data
 
 
 class CompletionItemKind(enum.Enum):

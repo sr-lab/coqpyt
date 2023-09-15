@@ -67,6 +67,7 @@ def test_is_invalid_1(setup, teardown):
 @pytest.mark.parametrize("setup", ["test_invalid_2.v"], indirect=True)
 def test_is_invalid_2(setup, teardown):
     assert not coq_file.is_valid
+    coq_file.run()
 
 
 @pytest.mark.parametrize("setup", ["test_module_type.v"], indirect=True)

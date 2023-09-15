@@ -2,6 +2,7 @@ from __future__ import print_function
 import threading
 import logging
 from pylspclient import lsp_structs
+from typing import Dict, List
 
 
 class LspEndpoint(threading.Thread):
@@ -17,7 +18,7 @@ class LspEndpoint(threading.Thread):
         self.next_id = 0
         self.timeout = timeout
         self.shutdown_flag = False
-        self.diagnostics = {}
+        self.diagnostics: Dict[str, List[lsp_structs.Diagnostic]] = {}
 
     def handle_result(self, rpc_id, result, error):
         self.response_dict[rpc_id] = (result, error)

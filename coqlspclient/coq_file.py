@@ -126,7 +126,7 @@ class CoqFile(object):
             for step in self.steps:
                 if (diagnostic.range.start.line < step.ast.range.start.line) or (
                     diagnostic.range.start.line == step.ast.range.start.line
-                    and diagnostic.range.start.character < step.ast.range.start.character
+                    and diagnostic.range.start.character <= step.ast.range.start.character
                 ):
                     early_range, late_range = diagnostic.range, step.ast.range
                 else:
@@ -134,7 +134,7 @@ class CoqFile(object):
 
                 if (late_range.start.line < early_range.end.line) or (
                     late_range.start.line == early_range.end.line
-                    and late_range.start.character < early_range.end.character
+                    and late_range.start.character <= early_range.end.character
                 ):
                     step.diagnostics.append(diagnostic)
                     break

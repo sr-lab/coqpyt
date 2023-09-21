@@ -58,13 +58,18 @@ class CoqFile(object):
             text, text_id = "\n".join(self.__lines), TextDocumentIdentifier(uri)
             self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
             self.ast = self.coq_lsp_client.get_document(text_id).spans
+            self.steps_taken: int = 0
+            self.steps: List[Step] = []
+            for curr_step in self.ast:
+                text = self.__get_text(curr_step.range)
+                self.steps.append(Step(text, curr_step))
+                self.steps_taken += 1
+            self.steps_taken = 0
         except Exception as e:
             self.__handle_exception(e)
             raise e
 
-        self.__first_error: Optional[Diagnostic] = None
         self.__validate()
-        self.steps_taken: int = 0
         self.curr_module: List[str] = []
         self.curr_module_type: List[str] = []
         self.curr_section: List[str] = []
@@ -107,8 +112,8 @@ class CoqFile(object):
 
     def __validate(self):
         uri = f"file://{self.__path}"
+        self.is_valid = True
         if uri not in self.coq_lsp_client.lsp_endpoint.diagnostics:
-            self.is_valid = True
             return
 
         self.coq_lsp_client.lsp_endpoint.diagnostics[uri].sort(
@@ -117,9 +122,22 @@ class CoqFile(object):
         for diagnostic in self.coq_lsp_client.lsp_endpoint.diagnostics[uri]:
             if diagnostic.severity == 1:
                 self.is_valid = False
-                self.__first_error = diagnostic
-                return
-        self.is_valid = True
+
+            for step in self.steps:
+                if (diagnostic.range.start.line < step.ast.range.start.line) or (
+                    diagnostic.range.start.line == step.ast.range.start.line
+                    and diagnostic.range.start.character < step.ast.range.start.character
+                ):
+                    early_range, late_range = diagnostic.range, step.ast.range
+                else:
+                    early_range, late_range = step.ast.range, diagnostic.range
+
+                if (late_range.start.line < early_range.end.line) or (
+                    late_range.start.line == early_range.end.line
+                    and late_range.start.character < early_range.end.character
+                ):
+                    step.diagnostics.append(diagnostic)
+                    break
 
     @staticmethod
     def get_id(id: List) -> str:
@@ -200,10 +218,6 @@ class CoqFile(object):
         lines[0] = slice_line(lines[0], start=start_character)
         text = "\n".join(lines)
         return " ".join(text.split()) if trim else text
-
-    def __step_text(self, trim=False):
-        curr_step = self.ast[self.steps_taken]
-        return self.__get_text(curr_step.range, trim=trim)
 
     def __add_term(self, name: str, ast: RangedSpan, text: str, term_type: TermType):
         term = Term(text, ast, term_type, self.path, self.curr_module[:])
@@ -359,7 +373,7 @@ class CoqFile(object):
             # TODO: A negative sign should handle things differently. For example:
             #   - names should be removed from the context
             #   - curr_module should change as you leave or re-enter modules
-            text = self.__step_text(trim=True)
+            text = self.__get_text(self.steps[self.steps_taken].ast.range, trim=True)
             # FIXME Let (and maybe Variable) should be handled. However,
             # I think we can't handle them as normal Locals since they are
             # specific to a section.
@@ -520,26 +534,15 @@ class CoqFile(object):
         Returns:
             List[Step]: List of steps executed.
         """
-        steps: List[Step] = []
         sign = 1 if nsteps > 0 else -1
+        initial_steps_taken = self.steps_taken
         nsteps = min(
             nsteps * sign,
             len(self.ast) - self.steps_taken if sign > 0 else self.steps_taken,
         )
         for _ in range(nsteps):
-            ast = self.ast[self.steps_taken]
-            if not self.is_valid and (
-                (ast.range.end.line > self.__first_error.range.start.line)
-                or (
-                    ast.range.end.line == self.__first_error.range.start.line
-                    and ast.range.end.character
-                    >= self.__first_error.range.start.character
-                )
-            ):
-                raise RuntimeError(self.__first_error.message)
-            steps.append(Step(self.__step_text(), ast))
             self.__process_step(sign)
-        return steps
+        return self.steps[initial_steps_taken:self.steps_taken]
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.

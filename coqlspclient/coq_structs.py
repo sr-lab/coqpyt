@@ -2,6 +2,7 @@ import re
 from enum import Enum
 from typing import Dict, List
 from coqlspclient.coq_lsp_structs import RangedSpan, GoalAnswer
+from pylspclient.lsp_structs import Diagnostic
 
 
 class SegmentType(Enum):
@@ -53,6 +54,7 @@ class Step(object):
     def __init__(self, text: str, ast: RangedSpan):
         self.text = text
         self.ast = ast
+        self.diagnostics: List[Diagnostic] = []
 
 
 class Term:

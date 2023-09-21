@@ -101,12 +101,11 @@ class _AuxFile(object):
         searches = {}
         lines = self.read().split("\n")
         for diagnostic in self.coq_lsp_client.lsp_endpoint.diagnostics[uri]:
-            command = lines[
-                diagnostic.range.start.line : diagnostic.range.end.line + 1
-            ]
+            command = lines[diagnostic.range.start.line : diagnostic.range.end.line + 1]
             if len(command) == 1:
                 command[0] = command[0][
-                    diagnostic.range.start.character : diagnostic.range.end.character + 1
+                    diagnostic.range.start.character : diagnostic.range.end.character
+                    + 1
                 ]
             else:
                 command[0] = command[0][diagnostic.range.start.character :]

@@ -26,6 +26,11 @@ class Position(object):
         self.character = character
         self.offset = offset
 
+    def __repr__(self) -> str:
+        return str(
+            {"line": self.line, "character": self.character, "offset": self.offset}
+        )
+
 
 class Range(object):
     def __init__(self, start, end):
@@ -37,6 +42,9 @@ class Range(object):
         """
         self.start = to_type(start, Position)
         self.end = to_type(end, Position)
+
+    def __repr__(self) -> str:
+        return str({"start": repr(self.start), "end": repr(self.end)})
 
 
 class Location(object):

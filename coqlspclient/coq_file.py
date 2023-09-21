@@ -52,23 +52,16 @@ class CoqFile(object):
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
         uri = f"file://{self.__path}"
         with open(self.__path, "r") as f:
-            self.__lines = f.read().split("\n")
+            text = f.read()
 
         try:
-            text, text_id = "\n".join(self.__lines), TextDocumentIdentifier(uri)
             self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
-            self.ast = self.coq_lsp_client.get_document(text_id).spans
-            self.steps_taken: int = 0
-            self.steps: List[Step] = []
-            for curr_step in self.ast:
-                text = self.__get_text(curr_step.range)
-                self.steps.append(Step(text, curr_step))
-                self.steps_taken += 1
-            self.steps_taken = 0
+            ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(uri)).spans
         except Exception as e:
             self.__handle_exception(e)
             raise e
 
+        self.__init_steps(text, ast)
         self.__validate()
         self.curr_module: List[str] = []
         self.curr_module_type: List[str] = []
@@ -110,6 +103,22 @@ class CoqFile(object):
         if self.__from_lib:
             os.remove(self.__path)
 
+    def __init_steps(self, text: str, ast: List[RangedSpan]):
+        lines = text.split("\n")
+        self.steps: List[Step] = []
+        for i, curr_ast in enumerate(ast):
+            start_line = 0 if i == 0 else ast[i - 1].range.end.line
+            start_char = 0 if i == 0 else ast[i - 1].range.end.character
+            end_line = curr_ast.range.end.line
+            end_char = curr_ast.range.end.character
+
+            curr_lines = lines[start_line : end_line + 1]
+            curr_lines[-1] = curr_lines[-1][:end_char]
+            curr_lines[0] = curr_lines[0][start_char:]
+            step_text = "\n".join(curr_lines)
+            self.steps.append(Step(step_text, curr_ast))
+        self.steps_taken: int = 0
+
     def __validate(self):
         uri = f"file://{self.__path}"
         self.is_valid = True
@@ -127,6 +136,14 @@ class CoqFile(object):
                 ):
                     step.diagnostics.append(diagnostic)
                     break
+
+    @property
+    def __curr_step(self):
+        return self.steps[self.steps_taken]
+
+    @property
+    def __prev_step(self):
+        return self.steps[self.steps_taken - 1]
 
     @staticmethod
     def get_id(id: List) -> str:
@@ -171,42 +188,39 @@ class CoqFile(object):
 
         return [None]
 
-    def __step_expr(self):
-        curr_step = self.ast[self.steps_taken]
-        return CoqFile.expr(curr_step)
-
-    def __get_text(self, range: Range, trim: bool = False, encode: bool = False):
+    def __short_text(self, range: Optional[Range] = None):
         def slice_line(
             line: str, start: Optional[int] = None, stop: Optional[int] = None
         ):
-            # The encode flag indicates if range.character is measured in bytes,
-            # rather than characters. If true, the string must be encoded before
+            if range is None:
+                return line[start:stop]
+
+            # A range will be provided when range.character is measured in bytes,
+            # rather than characters. If so, the string must be encoded before
             # indexing. This special treatment is necessary for handling Unicode
-            # characters which take up more than 1 byte.
-            return (
-                line.encode("utf-8")[start:stop].decode()
-                if encode
-                else line[start:stop]
-            )
+            # characters which take up more than 1 byte. Currently necessary to
+            # handle where-notations.
+            line = line.encode("utf-8")
 
-        end_line = range.end.line
-        end_character = range.end.character
+            # For where-notations, the character count does not include the closing
+            # parenthesis when present.
+            if stop is not None and chr(line[stop]) == ")":
+                stop += 1
+            return line[start:stop].decode()
 
-        if trim:
-            start_line = range.start.line
-            start_character = range.start.character
+        curr_range = self.__curr_step.ast.range if range is None else range
+        nlines = curr_range.end.line - curr_range.start.line + 1
+        lines = self.__curr_step.text.split("\n")[-nlines:]
+
+        prev_range = None if self.steps_taken == 0 else self.__prev_step.ast.range
+        if prev_range is None or prev_range.end.line < curr_range.start.line:
+            start = curr_range.start.character
         else:
-            prev_step = (
-                None if self.steps_taken == 0 else self.ast[self.steps_taken - 1]
-            )
-            start_line = 0 if prev_step is None else prev_step.range.end.line
-            start_character = 0 if prev_step is None else prev_step.range.end.character
+            start = curr_range.start.character - prev_range.end.character
 
-        lines = self.__lines[start_line : end_line + 1]
-        lines[-1] = slice_line(lines[-1], stop=end_character)
-        lines[0] = slice_line(lines[0], start=start_character)
-        text = "\n".join(lines)
-        return " ".join(text.split()) if trim else text
+        lines[-1] = slice_line(lines[-1], stop=curr_range.end.character)
+        lines[0] = slice_line(lines[0], start=start)
+        return " ".join(" ".join(lines).split())
 
     def __add_term(self, name: str, ast: RangedSpan, text: str, term_type: TermType):
         term = Term(text, ast, term_type, self.path, self.curr_module[:])
@@ -310,10 +324,8 @@ class CoqFile(object):
                 span["decl_ntn_interp"]["loc"]["ep"]
                 - span["decl_ntn_interp"]["loc"]["bol_pos"],
             )
-            if chr(self.__lines[end.line].encode("utf-8")[end.character]) == ")":
-                end.character += 1
             range = Range(start, end)
-            text = self.__get_text(range, trim=True, encode=True)
+            text = self.__short_text(range=range)
             name = FileContext.get_notation_key(
                 span["decl_ntn_string"]["v"], span["decl_ntn_scope"]
             )
@@ -362,7 +374,7 @@ class CoqFile(object):
             # TODO: A negative sign should handle things differently. For example:
             #   - names should be removed from the context
             #   - curr_module should change as you leave or re-enter modules
-            text = self.__get_text(self.steps[self.steps_taken].ast.range, trim=True)
+            text = self.__short_text()
             # FIXME Let (and maybe Variable) should be handled. However,
             # I think we can't handle them as normal Locals since they are
             # specific to a section.
@@ -375,7 +387,7 @@ class CoqFile(object):
             ]:
                 if text.startswith(keyword):
                     return
-            expr = self.__step_expr()
+            expr = CoqFile.expr(self.__curr_step.ast)
             if expr == [None]:
                 return
             if expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve":
@@ -413,16 +425,12 @@ class CoqFile(object):
                 name = text.split('"')[1].strip()
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(
-                    name, self.ast[self.steps_taken], text, TermType.NOTATION
-                )
+                self.__add_term(name, self.__curr_step.ast, text, TermType.NOTATION)
             elif expr[0] == "VernacSyntacticDefinition":
                 name = text.split(" ")[1]
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(
-                    name, self.ast[self.steps_taken], text, TermType.NOTATION
-                )
+                self.__add_term(name, self.__curr_step.ast, text, TermType.NOTATION)
             elif expr[0] == "VernacDefinition" and expr[2][0]["v"][0] == "Anonymous":
                 # We associate the anonymous term to the same name used internally by Coq
                 if self.__anonymous_id is None:
@@ -430,17 +438,17 @@ class CoqFile(object):
                 else:
                     name = f"Unnamed_thm{self.__anonymous_id}"
                     self.__anonymous_id += 1
-                self.__add_term(name, self.ast[self.steps_taken], text, term_type)
+                self.__add_term(name, self.__curr_step.ast, text, term_type)
             elif term_type == TermType.DERIVE:
                 name = CoqFile.get_ident(expr[2][0])
-                self.__add_term(name, self.ast[self.steps_taken], text, term_type)
+                self.__add_term(name, self.__curr_step.ast, text, term_type)
                 if expr[1][0] == "Derive":
                     prop = CoqFile.get_ident(expr[2][2])
-                    self.__add_term(prop, self.ast[self.steps_taken], text, term_type)
+                    self.__add_term(prop, self.__curr_step.ast, text, term_type)
             else:
                 names = traverse_expr(expr)
                 for name in names:
-                    self.__add_term(name, self.ast[self.steps_taken], text, term_type)
+                    self.__add_term(name, self.__curr_step.ast, text, term_type)
 
             self.__handle_where_notations(expr, term_type)
         finally:
@@ -461,7 +469,7 @@ class CoqFile(object):
         Returns:
             bool: True if the whole file was already executed
         """
-        return self.steps_taken == len(self.ast)
+        return self.steps_taken == len(self.steps)
 
     @property
     def in_proof(self) -> bool:
@@ -527,7 +535,7 @@ class CoqFile(object):
         initial_steps_taken = self.steps_taken
         nsteps = min(
             nsteps * sign,
-            len(self.ast) - self.steps_taken if sign > 0 else self.steps_taken,
+            len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
         for _ in range(nsteps):
             self.__process_step(sign)
@@ -539,7 +547,7 @@ class CoqFile(object):
         Returns:
             List[Step]: List of all the steps in the file.
         """
-        return self.exec(len(self.ast))
+        return self.exec(len(self.steps))
 
     def current_goals(self) -> Optional[GoalAnswer]:
         """Get goals in current position.
@@ -549,9 +557,7 @@ class CoqFile(object):
         """
         uri = f"file://{self.__path}"
         end_pos = (
-            Position(0, 0)
-            if self.steps_taken == 0
-            else self.ast[self.steps_taken - 1].range.end
+            Position(0, 0) if self.steps_taken == 0 else self.__prev_step.ast.range.end
         )
         try:
             return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)

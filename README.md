@@ -25,8 +25,6 @@ from coqlspclient.coq_structs import TermType
 
 # Open Coq file
 with CoqFile(os.path.join(os.getcwd(), "examples/example.v")) as coq_file:
-    # Print AST
-    print(coq_file.ast)
     coq_file.exec(nsteps=2)
     # Get all terms defined until now
     print("Number of terms:", len(coq_file.context.terms))

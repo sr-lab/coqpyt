@@ -31,6 +31,42 @@ class Position(object):
             {"line": self.line, "character": self.character, "offset": self.offset}
         )
 
+    def __eq__(self, __value: object) -> bool:
+        return isinstance(__value, Position) and (self.line, self.character) == (
+            __value.line,
+            __value.character,
+        )
+
+    def __ne__(self, __value: object) -> bool:
+        return not isinstance(__value, Position) or (self.line, self.character) != (
+            __value.line,
+            __value.character,
+        )
+
+    def __gt__(self, __value: object) -> bool:
+        return isinstance(__value, Position) and (self.line, self.character) > (
+            __value.line,
+            __value.character,
+        )
+
+    def __ge__(self, __value: object) -> bool:
+        return isinstance(__value, Position) and (self.line, self.character) >= (
+            __value.line,
+            __value.character,
+        )
+
+    def __lt__(self, __value: object) -> bool:
+        return isinstance(__value, Position) and (self.line, self.character) < (
+            __value.line,
+            __value.character,
+        )
+
+    def __le__(self, __value: object) -> bool:
+        return isinstance(__value, Position) and (self.line, self.character) <= (
+            __value.line,
+            __value.character,
+        )
+
 
 class Range(object):
     def __init__(self, start, end):

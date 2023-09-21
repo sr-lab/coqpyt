@@ -64,7 +64,10 @@ def test_is_invalid_1(setup, teardown):
     assert not coq_file.is_valid
     steps = coq_file.run()
     assert len(steps[11].diagnostics) == 1
-    assert steps[11].diagnostics[0].message == "Found no subterm matching \"0 + ?M152\" in the current goal."
+    assert (
+        steps[11].diagnostics[0].message
+        == 'Found no subterm matching "0 + ?M152" in the current goal.'
+    )
     assert steps[11].diagnostics[0].severity == 1
 
 
@@ -73,8 +76,12 @@ def test_is_invalid_2(setup, teardown):
     assert not coq_file.is_valid
     steps = coq_file.run()
     assert len(steps[15].diagnostics) == 1
-    assert steps[15].diagnostics[0].message == "Syntax error: '.' expected after [command] (in [vernac_aux])."
+    assert (
+        steps[15].diagnostics[0].message
+        == "Syntax error: '.' expected after [command] (in [vernac_aux])."
+    )
     assert steps[15].diagnostics[0].severity == 1
+
 
 @pytest.mark.parametrize("setup", ["test_module_type.v"], indirect=True)
 def test_module_type(setup, teardown):

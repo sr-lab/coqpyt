@@ -271,10 +271,7 @@ class ProofState(object):
             return None
         last_term = terms[0]
         for term in terms[1:]:
-            if (term.ast.range.end.line > last_term.ast.range.end.line) or (
-                term.ast.range.end.line == last_term.ast.range.end.line
-                and term.ast.range.end.character > last_term.ast.range.end.character
-            ):
+            if last_term.ast.range.end < term.ast.range.end:
                 last_term = term
         return last_term
 

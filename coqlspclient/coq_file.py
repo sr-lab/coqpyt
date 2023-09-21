@@ -116,25 +116,14 @@ class CoqFile(object):
         if uri not in self.coq_lsp_client.lsp_endpoint.diagnostics:
             return
 
-        self.coq_lsp_client.lsp_endpoint.diagnostics[uri].sort(
-            key=lambda d: d.range.start.line
-        )
         for diagnostic in self.coq_lsp_client.lsp_endpoint.diagnostics[uri]:
             if diagnostic.severity == 1:
                 self.is_valid = False
 
             for step in self.steps:
-                if (diagnostic.range.start.line < step.ast.range.start.line) or (
-                    diagnostic.range.start.line == step.ast.range.start.line
-                    and diagnostic.range.start.character <= step.ast.range.start.character
-                ):
-                    early_range, late_range = diagnostic.range, step.ast.range
-                else:
-                    early_range, late_range = step.ast.range, diagnostic.range
-
-                if (late_range.start.line < early_range.end.line) or (
-                    late_range.start.line == early_range.end.line
-                    and late_range.start.character <= early_range.end.character
+                if (
+                    step.ast.range.start <= diagnostic.range.start
+                    and step.ast.range.end >= diagnostic.range.end
                 ):
                     step.diagnostics.append(diagnostic)
                     break
@@ -542,7 +531,7 @@ class CoqFile(object):
         )
         for _ in range(nsteps):
             self.__process_step(sign)
-        return self.steps[initial_steps_taken:self.steps_taken]
+        return self.steps[initial_steps_taken : self.steps_taken]
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.

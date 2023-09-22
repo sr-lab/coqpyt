@@ -184,7 +184,8 @@ class CoqFile(object):
             and isinstance(step.span["v"], dict)
             and "expr" in step.span["v"]
         ):
-            return step.span["v"]["expr"]
+            # We ignore the tags [VernacSynterp] and [VernacSynPure]
+            return step.span["v"]["expr"][1]
 
         return [None]
 
@@ -315,22 +316,22 @@ class CoqFile(object):
         # handles when multiple notations are defined
         for span in spans:
             start = Position(
-                span["decl_ntn_string"]["loc"]["line_nb"] - 1,
-                span["decl_ntn_string"]["loc"]["bp"]
-                - span["decl_ntn_string"]["loc"]["bol_pos"],
+                span["ntn_decl_string"]["loc"]["line_nb"] - 1,
+                span["ntn_decl_string"]["loc"]["bp"]
+                - span["ntn_decl_string"]["loc"]["bol_pos"],
             )
             end = Position(
-                span["decl_ntn_interp"]["loc"]["line_nb_last"] - 1,
-                span["decl_ntn_interp"]["loc"]["ep"]
-                - span["decl_ntn_interp"]["loc"]["bol_pos"],
+                span["ntn_decl_interp"]["loc"]["line_nb_last"] - 1,
+                span["ntn_decl_interp"]["loc"]["ep"]
+                - span["ntn_decl_interp"]["loc"]["bol_pos"],
             )
             range = Range(start, end)
             text = self.__short_text(range=range)
             name = FileContext.get_notation_key(
-                span["decl_ntn_string"]["v"], span["decl_ntn_scope"]
+                span["ntn_decl_string"]["v"], span["ntn_decl_scope"]
             )
-            if span["decl_ntn_scope"] is not None:
-                text += " : " + span["decl_ntn_scope"]
+            if span["ntn_decl_scope"] is not None:
+                text += " : " + span["ntn_decl_scope"]
             text = "Notation " + text
             self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
 

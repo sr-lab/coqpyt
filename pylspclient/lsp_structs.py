@@ -37,20 +37,8 @@ class Position(object):
             __value.character,
         )
 
-    def __ne__(self, __value: object) -> bool:
-        return not isinstance(__value, Position) or (self.line, self.character) != (
-            __value.line,
-            __value.character,
-        )
-
     def __gt__(self, __value: object) -> bool:
         return isinstance(__value, Position) and (self.line, self.character) > (
-            __value.line,
-            __value.character,
-        )
-
-    def __ge__(self, __value: object) -> bool:
-        return isinstance(__value, Position) and (self.line, self.character) >= (
             __value.line,
             __value.character,
         )
@@ -61,11 +49,14 @@ class Position(object):
             __value.character,
         )
 
+    def __ne__(self, __value: object) -> bool:
+        return not self.__eq__(__value)
+
+    def __ge__(self, __value: object) -> bool:
+        return not self.__lt__(__value)
+
     def __le__(self, __value: object) -> bool:
-        return isinstance(__value, Position) and (self.line, self.character) <= (
-            __value.line,
-            __value.character,
-        )
+        return not self.__gt__(__value)
 
 
 class Range(object):

@@ -38,10 +38,9 @@ class Position(object):
         )
 
     def __gt__(self, __value: object) -> bool:
-        return isinstance(__value, Position) and (self.line, self.character) > (
-            __value.line,
-            __value.character,
-        )
+        if not isinstance(__value, Position):
+            raise TypeError(f"Invalid type for comparison: {type(__value).__name__}")
+        return (self.line, self.character) > (__value.line, __value.character)
 
     def __lt__(self, __value: object) -> bool:
         return not self.__eq__(__value) and not self.__gt__(__value)

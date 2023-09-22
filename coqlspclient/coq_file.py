@@ -431,6 +431,9 @@ class CoqFile(object):
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
                 self.__add_term(name, self.__curr_step.ast, text, TermType.NOTATION)
+            elif expr[0] == "VernacInstance" and expr[1][0]["v"][0] == "Anonymous":
+                # FIXME: The name should be "<Class>_instance_N"
+                self.__add_term("_anonymous", self.__curr_step.ast, text, term_type)
             elif expr[0] == "VernacDefinition" and expr[2][0]["v"][0] == "Anonymous":
                 # We associate the anonymous term to the same name used internally by Coq
                 if self.__anonymous_id is None:

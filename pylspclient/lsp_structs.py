@@ -44,10 +44,7 @@ class Position(object):
         )
 
     def __lt__(self, __value: object) -> bool:
-        return isinstance(__value, Position) and (self.line, self.character) < (
-            __value.line,
-            __value.character,
-        )
+        return not self.__eq__(__value) and not self.__gt__(__value)
 
     def __ne__(self, __value: object) -> bool:
         return not self.__eq__(__value)

@@ -26,6 +26,34 @@ class Position(object):
         self.character = character
         self.offset = offset
 
+    def __repr__(self) -> str:
+        return str(
+            {"line": self.line, "character": self.character, "offset": self.offset}
+        )
+
+    def __eq__(self, __value: object) -> bool:
+        return isinstance(__value, Position) and (self.line, self.character) == (
+            __value.line,
+            __value.character,
+        )
+
+    def __gt__(self, __value: object) -> bool:
+        if not isinstance(__value, Position):
+            raise TypeError(f"Invalid type for comparison: {type(__value).__name__}")
+        return (self.line, self.character) > (__value.line, __value.character)
+
+    def __lt__(self, __value: object) -> bool:
+        return not self.__eq__(__value) and not self.__gt__(__value)
+
+    def __ne__(self, __value: object) -> bool:
+        return not self.__eq__(__value)
+
+    def __ge__(self, __value: object) -> bool:
+        return not self.__lt__(__value)
+
+    def __le__(self, __value: object) -> bool:
+        return not self.__gt__(__value)
+
 
 class Range(object):
     def __init__(self, start, end):
@@ -37,6 +65,9 @@ class Range(object):
         """
         self.start = to_type(start, Position)
         self.end = to_type(end, Position)
+
+    def __repr__(self) -> str:
+        return str({"start": repr(self.start), "end": repr(self.end)})
 
 
 class Location(object):
@@ -82,7 +113,18 @@ class LocationLink(object):
 
 
 class Diagnostic(object):
-    def __init__(self, range, severity, code, source, message, relatedInformation):
+    def __init__(
+        self,
+        range,
+        message,
+        severity=None,
+        code=None,
+        codeDescription=None,
+        source=None,
+        tags=None,
+        relatedInformation=None,
+        data=None,
+    ):
         """
         Constructs a new Diagnostic instance.
         :param Range range: The range at which the message applies.Resource file.
@@ -95,7 +137,7 @@ class Diagnostic(object):
         :param list relatedInformation: An array of related diagnostic information, e.g. when symbol-names within
                                         a scope collide all definitions can be marked via this property.
         """
-        self.range = range
+        self.range: Range = Range(**range)
         self.severity = severity
         self.code = code
         self.source = source
@@ -532,30 +574,6 @@ class CompletionItem(object):
         self.score = score
 
 
-class Diagnostic(object):
-    def __init__(
-        self,
-        range,
-        message,
-        severity=None,
-        code=None,
-        codeDescription=None,
-        source=None,
-        tags=None,
-        relatedInformation=None,
-        data=None,
-    ):
-        self.range = range
-        self.message = message
-        self.severity = severity
-        self.code = code
-        self.codeDescription = codeDescription
-        self.source = source
-        self.tags = tags
-        self.relatedInformation = relatedInformation
-        self.data = data
-
-
 class CompletionItemKind(enum.Enum):
     Text = 1
     Method = 2
@@ -609,6 +627,7 @@ class ErrorCodes(enum.Enum):
     InternalError = -32603
     serverErrorStart = -32099
     serverErrorEnd = -32000
+    ServerTimeout = -32004
     ServerQuit = -32003
     ServerNotInitialized = -32002
     UnknownErrorCode = -32001

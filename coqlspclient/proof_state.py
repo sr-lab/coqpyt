@@ -10,27 +10,23 @@ from pylspclient.lsp_structs import (
     ErrorCodes,
 )
 from coqlspclient.coq_structs import (
-    ProofStep,
-    FileContext,
+    TermType,
+    CoqErrorCodes,
+    CoqError,
     Step,
     Term,
+    ProofStep,
     ProofTerm,
-    TermType,
+    FileContext,
 )
-from coqlspclient.coq_lsp_structs import (
-    CoqError,
-    CoqErrorCodes,
-    Result,
-    Query,
-    GoalAnswer,
-)
+from coqlspclient.coq_lsp_structs import Result, Query, GoalAnswer
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.coq_lsp_client import CoqLspClient
 from typing import List, Dict, Optional, Tuple
 
 
 class _AuxFile(object):
-    def __init__(self, file_path: Optional[str] = None, timeout: int = 2):
+    def __init__(self, file_path: Optional[str] = None, timeout: int = 30):
         self.__init_path(file_path)
         uri = f"file://{self.path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
@@ -69,7 +65,10 @@ class _AuxFile(object):
             f.write(text)
 
     def __handle_exception(self, e):
-        if not (isinstance(e, ResponseError) and e.code == ErrorCodes.ServerQuit.value):
+        if not isinstance(e, ResponseError) or e.code not in [
+            ErrorCodes.ServerQuit.value,
+            ErrorCodes.ServerTimeout.value,
+        ]:
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
         os.remove(self.path)
@@ -102,19 +101,15 @@ class _AuxFile(object):
         searches = {}
         lines = self.read().split("\n")
         for diagnostic in self.coq_lsp_client.lsp_endpoint.diagnostics[uri]:
-            command = lines[
-                diagnostic.range["start"]["line"] : diagnostic.range["end"]["line"] + 1
-            ]
+            command = lines[diagnostic.range.start.line : diagnostic.range.end.line + 1]
             if len(command) == 1:
                 command[0] = command[0][
-                    diagnostic.range["start"]["character"] : diagnostic.range["end"][
-                        "character"
-                    ]
+                    diagnostic.range.start.character : diagnostic.range.end.character
                     + 1
                 ]
             else:
-                command[0] = command[0][diagnostic.range["start"]["character"] :]
-                command[-1] = command[-1][: diagnostic.range["end"]["character"] + 1]
+                command[0] = command[0][diagnostic.range.start.character :]
+                command[-1] = command[-1][: diagnostic.range.end.character + 1]
             command = "".join(command).strip()
 
             if command.startswith(keyword):
@@ -133,7 +128,7 @@ class _AuxFile(object):
         for query in self.__get_queries(keyword):
             if query.query == f"{search}":
                 for result in query.results:
-                    if result.range["start"]["line"] == line:
+                    if result.range.start.line == line:
                         return result.message
                 break
         return None
@@ -162,7 +157,7 @@ class _AuxFile(object):
             for i, library in enumerate(libraries):
                 v_file = aux_file.get_diagnostics(
                     "Locate Library", library, last_line + i + 1
-                ).split("\n")[-1][:-1]
+                ).split()[-1][:-1]
                 coq_file = CoqFile(v_file, library=library, timeout=timeout)
                 coq_file.run()
 
@@ -231,39 +226,44 @@ class ProofState(object):
         fun = lambda x: x.endswith("(default interpretation)")
         return nots[0][:-25] if fun(nots[0]) else nots[0]
 
-    def __step_context(self, step=None):
-        def traverse_ast(el):
-            if isinstance(el, dict):
-                return [x for v in el.values() for x in traverse_ast(v)]
-            elif isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
-                id = ".".join([l[1] for l in el[1][1][::-1]] + [el[2][1]])
-                term = self.__get_term(id)
-                return [] if term is None else [(lambda x: x, term)]
-            elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
-                line = len(self.__aux_file.read().split("\n"))
-                self.__aux_file.append(f'\nLocate "{el[2][1]}".')
+    def __step_context(self):
+        def traverse_expr(expr):
+            stack, res = expr[:0:-1], []
+            while len(stack) > 0:
+                el = stack.pop()
+                if isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
+                    term = self.__get_term(CoqFile.get_id(el))
+                    if term is not None:
+                        res.append((lambda x: x, term))
+                elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
+                    line = len(self.__aux_file.read().split("\n"))
+                    self.__aux_file.append(f'\nLocate "{el[2][1]}".')
 
-                def __search_notation(call):
-                    notation_name = call[0]
-                    scope = ""
-                    notation = call[1](*call[2:])
-                    if notation == "Unknown notation":
-                        return None
-                    if notation.split(":")[-1].endswith("_scope"):
-                        scope = notation.split(":")[-1].strip()
-                    return self.context.get_notation(notation_name, scope)
+                    def __search_notation(call):
+                        notation_name = call[0]
+                        scope = ""
+                        notation = call[1](*call[2:])
+                        if notation == "Unknown notation":
+                            return None
+                        if notation.split(":")[-1].endswith("_scope"):
+                            scope = notation.split(":")[-1].strip()
+                        return self.context.get_notation(notation_name, scope)
 
-                return [
-                    (__search_notation, (el[2][1], self.__locate, el[2][1], line))
-                ] + traverse_ast(el[1:])
-            elif isinstance(el, list):
-                return [x for v in el for x in traverse_ast(v)]
+                    res.append(
+                        (__search_notation, (el[2][1], self.__locate, el[2][1], line))
+                    )
+                    stack.append(el[1:])
+                elif isinstance(el, list):
+                    for v in reversed(el):
+                        if isinstance(v, (dict, list)):
+                            stack.append(v)
+                elif isinstance(el, dict):
+                    for v in reversed(el.values()):
+                        if isinstance(v, (dict, list)):
+                            stack.append(v)
+            return res
 
-            return []
-
-        if step is None:
-            step = self.__current_step.ast
-        return traverse_ast(step.span)
+        return traverse_expr(CoqFile.expr(self.__current_step.ast))
 
     def __get_last_term(self):
         terms = self.coq_file.terms
@@ -271,32 +271,23 @@ class ProofState(object):
             return None
         last_term = terms[0]
         for term in terms[1:]:
-            if (term.ast.range.end.line > last_term.ast.range.end.line) or (
-                term.ast.range.end.line == last_term.ast.range.end.line
-                and term.ast.range.end.character > last_term.ast.range.end.character
-            ):
+            if last_term.ast.range.end < term.ast.range.end:
                 last_term = term
         return last_term
 
     def __get_program_context(self):
-        def traverse_ast(el, keep_id=False):
-            if (
-                isinstance(el, list)
-                and len(el) == 2
-                and (
-                    (el[0] == "Id" and keep_id)
-                    or (el[0] == "ExtraArg" and el[1] == "identref")
-                )
-            ):
-                return el[1]
-            elif isinstance(el, list):
-                for x in el:
-                    id = traverse_ast(x, keep_id=keep_id)
-                    if id == "identref":
-                        keep_id = True
-                    elif id is not None:
-                        return id
-                return "identref" if keep_id else None
+        def traverse_expr(expr):
+            stack = expr[:0:-1]
+            while len(stack) > 0:
+                el = stack.pop()
+                if isinstance(el, list):
+                    ident = CoqFile.get_ident(el)
+                    if ident is not None:
+                        return ident
+
+                    for v in reversed(el):
+                        if isinstance(v, list):
+                            stack.append(v)
             return None
 
         # Tags:
@@ -308,7 +299,7 @@ class ProofState(object):
         # 5 - Next Obligation
         tag = CoqFile.expr(self.__current_step.ast)[1][1]
         if tag in [0, 1, 4]:
-            id = traverse_ast(CoqFile.expr(self.__current_step.ast))
+            id = traverse_expr(CoqFile.expr(self.__current_step.ast))
             # This works because the obligation must be in the
             # same module as the program
             id = ".".join(self.coq_file.curr_module + [id])

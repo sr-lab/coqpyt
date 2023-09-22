@@ -3,7 +3,7 @@ import subprocess
 import pytest
 from typing import List, Tuple
 from coqlspclient.coq_lsp_structs import *
-from coqlspclient.coq_structs import TermType, Term
+from coqlspclient.coq_structs import TermType, Term, CoqError, CoqErrorCodes
 from coqlspclient.proof_state import ProofState, CoqFile
 
 versionId: VersionedTextDocumentIdentifier = None
@@ -94,7 +94,7 @@ def test_get_proofs(setup, teardown):
     ]
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
     ]
 
@@ -182,7 +182,7 @@ def test_get_proofs(setup, teardown):
             TermType.NOTATION,
             [],
         ),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
         ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
@@ -254,7 +254,7 @@ def test_get_proofs(setup, teardown):
     ]
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
     ]
 
@@ -345,7 +345,7 @@ def test_get_proofs(setup, teardown):
             TermType.NOTATION,
             [],
         ),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
@@ -404,13 +404,38 @@ def test_exists_notation(setup, teardown):
     )
 
 
+@pytest.mark.parametrize("setup", [("test_list_notation.v", None)], indirect=True)
+def test_list_notation(setup, teardown):
+    assert len(state.proofs) == 1
+    context = [
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
+        (
+            'Infix "++" := app (right associativity, at level 60) : list_scope.',
+            TermType.NOTATION,
+            [],
+        ),
+        (
+            'Notation "[ x ]" := (cons x nil) : list_scope.',
+            TermType.NOTATION,
+            ["ListNotations"],
+        ),
+        (
+            "Notation \"[ x ; y ; .. ; z ]\" := (cons x (cons y .. (cons z nil) ..)) (format \"[ '[' x ; '/' y ; '/' .. ; '/' z ']' ]\") : list_scope.",
+            TermType.NOTATION,
+            ["ListNotations"],
+        ),
+    ]
+    compare_context(context, state.proofs[0].context)
+
+
 @pytest.mark.parametrize("setup", [("test_unknown_notation.v", None)], indirect=True)
 def test_unknown_notation(setup, teardown):
     """Checks if it is able to handle the notation { _ } that is unknown for the
     Locate command because it is a default notation.
     """
-    with pytest.raises(RuntimeError):
+    with pytest.raises(CoqError) as e_info:
         assert state.context.get_notation("{ _ }", "")
+    assert e_info.value.code == CoqErrorCodes.NotationNotFound
 
 
 @pytest.mark.parametrize("setup", [("test_nested_proofs.v", None)], indirect=True)
@@ -467,11 +492,11 @@ def test_bullets(setup, teardown):
     proofs = state.proofs
     assert len(proofs) == 1
     steps = [
-        "\n    intros x y. ",
+        "\n    intros x y.",
         " split.",
-        "\n    - ",
-        " reflexivity.",
-        "\n    - ",
+        "\n    -",
+        "reflexivity.",
+        "\n    -",
         " reflexivity.",
     ]
     assert len(proofs[0].steps) == 6
@@ -494,7 +519,7 @@ def test_obligation(setup, teardown):
             TermType.NOTATION,
             [],
         ),
-        ('Notation "x = y :> A" := (@eq A x y) : type_scope', TermType.NOTATION, []),
+        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
     ]
     programs = [
         ("id1", "S (pred n)"),
@@ -574,3 +599,25 @@ def test_type_class(setup, teardown):
         ("Inductive unit : Set := tt : unit.", TermType.INDUCTIVE, []),
     ]
     compare_context(context, state.proofs[1].context)
+
+
+@pytest.mark.parametrize("setup", [("test_goal.v", None)], indirect=True)
+def test_goal(setup, teardown):
+    assert len(state.proofs) == 3
+    goals = [
+        "Definition ignored : forall P Q: Prop, (P -> Q) -> P -> Q.",
+        "Goal forall P Q: Prop, (P -> Q) -> P -> Q.",
+        "Goal forall P Q: Prop, (P -> Q) -> P -> Q.",
+    ]
+    for i, proof in enumerate(state.proofs):
+        assert proof.text == goals[i]
+        compare_context(
+            [
+                (
+                    'Notation "A -> B" := (forall (_ : A), B) : type_scope.',
+                    TermType.NOTATION,
+                    [],
+                )
+            ],
+            proof.context,
+        )

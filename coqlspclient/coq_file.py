@@ -3,7 +3,7 @@ import shutil
 import uuid
 import tempfile
 from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier
-from pylspclient.lsp_structs import ResponseError, ErrorCodes
+from pylspclient.lsp_structs import ResponseError, ErrorCodes, Diagnostic
 from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
 from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentType
 from coqlspclient.coq_lsp_client import CoqLspClient
@@ -31,7 +31,7 @@ class CoqFile(object):
         self,
         file_path: str,
         library: Optional[str] = None,
-        timeout: int = 2,
+        timeout: int = 30,
         workspace: Optional[str] = None,
     ):
         """Creates a CoqFile.
@@ -52,26 +52,23 @@ class CoqFile(object):
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
         uri = f"file://{self.__path}"
         with open(self.__path, "r") as f:
-            self.__lines = f.read().split("\n")
+            text = f.read()
 
         try:
-            self.coq_lsp_client.didOpen(
-                TextDocumentItem(uri, "coq", 1, "\n".join(self.__lines))
-            )
-            self.ast = self.coq_lsp_client.get_document(
-                TextDocumentIdentifier(uri)
-            ).spans
+            self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
+            ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(uri)).spans
         except Exception as e:
             self.__handle_exception(e)
             raise e
 
+        self.__init_steps(text, ast)
         self.__validate()
-        self.steps_taken: int = 0
         self.curr_module: List[str] = []
         self.curr_module_type: List[str] = []
         self.curr_section: List[str] = []
         self.__segment_stack: List[SegmentType] = []
         self.context = FileContext()
+        self.__anonymous_id: Optional[int] = None
 
     def __enter__(self):
         return self
@@ -81,7 +78,7 @@ class CoqFile(object):
 
     def __init_path(self, file_path, library):
         self.file_module = [] if library is None else library.split(".")
-        self.__from_lib = self.file_module[:1] == ["Coq"]
+        self.__from_lib = self.file_module[:2] == ["Coq", "Init"]
         self.path = file_path
         if not self.__from_lib:
             self.__path = file_path
@@ -97,31 +94,86 @@ class CoqFile(object):
         self.__path = new_path
 
     def __handle_exception(self, e):
-        if not (isinstance(e, ResponseError) and e.code == ErrorCodes.ServerQuit.value):
+        if not isinstance(e, ResponseError) or e.code not in [
+            ErrorCodes.ServerQuit.value,
+            ErrorCodes.ServerTimeout.value,
+        ]:
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
         if self.__from_lib:
             os.remove(self.__path)
 
+    def __init_steps(self, text: str, ast: List[RangedSpan]):
+        lines = text.split("\n")
+        self.steps: List[Step] = []
+        for i, curr_ast in enumerate(ast):
+            start_line = 0 if i == 0 else ast[i - 1].range.end.line
+            start_char = 0 if i == 0 else ast[i - 1].range.end.character
+            end_line = curr_ast.range.end.line
+            end_char = curr_ast.range.end.character
+
+            curr_lines = lines[start_line : end_line + 1]
+            curr_lines[-1] = curr_lines[-1][:end_char]
+            curr_lines[0] = curr_lines[0][start_char:]
+            step_text = "\n".join(curr_lines)
+            self.steps.append(Step(step_text, curr_ast))
+        self.steps_taken: int = 0
+
     def __validate(self):
         uri = f"file://{self.__path}"
+        self.is_valid = True
         if uri not in self.coq_lsp_client.lsp_endpoint.diagnostics:
-            self.is_valid = True
             return
 
         for diagnostic in self.coq_lsp_client.lsp_endpoint.diagnostics[uri]:
             if diagnostic.severity == 1:
                 self.is_valid = False
-                return
-        self.is_valid = True
+
+            for step in self.steps:
+                if (
+                    step.ast.range.start <= diagnostic.range.start
+                    and step.ast.range.end >= diagnostic.range.end
+                ):
+                    step.diagnostics.append(diagnostic)
+                    break
+
+    @property
+    def __curr_step(self):
+        return self.steps[self.steps_taken]
+
+    @property
+    def __prev_step(self):
+        return self.steps[self.steps_taken - 1]
 
     @staticmethod
     def get_id(id: List) -> str:
         if id[0] == "Ser_Qualid":
-            return ".".join([l[1] for l in id[1][1][::-1]] + [id[2][1]])
+            return ".".join([l[1] for l in reversed(id[1][1])] + [id[2][1]])
         elif id[0] == "Id":
             return id[1]
-        return ""
+        return None
+
+    @staticmethod
+    def get_ident(el: List) -> Optional[str]:
+        if (
+            len(el) == 3
+            and el[0] == "GenArg"
+            and el[1][0] == "Rawwit"
+            and el[1][1][0] == "ExtraArg"
+        ):
+            if el[1][1][1] == "identref":
+                return el[2][0][1][1]
+            elif el[1][1][1] == "ident":
+                return el[2][1]
+        return None
+
+    @staticmethod
+    def get_v(el):
+        if isinstance(el, dict) and "v" in el:
+            return el["v"]
+        elif isinstance(el, list) and len(el) == 2 and el[0] == "v":
+            return el[1]
+        return None
 
     @staticmethod
     def expr(step: RangedSpan) -> Optional[List]:
@@ -132,37 +184,44 @@ class CoqFile(object):
             and isinstance(step.span["v"], dict)
             and "expr" in step.span["v"]
         ):
-            return step.span["v"]["expr"]
+            # We ignore the tags [VernacSynterp] and [VernacSynPure]
+            return step.span["v"]["expr"][1]
 
         return [None]
 
-    def __step_expr(self):
-        curr_step = self.ast[self.steps_taken]
-        return CoqFile.expr(curr_step)
+    def __short_text(self, range: Optional[Range] = None):
+        def slice_line(
+            line: str, start: Optional[int] = None, stop: Optional[int] = None
+        ):
+            if range is None:
+                return line[start:stop]
 
-    def __get_text(self, range: Range, trim: bool = False):
-        end_line = range.end.line
-        end_character = range.end.character
+            # A range will be provided when range.character is measured in bytes,
+            # rather than characters. If so, the string must be encoded before
+            # indexing. This special treatment is necessary for handling Unicode
+            # characters which take up more than 1 byte. Currently necessary to
+            # handle where-notations.
+            line = line.encode("utf-8")
 
-        if trim:
-            start_line = range.start.line
-            start_character = range.start.character
+            # For where-notations, the character count does not include the closing
+            # parenthesis when present.
+            if stop is not None and chr(line[stop]) == ")":
+                stop += 1
+            return line[start:stop].decode()
+
+        curr_range = self.__curr_step.ast.range if range is None else range
+        nlines = curr_range.end.line - curr_range.start.line + 1
+        lines = self.__curr_step.text.split("\n")[-nlines:]
+
+        prev_range = None if self.steps_taken == 0 else self.__prev_step.ast.range
+        if prev_range is None or prev_range.end.line < curr_range.start.line:
+            start = curr_range.start.character
         else:
-            prev_step = (
-                None if self.steps_taken == 0 else self.ast[self.steps_taken - 1]
-            )
-            start_line = 0 if prev_step is None else prev_step.range.end.line
-            start_character = 0 if prev_step is None else prev_step.range.end.character
+            start = curr_range.start.character - prev_range.end.character
 
-        lines = self.__lines[start_line : end_line + 1]
-        lines[-1] = lines[-1][: end_character + 1]
-        lines[0] = lines[0][start_character:]
-        text = "\n".join(lines)
-        return " ".join(text.split()) if trim else text
-
-    def __step_text(self, trim=False):
-        curr_step = self.ast[self.steps_taken]
-        return self.__get_text(curr_step.range, trim=trim)
+        lines[-1] = slice_line(lines[-1], stop=curr_range.end.character)
+        lines[0] = slice_line(lines[0], start=start)
+        return " ".join(" ".join(lines).split())
 
     def __add_term(self, name: str, ast: RangedSpan, text: str, term_type: TermType):
         term = Term(text, ast, term_type, self.path, self.curr_module[:])
@@ -174,7 +233,7 @@ class CoqFile(object):
         self.context.update(terms={full_name(name): term})
 
         curr_file_module = ""
-        for module in self.file_module[::-1]:
+        for module in reversed(self.file_module):
             curr_file_module = module + "." + curr_file_module
             self.context.update(terms={curr_file_module + name: term})
 
@@ -194,20 +253,32 @@ class CoqFile(object):
             return TermType.RECORD
         elif expr[0] == "VernacInductive" and expr[1][0] == "Variant":
             return TermType.VARIANT
+        elif expr[0] == "VernacInductive" and expr[1][0] == "CoInductive":
+            return TermType.COINDUCTIVE
         elif expr[0] == "VernacInductive":
             return TermType.INDUCTIVE
         elif expr[0] == "VernacInstance":
             return TermType.INSTANCE
+        elif expr[0] == "VernacCoFixpoint":
+            return TermType.COFIXPOINT
         elif expr[0] == "VernacFixpoint":
             return TermType.FIXPOINT
         elif expr[0] == "VernacScheme":
             return TermType.SCHEME
+        elif expr[0] == "VernacExtend" and expr[1][0].startswith("Derive"):
+            return TermType.DERIVE
+        elif expr[0] == "VernacExtend" and expr[1][0].startswith("AddSetoid"):
+            return TermType.SETOID
+        elif expr[0] == "VernacExtend" and expr[1][0].startswith(
+            ("AddRelation", "AddParametricRelation")
+        ):
+            return TermType.RELATION
         elif (
-            len(expr) > 1
-            and isinstance(expr[1], list)
-            and expr[1][0] == "VernacDeclareTacticDefinition"
+            expr[0] == "VernacExtend" and expr[1][0] == "VernacDeclareTacticDefinition"
         ):
             return TermType.TACTIC
+        elif expr[0] == "VernacExtend" and expr[1][0] == "Function":
+            return TermType.FUNCTION
         else:
             return TermType.OTHER
 
@@ -244,66 +315,67 @@ class CoqFile(object):
 
         # handles when multiple notations are defined
         for span in spans:
-            range = Range(
-                Position(
-                    span["decl_ntn_string"]["loc"]["line_nb"] - 1,
-                    span["decl_ntn_string"]["loc"]["bp"]
-                    - span["decl_ntn_string"]["loc"]["bol_pos"],
-                ),
-                Position(
-                    span["decl_ntn_interp"]["loc"]["line_nb_last"] - 1,
-                    span["decl_ntn_interp"]["loc"]["ep"]
-                    - span["decl_ntn_interp"]["loc"]["bol_pos"],
-                ),
+            start = Position(
+                span["ntn_decl_string"]["loc"]["line_nb"] - 1,
+                span["ntn_decl_string"]["loc"]["bp"]
+                - span["ntn_decl_string"]["loc"]["bol_pos"],
             )
-            text = self.__get_text(range, trim=True)
+            end = Position(
+                span["ntn_decl_interp"]["loc"]["line_nb_last"] - 1,
+                span["ntn_decl_interp"]["loc"]["ep"]
+                - span["ntn_decl_interp"]["loc"]["bol_pos"],
+            )
+            range = Range(start, end)
+            text = self.__short_text(range=range)
             name = FileContext.get_notation_key(
-                span["decl_ntn_string"]["v"], span["decl_ntn_scope"]
+                span["ntn_decl_string"]["v"], span["ntn_decl_scope"]
             )
-            if span["decl_ntn_scope"] is not None:
-                text += " : " + span["decl_ntn_scope"]
+            if span["ntn_decl_scope"] is not None:
+                text += " : " + span["ntn_decl_scope"]
             text = "Notation " + text
             self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
 
-    def __get_tactic_name(self, expr):
-        if len(expr[2][0][2][0][1][0]) == 2 and expr[2][0][2][0][1][0][0] == "v":
-            name = CoqFile.get_id(expr[2][0][2][0][1][0][1])
-            if name != "":
-                return name
-
-            return None
-
     def __process_step(self, sign):
-        def traverse_ast(el, inductive=False):
-            if isinstance(el, dict):
-                if "v" in el and isinstance(el["v"], list) and len(el["v"]) == 2:
-                    if el["v"][0] == "Id":
-                        return [el["v"][1]]
-                    if el["v"][0] == "Name":
-                        return [el["v"][1][1]]
+        def traverse_expr(expr):
+            inductive = expr[0] == "VernacInductive"
+            extend = expr[0] == "VernacExtend"
+            stack, res = expr[:0:-1], []
+            while len(stack) > 0:
+                el = stack.pop()
+                v = CoqFile.get_v(el)
+                if v is not None and isinstance(v, list) and len(v) == 2:
+                    id = CoqFile.get_id(v)
+                    if id is not None:
+                        if not inductive:
+                            return [id]
+                        res.append(id)
+                    elif v[0] == "Name":
+                        if not inductive:
+                            return [v[1][1]]
+                        res.append(v[1][1])
 
-                return [x for v in el.values() for x in traverse_ast(v, inductive)]
-            elif isinstance(el, list):
-                if len(el) > 0:
-                    if el[0] == "CLocalAssum":
-                        return []
-                    if el[0] == "VernacInductive":
-                        inductive = True
+                elif isinstance(el, dict):
+                    for v in reversed(el.values()):
+                        if isinstance(v, (dict, list)):
+                            stack.append(v)
+                elif isinstance(el, list):
+                    if len(el) > 0 and el[0] == "CLocalAssum":
+                        continue
 
-                res = []
-                for v in el:
-                    res.extend(traverse_ast(v, inductive))
-                    if not inductive and len(res) > 0:
-                        return [res[0]]
-                return res
+                    ident = CoqFile.get_ident(el)
+                    if ident is not None and extend:
+                        return [ident]
 
-            return []
+                    for v in reversed(el):
+                        if isinstance(v, (dict, list)):
+                            stack.append(v)
+            return res
 
         try:
             # TODO: A negative sign should handle things differently. For example:
             #   - names should be removed from the context
             #   - curr_module should change as you leave or re-enter modules
-            text = self.__step_text(trim=True)
+            text = self.__short_text()
             # FIXME Let (and maybe Variable) should be handled. However,
             # I think we can't handle them as normal Locals since they are
             # specific to a section.
@@ -316,8 +388,10 @@ class CoqFile(object):
             ]:
                 if text.startswith(keyword):
                     return
-            expr = self.__step_expr()
+            expr = CoqFile.expr(self.__curr_step.ast)
             if expr == [None]:
+                return
+            if expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve":
                 return
             term_type = CoqFile.__get_term_type(expr)
 
@@ -345,32 +419,40 @@ class CoqFile(object):
             # and should be overriden.
             elif len(self.curr_module_type) > 0:
                 return
-            elif (
-                len(expr) >= 2
-                and isinstance(expr[1], list)
-                and len(expr[1]) == 2
-                and expr[1][0] == "VernacDeclareTacticDefinition"
-            ):
-                name = self.__get_tactic_name(expr)
-                self.__add_term(name, self.ast[self.steps_taken], text, TermType.TACTIC)
+            elif expr[0] == "VernacExtend" and expr[1][0] == "VernacTacticNotation":
+                # FIXME: Handle this case
+                return
             elif expr[0] == "VernacNotation":
-                name = text.split('"')[1]
+                name = text.split('"')[1].strip()
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(
-                    name, self.ast[self.steps_taken], text, TermType.NOTATION
-                )
+                self.__add_term(name, self.__curr_step.ast, text, TermType.NOTATION)
             elif expr[0] == "VernacSyntacticDefinition":
                 name = text.split(" ")[1]
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(
-                    name, self.ast[self.steps_taken], text, TermType.NOTATION
-                )
+                self.__add_term(name, self.__curr_step.ast, text, TermType.NOTATION)
+            elif expr[0] == "VernacInstance" and expr[1][0]["v"][0] == "Anonymous":
+                # FIXME: The name should be "<Class>_instance_N"
+                self.__add_term("_anonymous", self.__curr_step.ast, text, term_type)
+            elif expr[0] == "VernacDefinition" and expr[2][0]["v"][0] == "Anonymous":
+                # We associate the anonymous term to the same name used internally by Coq
+                if self.__anonymous_id is None:
+                    name, self.__anonymous_id = "Unnamed_thm", 0
+                else:
+                    name = f"Unnamed_thm{self.__anonymous_id}"
+                    self.__anonymous_id += 1
+                self.__add_term(name, self.__curr_step.ast, text, term_type)
+            elif term_type == TermType.DERIVE:
+                name = CoqFile.get_ident(expr[2][0])
+                self.__add_term(name, self.__curr_step.ast, text, term_type)
+                if expr[1][0] == "Derive":
+                    prop = CoqFile.get_ident(expr[2][2])
+                    self.__add_term(prop, self.__curr_step.ast, text, term_type)
             else:
-                names = traverse_ast(expr)
+                names = traverse_expr(expr)
                 for name in names:
-                    self.__add_term(name, self.ast[self.steps_taken], text, term_type)
+                    self.__add_term(name, self.__curr_step.ast, text, term_type)
 
             self.__handle_where_notations(expr, term_type)
         finally:
@@ -391,7 +473,7 @@ class CoqFile(object):
         Returns:
             bool: True if the whole file was already executed
         """
-        return self.steps_taken == len(self.ast)
+        return self.steps_taken == len(self.steps)
 
     @property
     def in_proof(self) -> bool:
@@ -427,6 +509,16 @@ class CoqFile(object):
             )
         )
 
+    @property
+    def diagnostics(self) -> List[Diagnostic]:
+        """
+        Returns:
+            List[Diagnostic]: The diagnostics of the file.
+                Includes all messages given by Coq.
+        """
+        uri = f"file://{self.__path}"
+        return self.coq_lsp_client.lsp_endpoint.diagnostics[uri]
+
     @staticmethod
     def get_term_type(ast: RangedSpan) -> TermType:
         expr = CoqFile.expr(ast)
@@ -443,16 +535,15 @@ class CoqFile(object):
         Returns:
             List[Step]: List of steps executed.
         """
-        steps: List[Step] = []
         sign = 1 if nsteps > 0 else -1
+        initial_steps_taken = self.steps_taken
         nsteps = min(
             nsteps * sign,
-            len(self.ast) - self.steps_taken if sign > 0 else self.steps_taken,
+            len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
         for _ in range(nsteps):
-            steps.append(Step(self.__step_text(), self.ast[self.steps_taken]))
             self.__process_step(sign)
-        return steps
+        return self.steps[initial_steps_taken : self.steps_taken]
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.
@@ -460,7 +551,7 @@ class CoqFile(object):
         Returns:
             List[Step]: List of all the steps in the file.
         """
-        return self.exec(len(self.ast))
+        return self.exec(len(self.steps))
 
     def current_goals(self) -> Optional[GoalAnswer]:
         """Get goals in current position.
@@ -470,9 +561,7 @@ class CoqFile(object):
         """
         uri = f"file://{self.__path}"
         end_pos = (
-            Position(0, 0)
-            if self.steps_taken == 0
-            else self.ast[self.steps_taken - 1].range.end
+            Position(0, 0) if self.steps_taken == 0 else self.__prev_step.ast.range.end
         )
         try:
             return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)

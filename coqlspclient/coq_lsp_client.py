@@ -25,7 +25,7 @@ class CoqLspClient(LspClient):
     def __init__(
         self,
         root_uri: str,
-        timeout: int = 2,
+        timeout: int = 30,
         memory_limit: int = 2097152,
         init_options: Dict = __DEFAULT_INIT_OPTIONS,
     ):
@@ -107,7 +107,7 @@ class CoqLspClient(LspClient):
         if timeout <= 0:
             self.shutdown()
             self.exit()
-            raise ResponseError(ErrorCodes.ServerQuit, "Server quit")
+            raise ResponseError(ErrorCodes.ServerTimeout, "Server timeout")
 
     def didOpen(self, textDocument: TextDocumentItem):
         """Open a text document in the server.

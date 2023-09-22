@@ -2,12 +2,7 @@ import re
 from enum import Enum
 from typing import Dict, List
 from coqlspclient.coq_lsp_structs import RangedSpan, GoalAnswer
-
-
-class Step(object):
-    def __init__(self, text: str, ast: RangedSpan):
-        self.text = text
-        self.ast = ast
+from pylspclient.lsp_structs import Diagnostic
 
 
 class SegmentType(Enum):
@@ -22,20 +17,44 @@ class TermType(Enum):
     DEFINITION = 3
     NOTATION = 4
     INDUCTIVE = 5
-    RECORD = 6
-    CLASS = 7
-    INSTANCE = 8
-    FIXPOINT = 9
-    TACTIC = 10
-    SCHEME = 11
-    VARIANT = 12
-    FACT = 13
-    REMARK = 14
-    COROLLARY = 15
-    PROPOSITION = 16
-    PROPERTY = 17
-    OBLIGATION = 18
+    COINDUCTIVE = 6
+    RECORD = 7
+    CLASS = 8
+    INSTANCE = 9
+    FIXPOINT = 10
+    COFIXPOINT = 11
+    SCHEME = 12
+    VARIANT = 13
+    FACT = 14
+    REMARK = 15
+    COROLLARY = 16
+    PROPOSITION = 17
+    PROPERTY = 18
+    OBLIGATION = 19
+    TACTIC = 20
+    RELATION = 21
+    SETOID = 22
+    FUNCTION = 23
+    DERIVE = 24
     OTHER = 100
+
+
+class CoqErrorCodes(Enum):
+    InvalidFile = 0
+    NotationNotFound = 1
+
+
+class CoqError(Exception):
+    def __init__(self, code: CoqErrorCodes, message: str):
+        self.code = code
+        self.message = message
+
+
+class Step(object):
+    def __init__(self, text: str, ast: RangedSpan):
+        self.text = text
+        self.ast = ast
+        self.diagnostics: List[Diagnostic] = []
 
 
 class Term:
@@ -112,16 +131,26 @@ class FileContext:
         regex = f"{re.escape(notation_id)}".split("\\ ")
         for i, sub in enumerate(regex):
             if sub == "_":
-                regex[i] = "(.+)"
+                # We match the wildcard with the description from here:
+                # https://coq.inria.fr/distrib/current/refman/language/core/basic.html#grammar-token-ident
+                # Coq accepts more characters, but no one should need more than these...
+                chars = "A-Za-zÀ-ÖØ-öø-ˁˆ-ˑˠ-ˤˬˮͰ-ʹͶͷͺ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-Ֆՙա-և"
+                regex[i] = f"([{chars}][{chars}0-9_']*|_[{chars}0-9_']+)"
             else:
                 # Handle '_'
                 regex[i] = f"({sub}|('{sub}'))"
         regex = "^" + "\\ ".join(regex) + "$"
 
         # Search notations
+        unscoped = None
         for term in self.terms.keys():
             if re.match(regex, term):
                 return self.terms[term]
+            if re.match(regex, term.split(":")[0].strip()):
+                unscoped = term
+        # In case the stored id contains the scope but no scope is provided
+        if unscoped is not None:
+            return self.terms[unscoped]
 
         # Search Infix
         if re.match("^_ ([^ ]*) _$", notation):
@@ -130,7 +159,10 @@ class FileContext:
             if key in self.terms:
                 return self.terms[key]
 
-        raise RuntimeError(f"Notation not found in context: {notation_id}")
+        raise CoqError(
+            CoqErrorCodes.NotationNotFound,
+            f"Notation not found in context: {notation_id}",
+        )
 
     @staticmethod
     def get_notation_key(notation: str, scope: str):

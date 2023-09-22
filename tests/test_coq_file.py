@@ -36,6 +36,10 @@ def test_where_notation(setup, teardown):
     assert coq_file.context.terms["n - m"].text == 'Notation "n - m" := (minus n m)'
     assert "A & B" in coq_file.context.terms
     assert coq_file.context.terms["A & B"].text == 'Notation "A & B" := (and\' A B)'
+    assert "'ONE'" in coq_file.context.terms
+    assert coq_file.context.terms["'ONE'"].text == "Notation \"'ONE'\" := 1"
+    assert "x 🀄 y" in coq_file.context.terms
+    assert coq_file.context.terms["x 🀄 y"].text == 'Notation "x 🀄 y" := (plus_test x y)'
 
 
 @pytest.mark.parametrize("setup", ["test_get_notation.v"], indirect=True)
@@ -58,11 +62,25 @@ def test_get_notation(setup, teardown):
 @pytest.mark.parametrize("setup", ["test_invalid_1.v"], indirect=True)
 def test_is_invalid_1(setup, teardown):
     assert not coq_file.is_valid
+    steps = coq_file.run()
+    assert len(steps[11].diagnostics) == 1
+    assert (
+        steps[11].diagnostics[0].message
+        == 'Found no subterm matching "0 + ?M152" in the current goal.'
+    )
+    assert steps[11].diagnostics[0].severity == 1
 
 
 @pytest.mark.parametrize("setup", ["test_invalid_2.v"], indirect=True)
 def test_is_invalid_2(setup, teardown):
     assert not coq_file.is_valid
+    steps = coq_file.run()
+    assert len(steps[15].diagnostics) == 1
+    assert (
+        steps[15].diagnostics[0].message
+        == "Syntax error: '.' expected after [command] (in [vernac_aux])."
+    )
+    assert steps[15].diagnostics[0].severity == 1
 
 
 @pytest.mark.parametrize("setup", ["test_module_type.v"], indirect=True)
@@ -71,3 +89,27 @@ def test_module_type(setup, teardown):
     # We ignore terms inside a Module Type since they can't be used outside
     # and should be overriden.
     assert len(coq_file.context.terms) == 1
+
+
+@pytest.mark.parametrize("setup", ["test_derive.v"], indirect=True)
+def test_derive(setup, teardown):
+    coq_file.run()
+    for key in ["incr", "incr_correct"]:
+        assert key in coq_file.context.terms
+        assert (
+            coq_file.context.terms[key].text
+            == "Derive incr SuchThat (forall n, incr n = plus 1 n) As incr_correct."
+        )
+    keywords = [
+        "Inversion",
+        "Inversion_clear",
+        "Dependent Inversion",
+        "Dependent Inversion_clear",
+    ]
+    for i in range(4):
+        key = f"leminv{i + 1}"
+        assert key in coq_file.context.terms
+        assert (
+            coq_file.context.terms[key].text
+            == f"Derive {keywords[i]} {key} with (forall n m:nat, Le (S n) m) Sort Prop."
+        )

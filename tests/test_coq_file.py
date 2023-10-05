@@ -24,6 +24,14 @@ def test_is_valid(setup, teardown):
     assert coq_file.is_valid
 
 
+@pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
+def test_negative_step(setup, teardown):
+    steps = coq_file.exec(nsteps=8)
+    assert steps[-1].text == "\n      Print plus."
+    steps = coq_file.exec(nsteps=-1)
+    assert steps[0].text == "\n      intros n."
+
+
 @pytest.mark.parametrize("setup", ["test_where_notation.v"], indirect=True)
 def test_where_notation(setup, teardown):
     coq_file.run()

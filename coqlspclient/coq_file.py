@@ -541,9 +541,16 @@ class CoqFile(object):
             nsteps * sign,
             len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
-        for _ in range(nsteps):
-            self.__process_step(sign)
-        return self.steps[initial_steps_taken : self.steps_taken]
+
+        # FIXME: for now we ignore the terms in the context when going backwards
+        # on the file
+        if sign == 1:
+            for _ in range(nsteps):
+                self.__process_step(sign)
+            return self.steps[initial_steps_taken : self.steps_taken]
+        else:
+            self.steps_taken -= nsteps
+            return self.steps[self.steps_taken - 1 : initial_steps_taken]
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.

@@ -109,20 +109,29 @@ class CoqFile(object):
         if self.__from_lib:
             os.remove(self.__path)
 
+    def __init_step(
+        self,
+        lines: List[str],
+        index: int,
+        step_ast: RangedSpan,
+        prev_step_ast: RangedSpan,
+    ):
+        start_line = 0 if index == 0 else prev_step_ast.range.end.line
+        start_char = 0 if index == 0 else prev_step_ast.range.end.character
+        end_line = step_ast.range.end.line
+        end_char = step_ast.range.end.character
+
+        curr_lines = lines[start_line : end_line + 1]
+        curr_lines[-1] = curr_lines[-1][:end_char]
+        curr_lines[0] = curr_lines[0][start_char:]
+        step_text = "\n".join(curr_lines)
+        return Step(step_text, step_ast)
+
     def __init_steps(self, text: str, ast: List[RangedSpan]):
         lines = text.split("\n")
         self.steps: List[Step] = []
         for i, curr_ast in enumerate(ast):
-            start_line = 0 if i == 0 else ast[i - 1].range.end.line
-            start_char = 0 if i == 0 else ast[i - 1].range.end.character
-            end_line = curr_ast.range.end.line
-            end_char = curr_ast.range.end.character
-
-            curr_lines = lines[start_line : end_line + 1]
-            curr_lines[-1] = curr_lines[-1][:end_char]
-            curr_lines[0] = curr_lines[0][start_char:]
-            step_text = "\n".join(curr_lines)
-            self.steps.append(Step(step_text, curr_ast))
+            self.steps.append(self.__init_step(lines, i, curr_ast, ast[i - 1]))
         self.steps_taken: int = 0
 
     def __validate(self):
@@ -586,6 +595,7 @@ class CoqFile(object):
                     )
             return self.steps[self.steps_taken - 1 : initial_steps_taken]
 
+    # FIXME just delete steps in proofs
     def delete_step(self, step_index: int) -> None:
         with open(self.__path, "r") as f:
             lines = f.read().split("\n")
@@ -607,6 +617,39 @@ class CoqFile(object):
                 lines[step.ast.range.start.line] = start_line
                 lines[step.ast.range.end.line] = end_line
             f.write("\n".join(lines))
+
+        self.__didChange()
+
+    # FIXME just add steps in proofs
+    def add_step(self, step_text: str, previous_step_index: int) -> None:
+        with open(self.__path, "r") as f:
+            lines = f.read().split("\n")
+
+        with open(self.path, "w") as f:
+            previous_step = self.steps[previous_step_index]
+            end_line = previous_step.ast.range.end.line
+            end_char = previous_step.ast.range.end.character
+            lines[end_line] = (
+                lines[end_line][: end_char + 1]
+                + step_text
+                + lines[end_line][end_char + 1 :]
+            )
+            text = "\n".join(lines)
+            f.write(text)
+            uri = f"file://{self.path}"
+            try:
+                self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
+                ast = self.coq_lsp_client.get_document(
+                    TextDocumentIdentifier(uri)
+                ).spans
+            except Exception as e:
+                self.__handle_exception(e)
+                raise e
+
+            i = previous_step_index + 1
+            self.steps.insert(i, self.__init_step(text.split("\n"), i, ast[i], ast[i - 1]))
+            if self.steps_taken - 1 > previous_step_index:
+                self.steps_taken += 1
 
         self.__didChange()
 

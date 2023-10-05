@@ -40,13 +40,34 @@ def test_delete_step():
     file_path = os.path.join("tests/resources", "test_valid.v")
     new_file_path = os.path.join("tests/resources", "test_valid_delete.v")
     shutil.copyfile(file_path, new_file_path)
+    coq_file = CoqFile(new_file_path, timeout=60)
 
     try:
-        coq_file = CoqFile(new_file_path, timeout=60)
         coq_file.delete_step(7)
         assert coq_file.steps[7].text == "\n      Print Nat.add."
         with open(new_file_path, "r") as f:
             assert "Print plus." not in f.read()
+    finally:
+        coq_file.close()
+        if os.path.exists(new_file_path):
+            os.remove(new_file_path)
+
+
+def test_add_step():
+    file_path = os.path.join("tests/resources", "test_valid.v")
+    new_file_path = os.path.join("tests/resources", "test_valid_add.v")
+    shutil.copyfile(file_path, new_file_path)
+    coq_file = CoqFile(new_file_path, timeout=60)
+
+    try:
+        steps = coq_file.exec(nsteps=8)
+        assert steps[-1].text == "\n      Print plus."
+        coq_file.add_step("\n      Print minus.", 7)
+        steps = coq_file.exec(nsteps=1)
+        assert steps[-1].text == "\n      Print minus."
+        coq_file.add_step("\n      Print minus.", 6)
+        steps = coq_file.exec(nsteps=1)
+        assert steps[-1].text == "\n      Print Nat.add."
     finally:
         coq_file.close()
         if os.path.exists(new_file_path):

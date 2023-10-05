@@ -1,4 +1,5 @@
 import os
+import shutil
 import pytest
 from coqlspclient.coq_file import CoqFile
 
@@ -30,6 +31,26 @@ def test_negative_step(setup, teardown):
     assert steps[-1].text == "\n      Print plus."
     steps = coq_file.exec(nsteps=-1)
     assert steps[0].text == "\n      intros n."
+    steps = coq_file.exec(nsteps=-2)
+    with pytest.raises(NotImplementedError):
+        coq_file.exec(nsteps=-1)
+
+
+def test_delete_step():
+    file_path = os.path.join("tests/resources", "test_valid.v")
+    new_file_path = os.path.join("tests/resources", "test_valid_delete.v")
+    shutil.copyfile(file_path, new_file_path)
+
+    try:
+        coq_file = CoqFile(new_file_path, timeout=60)
+        coq_file.delete_step(7)
+        assert coq_file.steps[7].text == "\n      Print Nat.add."
+        with open(new_file_path, "r") as f:
+            assert "Print plus." not in f.read()
+    finally:
+        coq_file.close()
+        if os.path.exists(new_file_path):
+            os.remove(new_file_path)
 
 
 @pytest.mark.parametrize("setup", ["test_where_notation.v"], indirect=True)

@@ -2,7 +2,12 @@ import os
 import shutil
 import uuid
 import tempfile
-from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier
+from pylspclient.lsp_structs import (
+    TextDocumentItem,
+    TextDocumentIdentifier,
+    VersionedTextDocumentIdentifier,
+    TextDocumentContentChangeEvent,
+)
 from pylspclient.lsp_structs import ResponseError, ErrorCodes, Diagnostic
 from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
 from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentType
@@ -69,6 +74,7 @@ class CoqFile(object):
         self.__segment_stack: List[SegmentType] = []
         self.context = FileContext()
         self.__anonymous_id: Optional[int] = None
+        self.version = 1
 
     def __enter__(self):
         return self
@@ -189,26 +195,30 @@ class CoqFile(object):
 
         return [None]
 
+    def __slice_line(
+        self,
+        line: str,
+        start: Optional[int] = None,
+        stop: Optional[int] = None,
+        range: Optional[Range] = None,
+    ):
+        if range is None:
+            return line[start:stop]
+
+        # A range will be provided when range.character is measured in bytes,
+        # rather than characters. If so, the string must be encoded before
+        # indexing. This special treatment is necessary for handling Unicode
+        # characters which take up more than 1 byte. Currently necessary to
+        # handle where-notations.
+        line = line.encode("utf-8")
+
+        # For where-notations, the character count does not include the closing
+        # parenthesis when present.
+        if stop is not None and chr(line[stop]) == ")":
+            stop += 1
+        return line[start:stop].decode()
+
     def __short_text(self, range: Optional[Range] = None):
-        def slice_line(
-            line: str, start: Optional[int] = None, stop: Optional[int] = None
-        ):
-            if range is None:
-                return line[start:stop]
-
-            # A range will be provided when range.character is measured in bytes,
-            # rather than characters. If so, the string must be encoded before
-            # indexing. This special treatment is necessary for handling Unicode
-            # characters which take up more than 1 byte. Currently necessary to
-            # handle where-notations.
-            line = line.encode("utf-8")
-
-            # For where-notations, the character count does not include the closing
-            # parenthesis when present.
-            if stop is not None and chr(line[stop]) == ")":
-                stop += 1
-            return line[start:stop].decode()
-
         curr_range = self.__curr_step.ast.range if range is None else range
         nlines = curr_range.end.line - curr_range.start.line + 1
         lines = self.__curr_step.text.split("\n")[-nlines:]
@@ -219,8 +229,10 @@ class CoqFile(object):
         else:
             start = curr_range.start.character - prev_range.end.character
 
-        lines[-1] = slice_line(lines[-1], stop=curr_range.end.character)
-        lines[0] = slice_line(lines[0], start=start)
+        lines[-1] = self.__slice_line(
+            lines[-1], stop=curr_range.end.character, range=range
+        )
+        lines[0] = self.__slice_line(lines[0], start=start, range=range)
         return " ".join(" ".join(lines).split())
 
     def __add_term(self, name: str, ast: RangedSpan, text: str, term_type: TermType):
@@ -458,6 +470,22 @@ class CoqFile(object):
         finally:
             self.steps_taken += sign
 
+    def __read(self):
+        with open(self.path, "r") as f:
+            return f.read()
+
+    def __didChange(self):
+        uri = f"file://{self.path}"
+        self.version += 1
+        try:
+            self.coq_lsp_client.didChange(
+                VersionedTextDocumentIdentifier(uri, self.version),
+                [TextDocumentContentChangeEvent(None, None, self.__read())],
+            )
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+
     @property
     def timeout(self) -> int:
         """The timeout of the coq-lsp client.
@@ -549,8 +577,38 @@ class CoqFile(object):
                 self.__process_step(sign)
             return self.steps[initial_steps_taken : self.steps_taken]
         else:
-            self.steps_taken -= nsteps
+            for _ in range(nsteps):
+                self.steps_taken -= 1
+                if not self.in_proof:
+                    self.steps_taken = initial_steps_taken
+                    raise NotImplementedError(
+                        "Going backwards outside of a proof is not implemented yet"
+                    )
             return self.steps[self.steps_taken - 1 : initial_steps_taken]
+
+    def delete_step(self, step_index: int) -> None:
+        with open(self.__path, "r") as f:
+            lines = f.read().split("\n")
+
+        with open(self.path, "w") as f:
+            step = self.steps.pop(step_index)
+            start_line = lines[step.ast.range.start.line]
+            end_line = lines[step.ast.range.end.line]
+
+            start_line = self.__slice_line(
+                start_line, stop=step.ast.range.start.character, range=step.ast.range
+            )
+            end_line = self.__slice_line(
+                end_line, start=step.ast.range.end.character, range=step.ast.range
+            )
+            if step.ast.range.start.line == step.ast.range.end.line:
+                lines[step.ast.range.start.line] = start_line + end_line
+            else:
+                lines[step.ast.range.start.line] = start_line
+                lines[step.ast.range.end.line] = end_line
+            f.write("\n".join(lines))
+
+        self.__didChange()
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.

@@ -47,6 +47,9 @@ def test_delete_step():
         assert coq_file.steps[7].text == "\n      Print Nat.add."
         with open(new_file_path, "r") as f:
             assert "Print plus." not in f.read()
+
+        with pytest.raises(NotImplementedError):
+            coq_file.delete_step(0)
     finally:
         coq_file.close()
         if os.path.exists(new_file_path):
@@ -68,6 +71,9 @@ def test_add_step():
         coq_file.add_step("\n      Print minus.", 6)
         steps = coq_file.exec(nsteps=1)
         assert steps[-1].text == "\n      Print Nat.add."
+
+        with pytest.raises(NotImplementedError):
+            coq_file.add_step("\n      Print minus.", 0)
     finally:
         coq_file.close()
         if os.path.exists(new_file_path):

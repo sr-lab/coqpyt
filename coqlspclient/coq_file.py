@@ -482,6 +482,30 @@ class CoqFile(object):
     def __read(self):
         with open(self.path, "r") as f:
             return f.read()
+        
+    def __goals(self, end_pos: Position):
+        uri = f"file://{self.__path}"
+        try:
+            return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+        
+    def __in_proof(self, goals: Optional[GoalAnswer]):
+        def empty_stack(stack):
+            # e.g. [([], [])]
+            for tuple in stack:
+                if len(tuple[0]) > 0 or len(tuple[1]) > 0:
+                    return False
+            return True
+        
+        goals = goals.goals
+        return goals is not None and (
+            len(goals.goals) > 0
+            or not empty_stack(goals.stack)
+            or len(goals.shelf) > 0
+            or goals.bullet is not None
+        )
 
     def __didChange(self):
         uri = f"file://{self.path}"
@@ -518,21 +542,7 @@ class CoqFile(object):
         Returns:
             bool: True if the current step is inside a proof
         """
-
-        def empty_stack(stack):
-            # e.g. [([], [])]
-            for tuple in stack:
-                if len(tuple[0]) > 0 or len(tuple[1]) > 0:
-                    return False
-            return True
-
-        goals = self.current_goals().goals
-        return goals is not None and (
-            len(goals.goals) > 0
-            or not empty_stack(goals.stack)
-            or len(goals.shelf) > 0
-            or goals.bullet is not None
-        )
+        return self.__in_proof(self.current_goals())
 
     @property
     def terms(self) -> List[Term]:
@@ -595,8 +605,11 @@ class CoqFile(object):
                     )
             return self.steps[self.steps_taken - 1 : initial_steps_taken]
 
-    # FIXME just delete steps in proofs
     def delete_step(self, step_index: int) -> None:
+        goals = self.__goals(self.steps[step_index- 1].ast.range.end)
+        if not self.__in_proof(goals):
+            raise NotImplementedError("Deleting steps outside of a proof is not implemented yet")
+
         with open(self.__path, "r") as f:
             lines = f.read().split("\n")
 
@@ -620,8 +633,11 @@ class CoqFile(object):
 
         self.__didChange()
 
-    # FIXME just add steps in proofs
     def add_step(self, step_text: str, previous_step_index: int) -> None:
+        goals = self.__goals(self.steps[previous_step_index].ast.range.end)
+        if not self.__in_proof(goals):
+            raise NotImplementedError("Adding steps outside of a proof is not implemented yet")
+        
         with open(self.__path, "r") as f:
             lines = f.read().split("\n")
 
@@ -667,15 +683,10 @@ class CoqFile(object):
         Returns:
             Optional[GoalAnswer]: Goals in the current position if there are goals
         """
-        uri = f"file://{self.__path}"
         end_pos = (
             Position(0, 0) if self.steps_taken == 0 else self.__prev_step.ast.range.end
         )
-        try:
-            return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
-        except Exception as e:
-            self.__handle_exception(e)
-            raise e
+        return self.__goals(end_pos)
 
     def save_vo(self):
         """Compiles the vo file for this Coq file."""

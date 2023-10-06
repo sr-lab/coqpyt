@@ -4,10 +4,10 @@ import pytest
 from typing import List, Tuple
 from coqlspclient.coq_lsp_structs import *
 from coqlspclient.coq_structs import TermType, Term, CoqError, CoqErrorCodes
-from coqlspclient.proof_state import ProofState, CoqFile
+from coqlspclient.proof_file import ProofFile, CoqFile
 
 versionId: VersionedTextDocumentIdentifier = None
-state: ProofState = None
+state: ProofFile = None
 workspace: str = None
 
 
@@ -30,7 +30,7 @@ def setup(request):
         workspace = os.path.join(os.getcwd(), "tests/resources", workspace)
         subprocess.run(f"cd {workspace} && make", shell=True, capture_output=True)
     uri = "file://" + file_path
-    state = ProofState(CoqFile(file_path, timeout=60, workspace=workspace))
+    state = ProofFile(file_path, timeout=60, workspace=workspace)
     versionId = VersionedTextDocumentIdentifier(uri, 1)
     yield
 

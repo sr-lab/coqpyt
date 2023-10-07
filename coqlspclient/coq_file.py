@@ -66,6 +66,7 @@ class CoqFile(object):
             self.__handle_exception(e)
             raise e
 
+        self.steps_taken: int = 0
         self.__init_steps(text, ast)
         self.__validate()
         self.curr_module: List[str] = []
@@ -132,7 +133,6 @@ class CoqFile(object):
         self.steps: List[Step] = []
         for i, curr_ast in enumerate(ast):
             self.steps.append(self.__init_step(lines, i, curr_ast, ast[i - 1]))
-        self.steps_taken: int = 0
 
     def __validate(self):
         uri = f"file://{self.__path}"
@@ -483,7 +483,7 @@ class CoqFile(object):
         with open(self.path, "r") as f:
             return f.read()
 
-    def __goals(self, end_pos: Position):
+    def _goals(self, end_pos: Position):
         uri = f"file://{self.__path}"
         try:
             return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
@@ -615,35 +615,47 @@ class CoqFile(object):
         Raises:
             NotImplementedError: If the step is outside a proof.
         """
-        goals = self.__goals(self.steps[step_index - 1].ast.range.end)
+        goals = self._goals(self.steps[step_index - 1].ast.range.end)
         if not self.__in_proof(goals):
             raise NotImplementedError(
                 "Deleting steps outside of a proof is not implemented yet"
             )
 
         with open(self.__path, "r") as f:
-            lines = f.read().split("\n")
+            lines = f.readlines()
 
         with open(self.path, "w") as f:
-            step = self.steps.pop(step_index)
-            start_line = lines[step.ast.range.start.line]
+            step = self.steps[step_index]
+            prev_step = self.steps[step_index - 1]
+            start_line = lines[prev_step.ast.range.end.line]
             end_line = lines[step.ast.range.end.line]
 
             start_line = self.__slice_line(
-                start_line, stop=step.ast.range.start.character, range=step.ast.range
+                start_line, stop=prev_step.ast.range.end.character, range=prev_step.ast.range
             )
             end_line = self.__slice_line(
                 end_line, start=step.ast.range.end.character, range=step.ast.range
             )
-            if step.ast.range.start.line == step.ast.range.end.line:
-                lines[step.ast.range.start.line] = start_line + end_line
+            if prev_step.ast.range.end.line == step.ast.range.end.line:
+                lines[prev_step.ast.range.end.line] = start_line + end_line
             else:
-                lines[step.ast.range.start.line] = start_line
+                lines[prev_step.ast.range.end.line] = start_line
                 lines[step.ast.range.end.line] = end_line
-            f.write("\n".join(lines))
-
-        self.__didChange()
-
+            text = "".join(lines)
+            f.write(text)
+        
+        uri = f"file://{self.path}"
+        try:
+            self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
+            ast = self.coq_lsp_client.get_document(
+                TextDocumentIdentifier(uri)
+            ).spans
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+        self.__init_steps(text, ast)
+        self.__validate()
+    
     def add_step(self, step_text: str, previous_step_index: int) -> None:
         """Adds a step to the file. The step must be inside a proof.
         This function will change the original file.
@@ -655,7 +667,7 @@ class CoqFile(object):
         Raises:
             NotImplementedError: If the step added is not on a proof.
         """
-        goals = self.__goals(self.steps[previous_step_index].ast.range.end)
+        goals = self._goals(self.steps[previous_step_index].ast.range.end)
         if not self.__in_proof(goals):
             raise NotImplementedError(
                 "Adding steps outside of a proof is not implemented yet"
@@ -684,15 +696,11 @@ class CoqFile(object):
             except Exception as e:
                 self.__handle_exception(e)
                 raise e
+            self.__init_steps(text, ast)
+            self.__validate()
 
-            i = previous_step_index + 1
-            self.steps.insert(
-                i, self.__init_step(text.split("\n"), i, ast[i], ast[i - 1])
-            )
             if self.steps_taken - 1 > previous_step_index:
                 self.steps_taken += 1
-
-        self.__didChange()
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.
@@ -711,7 +719,7 @@ class CoqFile(object):
         end_pos = (
             Position(0, 0) if self.steps_taken == 0 else self.prev_step.ast.range.end
         )
-        return self.__goals(end_pos)
+        return self._goals(end_pos)
 
     def save_vo(self):
         """Compiles the vo file for this Coq file."""

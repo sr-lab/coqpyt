@@ -42,9 +42,13 @@ def test_delete_step():
     shutil.copyfile(file_path, new_file_path)
     coq_file = CoqFile(new_file_path, timeout=60)
 
+    assert coq_file.steps[8].text == "\n      Print Nat.add."
+    assert coq_file.steps[8].ast.range.start.line == 12
+
     try:
         coq_file.delete_step(7)
         assert coq_file.steps[7].text == "\n      Print Nat.add."
+        assert coq_file.steps[7].ast.range.start.line == 11
         with open(new_file_path, "r") as f:
             assert "Print plus." not in f.read()
 
@@ -62,6 +66,9 @@ def test_add_step():
     shutil.copyfile(file_path, new_file_path)
     coq_file = CoqFile(new_file_path, timeout=60)
 
+    assert coq_file.steps[8].text == "\n      Print Nat.add."
+    assert coq_file.steps[8].ast.range.start.line == 12
+
     try:
         steps = coq_file.exec(nsteps=8)
         assert steps[-1].text == "\n      Print plus."
@@ -71,6 +78,7 @@ def test_add_step():
         coq_file.add_step("\n      Print minus.", 6)
         steps = coq_file.exec(nsteps=1)
         assert steps[-1].text == "\n      Print Nat.add."
+        assert steps[-1].ast.range.start.line == 14
 
         with pytest.raises(NotImplementedError):
             coq_file.add_step("\n      Print minus.", 0)

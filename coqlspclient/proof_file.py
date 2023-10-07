@@ -192,7 +192,7 @@ class ProofFile(CoqFile):
         timeout: int = 30,
         workspace: Optional[str] = None,
     ):
-        """ Creates a ProofFile.
+        """Creates a ProofFile.
 
         Args:
             file_path (str): Absolute path of the Coq file.
@@ -205,7 +205,6 @@ class ProofFile(CoqFile):
         super().__init__(file_path, library, timeout, workspace)
         self.context = _AuxFile.get_context(self.path, self.timeout)
         self.__aux_file = _AuxFile(timeout=self.timeout)
-        self.__current_step = None
         self.__program_context: Dict[str, Tuple[Term, List]] = {}
         self.__proofs = self.__get_proofs()
 
@@ -266,7 +265,7 @@ class ProofFile(CoqFile):
                             stack.append(v)
             return res
 
-        return traverse_expr(CoqFile.expr(self.__current_step.ast))
+        return traverse_expr(CoqFile.expr(self.prev_step.ast))
 
     def __get_last_term(self):
         terms = self.terms
@@ -300,9 +299,9 @@ class ProofFile(CoqFile):
         # 3 - Obligation N
         # 4 - Next Obligation of id
         # 5 - Next Obligation
-        tag = CoqFile.expr(self.__current_step.ast)[1][1]
+        tag = CoqFile.expr(self.prev_step.ast)[1][1]
         if tag in [0, 1, 4]:
-            id = traverse_expr(CoqFile.expr(self.__current_step.ast))
+            id = traverse_expr(CoqFile.expr(self.prev_step.ast))
             # This works because the obligation must be in the
             # same module as the program
             id = ".".join(self.curr_module + [id])
@@ -326,8 +325,8 @@ class ProofFile(CoqFile):
         self.__program_context[id] = (self.__get_last_term(), self.__step_context())
 
     def __step(self):
-        self.__current_step = self.exec()[0]
-        self.__aux_file.append(self.__current_step.text)
+        self.exec()
+        self.__aux_file.append(self.prev_step.text)
         self.__check_program()
 
     def __get_steps(
@@ -342,16 +341,16 @@ class ProofFile(CoqFile):
                 raise e
 
             self.__step()
-            if CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
+            if CoqFile.get_term_type(self.prev_step.ast) != TermType.OTHER:
                 self.__get_proof(proofs)
                 # Pass Qed if it exists
                 while not self.in_proof and not self.checked:
                     self.__step()
                 continue
-            if CoqFile.expr(self.__current_step.ast)[0] == "VernacProof":
+            if CoqFile.expr(self.prev_step.ast)[0] == "VernacProof":
                 continue
             context_calls = self.__step_context()
-            steps.append((self.__current_step, goals, context_calls))
+            steps.append((self.prev_step, goals, context_calls))
 
         if self.checked and self.in_proof:
             return None
@@ -360,9 +359,9 @@ class ProofFile(CoqFile):
 
     def __get_proof(self, proofs):
         term, statement_context = None, None
-        if CoqFile.get_term_type(self.__current_step.ast) == TermType.OBLIGATION:
+        if CoqFile.get_term_type(self.prev_step.ast) == TermType.OBLIGATION:
             term, statement_context = self.__get_program_context()
-        elif CoqFile.get_term_type(self.__current_step.ast) != TermType.OTHER:
+        elif CoqFile.get_term_type(self.prev_step.ast) != TermType.OTHER:
             term = self.__get_last_term()
             statement_context = self.__step_context()
         # HACK: We ignore proofs inside a Module Type since they can't be used outside

@@ -153,11 +153,11 @@ class CoqFile(object):
                     break
 
     @property
-    def __curr_step(self):
+    def curr_step(self):
         return self.steps[self.steps_taken]
 
     @property
-    def __prev_step(self):
+    def prev_step(self):
         return self.steps[self.steps_taken - 1]
 
     @staticmethod
@@ -228,11 +228,11 @@ class CoqFile(object):
         return line[start:stop].decode()
 
     def __short_text(self, range: Optional[Range] = None):
-        curr_range = self.__curr_step.ast.range if range is None else range
+        curr_range = self.curr_step.ast.range if range is None else range
         nlines = curr_range.end.line - curr_range.start.line + 1
-        lines = self.__curr_step.text.split("\n")[-nlines:]
+        lines = self.curr_step.text.split("\n")[-nlines:]
 
-        prev_range = None if self.steps_taken == 0 else self.__prev_step.ast.range
+        prev_range = None if self.steps_taken == 0 else self.prev_step.ast.range
         if prev_range is None or prev_range.end.line < curr_range.start.line:
             start = curr_range.start.character
         else:
@@ -409,7 +409,7 @@ class CoqFile(object):
             ]:
                 if text.startswith(keyword):
                     return
-            expr = CoqFile.expr(self.__curr_step.ast)
+            expr = CoqFile.expr(self.curr_step.ast)
             if expr == [None]:
                 return
             if expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve":
@@ -447,15 +447,15 @@ class CoqFile(object):
                 name = text.split('"')[1].strip()
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(name, self.__curr_step.ast, text, TermType.NOTATION)
+                self.__add_term(name, self.curr_step.ast, text, TermType.NOTATION)
             elif expr[0] == "VernacSyntacticDefinition":
                 name = text.split(" ")[1]
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(name, self.__curr_step.ast, text, TermType.NOTATION)
+                self.__add_term(name, self.curr_step.ast, text, TermType.NOTATION)
             elif expr[0] == "VernacInstance" and expr[1][0]["v"][0] == "Anonymous":
                 # FIXME: The name should be "<Class>_instance_N"
-                self.__add_term("_anonymous", self.__curr_step.ast, text, term_type)
+                self.__add_term("_anonymous", self.curr_step.ast, text, term_type)
             elif expr[0] == "VernacDefinition" and expr[2][0]["v"][0] == "Anonymous":
                 # We associate the anonymous term to the same name used internally by Coq
                 if self.__anonymous_id is None:
@@ -463,17 +463,17 @@ class CoqFile(object):
                 else:
                     name = f"Unnamed_thm{self.__anonymous_id}"
                     self.__anonymous_id += 1
-                self.__add_term(name, self.__curr_step.ast, text, term_type)
+                self.__add_term(name, self.curr_step.ast, text, term_type)
             elif term_type == TermType.DERIVE:
                 name = CoqFile.get_ident(expr[2][0])
-                self.__add_term(name, self.__curr_step.ast, text, term_type)
+                self.__add_term(name, self.curr_step.ast, text, term_type)
                 if expr[1][0] == "Derive":
                     prop = CoqFile.get_ident(expr[2][2])
-                    self.__add_term(prop, self.__curr_step.ast, text, term_type)
+                    self.__add_term(prop, self.curr_step.ast, text, term_type)
             else:
                 names = traverse_expr(expr)
                 for name in names:
-                    self.__add_term(name, self.__curr_step.ast, text, term_type)
+                    self.__add_term(name, self.curr_step.ast, text, term_type)
 
             self.__handle_where_notations(expr, term_type)
         finally:
@@ -482,7 +482,7 @@ class CoqFile(object):
     def __read(self):
         with open(self.path, "r") as f:
             return f.read()
-        
+
     def __goals(self, end_pos: Position):
         uri = f"file://{self.__path}"
         try:
@@ -490,7 +490,7 @@ class CoqFile(object):
         except Exception as e:
             self.__handle_exception(e)
             raise e
-        
+
     def __in_proof(self, goals: Optional[GoalAnswer]):
         def empty_stack(stack):
             # e.g. [([], [])]
@@ -498,7 +498,7 @@ class CoqFile(object):
                 if len(tuple[0]) > 0 or len(tuple[1]) > 0:
                     return False
             return True
-        
+
         goals = goals.goals
         return goals is not None and (
             len(goals.goals) > 0
@@ -615,9 +615,11 @@ class CoqFile(object):
         Raises:
             NotImplementedError: If the step is outside a proof.
         """
-        goals = self.__goals(self.steps[step_index- 1].ast.range.end)
+        goals = self.__goals(self.steps[step_index - 1].ast.range.end)
         if not self.__in_proof(goals):
-            raise NotImplementedError("Deleting steps outside of a proof is not implemented yet")
+            raise NotImplementedError(
+                "Deleting steps outside of a proof is not implemented yet"
+            )
 
         with open(self.__path, "r") as f:
             lines = f.read().split("\n")
@@ -655,8 +657,10 @@ class CoqFile(object):
         """
         goals = self.__goals(self.steps[previous_step_index].ast.range.end)
         if not self.__in_proof(goals):
-            raise NotImplementedError("Adding steps outside of a proof is not implemented yet")
-        
+            raise NotImplementedError(
+                "Adding steps outside of a proof is not implemented yet"
+            )
+
         with open(self.__path, "r") as f:
             lines = f.read().split("\n")
 
@@ -682,7 +686,9 @@ class CoqFile(object):
                 raise e
 
             i = previous_step_index + 1
-            self.steps.insert(i, self.__init_step(text.split("\n"), i, ast[i], ast[i - 1]))
+            self.steps.insert(
+                i, self.__init_step(text.split("\n"), i, ast[i], ast[i - 1])
+            )
             if self.steps_taken - 1 > previous_step_index:
                 self.steps_taken += 1
 
@@ -703,7 +709,7 @@ class CoqFile(object):
             Optional[GoalAnswer]: Goals in the current position if there are goals
         """
         end_pos = (
-            Position(0, 0) if self.steps_taken == 0 else self.__prev_step.ast.range.end
+            Position(0, 0) if self.steps_taken == 0 else self.prev_step.ast.range.end
         )
         return self.__goals(end_pos)
 

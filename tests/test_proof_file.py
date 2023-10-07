@@ -1,14 +1,18 @@
 import os
+import shutil
+import uuid
 import subprocess
 import pytest
+import tempfile
 from typing import List, Tuple
 from coqlspclient.coq_lsp_structs import *
 from coqlspclient.coq_structs import TermType, Term, CoqError, CoqErrorCodes
-from coqlspclient.proof_file import ProofFile, CoqFile
+from coqlspclient.proof_file import ProofFile
 
 versionId: VersionedTextDocumentIdentifier = None
 state: ProofFile = None
 workspace: str = None
+file_path: str = ""
 
 
 def compare_context(
@@ -23,9 +27,16 @@ def compare_context(
 
 @pytest.fixture
 def setup(request):
-    global state, versionId, workspace
+    global state, versionId, workspace, file_path
     file_path, workspace = request.param[0], request.param[1]
-    file_path = os.path.join("tests/resources", file_path)
+    if len(request.param) == 3 and request.param[2]:
+        new_path = os.path.join(
+            tempfile.gettempdir(), "test" + str(uuid.uuid4()).replace("-", "") + ".v"
+        )
+        shutil.copyfile(os.path.join("tests/resources", file_path), new_path)
+        file_path = new_path
+    else:
+        file_path = os.path.join("tests/resources", file_path)
     if workspace is not None:
         workspace = os.path.join(os.getcwd(), "tests/resources", workspace)
         subprocess.run(f"cd {workspace} && make", shell=True, capture_output=True)
@@ -41,6 +52,13 @@ def teardown(request):
     if workspace is not None:
         subprocess.run(f"cd {workspace} && make clean", shell=True, capture_output=True)
     state.close()
+    if (
+        hasattr(request, "param")
+        and len(request.param) == 1
+        and request.param[0]
+        and os.path.exists(file_path)
+    ):
+        os.remove(file_path)
 
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None)], indirect=True)
@@ -359,6 +377,40 @@ def test_get_proofs(setup, teardown):
         assert proofs[3].steps[i].text == texts[i]
         assert str(proofs[3].steps[i].goals) == str(goals[i])
         compare_context(contexts[i], proofs[3].steps[i].context)
+
+
+# @pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
+# @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+# def test_get_proofs_change(setup, teardown):
+#     import time
+#     start = time.time()
+#     state.delete_step(7)
+#     end = time.time()
+#     print(end - start)
+
+#     proofs = state.proofs
+#     texts = [
+#         "\n      intros n.",
+#         "\n      Print Nat.add.",
+#         "\n      reduce_eq.",
+#     ]
+#     for i, step in enumerate(proofs[0].steps):
+#         assert step.text == texts[i]
+
+#     start = time.time()
+#     state.add_step("\n      Print plus.", 6)
+#     end = time.time()
+#     print(end - start)
+
+#     proofs = state.proofs
+#     texts = [
+#         "\n      intros n.",
+#         "\n      Print plus."
+#         "\n      Print Nat.add.",
+#         "\n      reduce_eq.",
+#     ]
+#     for i, step in enumerate(proofs[0].steps):
+#         assert step.text == texts[i]
 
 
 @pytest.mark.parametrize(

@@ -379,38 +379,38 @@ def test_get_proofs(setup, teardown):
         compare_context(contexts[i], proofs[3].steps[i].context)
 
 
-# @pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
-# @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
-# def test_get_proofs_change(setup, teardown):
-#     import time
-#     start = time.time()
-#     state.delete_step(7)
-#     end = time.time()
-#     print(end - start)
+@pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_change(setup, teardown):
+    import time
+    start = time.time()
+    state.delete_step(7)
+    end = time.time()
+    print(end - start)
 
-#     proofs = state.proofs
-#     texts = [
-#         "\n      intros n.",
-#         "\n      Print Nat.add.",
-#         "\n      reduce_eq.",
-#     ]
-#     for i, step in enumerate(proofs[0].steps):
-#         assert step.text == texts[i]
+    proofs = state.proofs
+    texts = [
+        "\n      intros n.",
+        "\n      Print Nat.add.",
+        "\n      reduce_eq.",
+    ]
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == texts[i]
 
-#     start = time.time()
-#     state.add_step("\n      Print plus.", 6)
-#     end = time.time()
-#     print(end - start)
+    # start = time.time()
+    # state.add_step("\n      Print plus.", 6)
+    # end = time.time()
+    # print(end - start)
 
-#     proofs = state.proofs
-#     texts = [
-#         "\n      intros n.",
-#         "\n      Print plus."
-#         "\n      Print Nat.add.",
-#         "\n      reduce_eq.",
-#     ]
-#     for i, step in enumerate(proofs[0].steps):
-#         assert step.text == texts[i]
+    # proofs = state.proofs
+    # texts = [
+    #     "\n      intros n.",
+    #     "\n      Print plus."
+    #     "\n      Print Nat.add.",
+    #     "\n      reduce_eq.",
+    # ]
+    # for i, step in enumerate(proofs[0].steps):
+    #     assert step.text == texts[i]
 
 
 @pytest.mark.parametrize(

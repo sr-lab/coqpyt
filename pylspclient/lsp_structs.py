@@ -68,6 +68,11 @@ class Range(object):
 
     def __repr__(self) -> str:
         return str({"start": repr(self.start), "end": repr(self.end)})
+    
+    def __eq__(self, __value: object) -> bool:
+        if not isinstance(__value, Range):
+            raise TypeError(f"Invalid type for comparison: {type(__value).__name__}")
+        return self.start == __value.start and self.end == __value.end
 
 
 class Location(object):

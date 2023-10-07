@@ -411,6 +411,18 @@ class ProofFile(CoqFile):
                 used for each step and the goals in that step.
         """
         return self.__proofs
+    
+    # FIXME
+    def add_step(self, step_text: str, previous_step_index: int):
+        super().add_step(step_text, previous_step_index)
+
+    def delete_step(self, step_index: int) -> None:
+        step = self.steps[step_index]
+        for proof in self.proofs:
+            for i, proof_step in enumerate(proof.steps):
+                if proof_step.ast.range == step.ast.range:
+                    proof.steps.pop(i)
+        super().delete_step(step_index)
 
     def close(self):
         """Closes all resources used by this object."""

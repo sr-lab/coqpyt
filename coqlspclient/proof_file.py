@@ -228,7 +228,7 @@ class ProofFile(CoqFile):
         fun = lambda x: x.endswith("(default interpretation)")
         return nots[0][:-25] if fun(nots[0]) else nots[0]
 
-    def __step_context(self):
+    def __step_context(self, step: Step):
         def traverse_expr(expr):
             stack, res = expr[:0:-1], []
             while len(stack) > 0:
@@ -265,7 +265,7 @@ class ProofFile(CoqFile):
                             stack.append(v)
             return res
 
-        return traverse_expr(CoqFile.expr(self.prev_step.ast))
+        return traverse_expr(CoqFile.expr(step.ast))
 
     def __get_last_term(self):
         terms = self.terms
@@ -322,7 +322,10 @@ class ProofFile(CoqFile):
         id = ".".join(self.curr_module + [goals.program[-1][0][1]])
         if id in self.__program_context:
             return
-        self.__program_context[id] = (self.__get_last_term(), self.__step_context())
+        self.__program_context[id] = (
+            self.__get_last_term(),
+            self.__step_context(self.prev_step),
+        )
 
     def __step(self):
         self.exec()
@@ -349,7 +352,7 @@ class ProofFile(CoqFile):
                 continue
             if CoqFile.expr(self.prev_step.ast)[0] == "VernacProof":
                 continue
-            context_calls = self.__step_context()
+            context_calls = self.__step_context(self.prev_step)
             steps.append((self.prev_step, goals, context_calls))
 
         if self.checked and self.in_proof:
@@ -363,7 +366,7 @@ class ProofFile(CoqFile):
             term, statement_context = self.__get_program_context()
         elif CoqFile.get_term_type(self.prev_step.ast) != TermType.OTHER:
             term = self.__get_last_term()
-            statement_context = self.__step_context()
+            statement_context = self.__step_context(self.prev_step)
         # HACK: We ignore proofs inside a Module Type since they can't be used outside
         # and should be overriden.
         if self.in_proof and len(self.curr_module_type) == 0:
@@ -371,14 +374,14 @@ class ProofFile(CoqFile):
             if steps is not None:
                 proofs.append((term, statement_context, steps))
 
-    def __get_proofs(self) -> List[ProofTerm]:
-        def call_context(calls: List[Tuple]):
-            context, calls = [], [call[0](*call[1:]) for call in calls]
-            [context.append(call) for call in calls if call not in context]
-            return list(filter(lambda term: term is not None, context))
+    def __call_context(self, calls: List[Tuple]):
+        context, calls = [], [call[0](*call[1:]) for call in calls]
+        [context.append(call) for call in calls if call not in context]
+        return list(filter(lambda term: term is not None, context))
 
+    def __get_proofs(self) -> List[ProofTerm]:
         def get_proof_step(step: Tuple[Step, Optional[GoalAnswer], List[Tuple]]):
-            return ProofStep(step[0], step[1], call_context(step[2]))
+            return ProofStep(step[0], step[1], self.__call_context(step[2]))
 
         proofs: List[
             Tuple[Term, List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]]
@@ -395,7 +398,7 @@ class ProofFile(CoqFile):
             raise e
 
         proof_steps = [
-            (term, call_context(calls), list(map(get_proof_step, steps)))
+            (term, self.__call_context(calls), list(map(get_proof_step, steps)))
             for term, calls, steps in proofs
         ]
         return list(map(lambda t: ProofTerm(*t), proof_steps))
@@ -411,18 +414,52 @@ class ProofFile(CoqFile):
                 used for each step and the goals in that step.
         """
         return self.__proofs
-    
+
     # FIXME
     def add_step(self, step_text: str, previous_step_index: int):
         super().add_step(step_text, previous_step_index)
+        self.__aux_file.write("")
+        for step in self.steps[: previous_step_index + 1]:
+            self.__aux_file.append(step.text)
+        self.__aux_file.didChange()
+
+        context = self.__call_context(
+            self.__step_context(self.steps[previous_step_index + 1])
+        )
+        # We should change the goals of all the steps in the same proof 
+        # after the one that was changed 
+        for proof in self.proofs:
+            found_step = False
+            for i, step in enumerate(proof.steps):
+                if step.ast.range == self.steps[previous_step_index].ast.range:
+                    goals = self._goals(self.steps[previous_step_index].ast.range.end)
+                    proof.steps.insert(
+                        i + 1,
+                        ProofStep(self.steps[previous_step_index + 1], goals, context),
+                    )
+                    found_step = True
+                elif found_step:
+                    proof.steps[i].goals = self._goals(proof.steps[i - 1].ast.range.end)
+            if found_step:
+                break
 
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]
+        super().delete_step(step_index)
+        # We should change the goals of all the steps in the same proof 
+        # after the one that was changed 
         for proof in self.proofs:
             for i, proof_step in enumerate(proof.steps):
                 if proof_step.ast.range == step.ast.range:
                     proof.steps.pop(i)
-        super().delete_step(step_index)
+                    break
+            else:
+                continue
+
+            for e in range(i, len(proof.steps)):
+                proof.steps[e].goals = self._goals(proof.steps[e].ast.range.start)
+            break
+
 
     def close(self):
         """Closes all resources used by this object."""

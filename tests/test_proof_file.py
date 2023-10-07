@@ -383,19 +383,41 @@ def test_get_proofs(setup, teardown):
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_change(setup, teardown):
     import time
+
     start = time.time()
-    state.delete_step(7)
+    state.delete_step(6)
     end = time.time()
     print(end - start)
 
     proofs = state.proofs
     texts = [
-        "\n      intros n.",
+        "\n      Print plus.",
         "\n      Print Nat.add.",
         "\n      reduce_eq.",
     ]
+    goals = [
+        GoalAnswer(
+            versionId,
+            Position(10, 6),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(11, 6),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(12, 6),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
+    ]
     for i, step in enumerate(proofs[0].steps):
         assert step.text == texts[i]
+        assert str(proofs[0].steps[i].goals) == str(goals[i])
 
     # start = time.time()
     # state.add_step("\n      Print plus.", 6)
@@ -405,10 +427,11 @@ def test_get_proofs_change(setup, teardown):
     # proofs = state.proofs
     # texts = [
     #     "\n      intros n.",
-    #     "\n      Print plus."
+    #     "\n      Print plus.",
     #     "\n      Print Nat.add.",
     #     "\n      reduce_eq.",
     # ]
+    # # FIXME check context and goals
     # for i, step in enumerate(proofs[0].steps):
     #     assert step.text == texts[i]
 

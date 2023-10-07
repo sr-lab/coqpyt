@@ -90,11 +90,23 @@ class Term:
         return hash(self.text)
 
 
-class ProofStep(Step):
+class ProofStep:
     def __init__(self, step: Step, goals: GoalAnswer, context: List[Term]):
-        super().__init__(step.text, step.ast)
+        self.step = step
         self.goals = goals
         self.context = context
+
+    @property
+    def ast(self) -> RangedSpan:
+        return self.step.ast
+
+    @property
+    def text(self) -> str:
+        return self.step.text
+
+    @property
+    def diagnostics(self) -> List[Diagnostic]:
+        return self.step.diagnostics
 
 
 class ProofTerm(Term):

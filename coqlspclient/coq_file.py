@@ -507,17 +507,31 @@ class CoqFile(object):
             or goals.bullet is not None
         )
 
-    def __didChange(self):
+    # def __didChange(self):
+    #     uri = f"file://{self.path}"
+    #     self.version += 1
+    #     try:
+    #         self.coq_lsp_client.didChange(
+    #             VersionedTextDocumentIdentifier(uri, self.version),
+    #             [TextDocumentContentChangeEvent(None, None, self.__read())],
+    #         )
+    #     except Exception as e:
+    #         self.__handle_exception(e)
+    #         raise e
+
+    def __update_steps(self):
         uri = f"file://{self.path}"
-        self.version += 1
+        text = self.__read()
         try:
-            self.coq_lsp_client.didChange(
-                VersionedTextDocumentIdentifier(uri, self.version),
-                [TextDocumentContentChangeEvent(None, None, self.__read())],
-            )
+            self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
+            ast = self.coq_lsp_client.get_document(
+                TextDocumentIdentifier(uri)
+            ).spans
         except Exception as e:
             self.__handle_exception(e)
             raise e
+        self.__init_steps(text, ast)
+        self.__validate()
 
     @property
     def timeout(self) -> int:
@@ -643,18 +657,18 @@ class CoqFile(object):
                 lines[step.ast.range.end.line] = end_line
             text = "".join(lines)
             f.write(text)
-        
-        uri = f"file://{self.path}"
-        try:
-            self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
-            ast = self.coq_lsp_client.get_document(
-                TextDocumentIdentifier(uri)
-            ).spans
-        except Exception as e:
-            self.__handle_exception(e)
-            raise e
-        self.__init_steps(text, ast)
-        self.__validate()
+
+        # Modify the previous steps instead of creating new ones
+        # This is important to preserve their references
+        # For instance, in the ProofFile
+        previous_steps = self.steps
+        self.__update_steps()
+        previous_steps.pop(step_index)
+        for i, step in enumerate(previous_steps):
+            step.text, step.ast = self.steps[i].text, self.steps[i].ast
+            step.diagnostics = self.steps[i].diagnostics
+        self.steps = previous_steps
+
     
     def add_step(self, step_text: str, previous_step_index: int) -> None:
         """Adds a step to the file. The step must be inside a proof.
@@ -680,6 +694,7 @@ class CoqFile(object):
             previous_step = self.steps[previous_step_index]
             end_line = previous_step.ast.range.end.line
             end_char = previous_step.ast.range.end.character
+            # FIXME use slice line
             lines[end_line] = (
                 lines[end_line][: end_char + 1]
                 + step_text
@@ -687,20 +702,21 @@ class CoqFile(object):
             )
             text = "\n".join(lines)
             f.write(text)
-            uri = f"file://{self.path}"
-            try:
-                self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
-                ast = self.coq_lsp_client.get_document(
-                    TextDocumentIdentifier(uri)
-                ).spans
-            except Exception as e:
-                self.__handle_exception(e)
-                raise e
-            self.__init_steps(text, ast)
-            self.__validate()
+            
+        # Modify the previous steps instead of creating new ones
+        # This is important to preserve their references
+        # For instance, in the ProofFile
+        previous_steps = self.steps
+        self.__update_steps()
+        step_index = previous_step_index + 1
+        previous_steps.insert(step_index, self.steps[step_index])
+        for i, step in enumerate(previous_steps):
+            step.text, step.ast = self.steps[i].text, self.steps[i].ast
+            step.diagnostics = self.steps[i].diagnostics
+        self.steps = previous_steps
 
-            if self.steps_taken - 1 > previous_step_index:
-                self.steps_taken += 1
+        if self.steps_taken - 1 > previous_step_index:
+            self.steps_taken += 1
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.

@@ -507,23 +507,15 @@ class CoqFile(object):
             or goals.bullet is not None
         )
 
-    # def __didChange(self):
-    #     uri = f"file://{self.path}"
-    #     self.version += 1
-    #     try:
-    #         self.coq_lsp_client.didChange(
-    #             VersionedTextDocumentIdentifier(uri, self.version),
-    #             [TextDocumentContentChangeEvent(None, None, self.__read())],
-    #         )
-    #     except Exception as e:
-    #         self.__handle_exception(e)
-    #         raise e
-
     def __update_steps(self):
         uri = f"file://{self.path}"
         text = self.__read()
         try:
-            self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
+            self.version += 1
+            self.coq_lsp_client.didChange(
+                VersionedTextDocumentIdentifier(uri, self.version), 
+                [TextDocumentContentChangeEvent(None, None, text)]
+            )
             ast = self.coq_lsp_client.get_document(
                 TextDocumentIdentifier(uri)
             ).spans
@@ -619,7 +611,7 @@ class CoqFile(object):
                     )
             return self.steps[self.steps_taken - 1 : initial_steps_taken]
 
-    def delete_step(self, step_index: int) -> None:
+    def delete_step(self, step_index: int, step_goals:Optional[GoalAnswer]=None) -> None:
         """Deletes a step from the file. The step must be inside a proof.
         This function will change the original file.
 
@@ -629,8 +621,9 @@ class CoqFile(object):
         Raises:
             NotImplementedError: If the step is outside a proof.
         """
-        goals = self._goals(self.steps[step_index - 1].ast.range.end)
-        if not self.__in_proof(goals):
+        if step_goals is None:
+            step_goals = self._goals(self.steps[step_index - 1].ast.range.end)
+        if not self.__in_proof(step_goals):
             raise NotImplementedError(
                 "Deleting steps outside of a proof is not implemented yet"
             )
@@ -670,7 +663,7 @@ class CoqFile(object):
         self.steps = previous_steps
 
     
-    def add_step(self, step_text: str, previous_step_index: int) -> None:
+    def add_step(self, step_text: str, previous_step_index: int, step_goals:Optional[GoalAnswer]=None) -> None:
         """Adds a step to the file. The step must be inside a proof.
         This function will change the original file.
 
@@ -681,8 +674,9 @@ class CoqFile(object):
         Raises:
             NotImplementedError: If the step added is not on a proof.
         """
-        goals = self._goals(self.steps[previous_step_index].ast.range.end)
-        if not self.__in_proof(goals):
+        if step_goals is None:
+            step_goals = self._goals(self.steps[previous_step_index].ast.range.end)
+        if not self.__in_proof(step_goals):
             raise NotImplementedError(
                 "Adding steps outside of a proof is not implemented yet"
             )

@@ -1,8 +1,8 @@
 import re
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Union, Callable
 from coqlspclient.coq_lsp_structs import RangedSpan, GoalAnswer
-from pylspclient.lsp_structs import Diagnostic
+from pylspclient.lsp_structs import Diagnostic, Position
 
 
 class SegmentType(Enum):
@@ -91,10 +91,22 @@ class Term:
 
 
 class ProofStep:
-    def __init__(self, step: Step, goals: GoalAnswer, context: List[Term]):
+    def __init__(self, step: Step, goals: Union[GoalAnswer, Callable[[Position], GoalAnswer]], context: List[Term]):
         self.step = step
-        self.goals = goals
+        self._goals = goals
         self.context = context
+
+    @property
+    def goals(self) -> GoalAnswer:
+        if callable(self._goals):
+            goals = self._goals(self.ast.range.start)
+            self._goals = goals
+            return self._goals
+        return self._goals
+    
+    @goals.setter
+    def goals(self, goals: Union[GoalAnswer, Callable[[Position], GoalAnswer]]):
+        self._goals = goals
 
     @property
     def ast(self) -> RangedSpan:

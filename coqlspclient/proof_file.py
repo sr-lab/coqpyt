@@ -414,22 +414,23 @@ class ProofFile(CoqFile):
         return self.__proofs
 
     def add_step(self, step_text: str, previous_step_index: int):
-        super().add_step(step_text, previous_step_index)
-        self.__aux_file.write("")
-        for step in self.steps[: previous_step_index + 1]:
-            self.__aux_file.append(step.text)
-        self.__aux_file.didChange()
-
-        context = self.__call_context(
-            self.__step_context(self.steps[previous_step_index + 1])
-        )
         # We should change the goals of all the steps in the same proof 
         # after the one that was changed
         # NOTE: We assume the proofs and steps are in the order they are written
         for proof in self.proofs:
             for i, step in enumerate(proof.steps):
                 if step.ast.range >= self.steps[previous_step_index + 1].ast.range:
-                    goals = self._goals(self.steps[previous_step_index + 1].ast.range.start)
+                    super().add_step(step_text, previous_step_index, step.goals)
+                    self.__aux_file.write("")
+                    for step in self.steps[: previous_step_index + 1]:
+                        self.__aux_file.append(step.text)
+                    self.__aux_file.didChange()
+
+                    context = self.__call_context(
+                        self.__step_context(self.steps[previous_step_index + 1])
+                    )
+                    # The goals will be loaded if used (Lazy Loading)
+                    goals = self._goals
                     proof.steps.insert(
                         i,
                         ProofStep(self.steps[previous_step_index + 1], goals, context),
@@ -439,25 +440,27 @@ class ProofFile(CoqFile):
                 continue
 
             for e in range(i + 1, len(proof.steps)):
-                proof.steps[e].goals = self._goals(proof.steps[e].ast.range.start)
+                # The goals will be loaded if used (Lazy Loading)
+                proof.steps[e].goals = self._goals
             break
 
 
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]
-        super().delete_step(step_index)
         # We should change the goals of all the steps in the same proof 
         # after the one that was changed 
         for proof in self.proofs:
             for i, proof_step in enumerate(proof.steps):
                 if proof_step.ast.range == step.ast.range:
+                    super().delete_step(step_index, proof_step.goals)
                     proof.steps.pop(i)
                     break
             else:
                 continue
 
             for e in range(i, len(proof.steps)):
-                proof.steps[e].goals = self._goals(proof.steps[e].ast.range.start)
+                # The goals will be loaded if used (Lazy Loading)
+                proof.steps[e].goals = self._goals
             break
 
 

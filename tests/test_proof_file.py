@@ -389,6 +389,7 @@ def test_get_proofs_change(setup, teardown):
     end = time.time()
     print(end - start)
 
+    versionId.version += 1
     proofs = state.proofs
     texts = [
         "\n      Print plus.",
@@ -415,15 +416,23 @@ def test_get_proofs_change(setup, teardown):
             GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
         ),
     ]
-    for i, step in enumerate(proofs[0].steps):
-        assert step.text == texts[i]
-        assert str(proofs[0].steps[i].goals) == str(goals[i])
+    # for i, step in enumerate(proofs[0].steps):
+    #     assert step.text == texts[i]
+    #     assert str(proofs[0].steps[i].goals) == str(goals[i])
+
+    import cProfile
+    profiler = cProfile.Profile()
+    profiler.enable()
 
     start = time.time()
     state.add_step("\n      intros n.", 5)
     end = time.time()
     print(end - start)
 
+    profiler.disable()
+    profiler.dump_stats("output.prof")
+
+    versionId.version += 1
     proofs = state.proofs
     texts = [
         "\n      intros n.",

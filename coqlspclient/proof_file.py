@@ -11,8 +11,6 @@ from pylspclient.lsp_structs import (
 )
 from coqlspclient.coq_structs import (
     TermType,
-    CoqErrorCodes,
-    CoqError,
     Step,
     Term,
     ProofStep,
@@ -415,7 +413,6 @@ class ProofFile(CoqFile):
         """
         return self.__proofs
 
-    # FIXME
     def add_step(self, step_text: str, previous_step_index: int):
         super().add_step(step_text, previous_step_index)
         self.__aux_file.write("")
@@ -427,21 +424,24 @@ class ProofFile(CoqFile):
             self.__step_context(self.steps[previous_step_index + 1])
         )
         # We should change the goals of all the steps in the same proof 
-        # after the one that was changed 
+        # after the one that was changed
+        # NOTE: We assume the proofs and steps are in the order they are written
         for proof in self.proofs:
-            found_step = False
             for i, step in enumerate(proof.steps):
-                if step.ast.range == self.steps[previous_step_index].ast.range:
-                    goals = self._goals(self.steps[previous_step_index].ast.range.end)
+                if step.ast.range >= self.steps[previous_step_index + 1].ast.range:
+                    goals = self._goals(self.steps[previous_step_index + 1].ast.range.start)
                     proof.steps.insert(
-                        i + 1,
+                        i,
                         ProofStep(self.steps[previous_step_index + 1], goals, context),
                     )
-                    found_step = True
-                elif found_step:
-                    proof.steps[i].goals = self._goals(proof.steps[i - 1].ast.range.end)
-            if found_step:
-                break
+                    break
+            else:
+                continue
+
+            for e in range(i + 1, len(proof.steps)):
+                proof.steps[e].goals = self._goals(proof.steps[e].ast.range.start)
+            break
+
 
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]

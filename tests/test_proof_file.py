@@ -419,21 +419,73 @@ def test_get_proofs_change(setup, teardown):
         assert step.text == texts[i]
         assert str(proofs[0].steps[i].goals) == str(goals[i])
 
-    # start = time.time()
-    # state.add_step("\n      Print plus.", 6)
-    # end = time.time()
-    # print(end - start)
+    start = time.time()
+    state.add_step("\n      intros n.", 5)
+    end = time.time()
+    print(end - start)
 
-    # proofs = state.proofs
-    # texts = [
-    #     "\n      intros n.",
-    #     "\n      Print plus.",
-    #     "\n      Print Nat.add.",
-    #     "\n      reduce_eq.",
-    # ]
-    # # FIXME check context and goals
-    # for i, step in enumerate(proofs[0].steps):
-    #     assert step.text == texts[i]
+    proofs = state.proofs
+    texts = [
+        "\n      intros n.",
+        "\n      Print plus.",
+        "\n      Print Nat.add.",
+        "\n      reduce_eq.",
+    ]
+    goals = [
+        GoalAnswer(
+            versionId,
+            Position(10, 6),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(11, 6),
+            [],
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(12, 6),
+            [],
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(13, 6),
+            [],
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
+        ),
+    ]
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == texts[i]
+        assert str(proofs[0].steps[i].goals) == str(goals[i])
+
+    # Check if context is changed correctly
+    state.add_step("\n      Print minus.", 7)
+    texts = [
+        "\n      intros n.",
+        "\n      Print plus.",
+        "\n      Print minus.",
+        "\n      Print Nat.add.",
+        "\n      reduce_eq.",
+    ]
+    contexts = [
+        [],
+        [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
+        [("Notation minus := Nat.sub (only parsing).", TermType.NOTATION, [])],
+        [
+            (
+                'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
+                TermType.FIXPOINT,
+                [],
+            )
+        ],
+        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
+    ]
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == texts[i]
+        compare_context(contexts[i], proofs[0].steps[i].context)
 
 
 @pytest.mark.parametrize(

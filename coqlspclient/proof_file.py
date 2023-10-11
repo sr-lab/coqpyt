@@ -426,11 +426,11 @@ class ProofFile(CoqFile):
                     self.__aux_file.write("")
                     for step in self.steps[: previous_step_index + 1]:
                         self.__aux_file.append(step.text)
+
+                    call = self.__step_context(self.steps[previous_step_index + 1])
                     self.__aux_file.didChange()
 
-                    context = self.__call_context(
-                        self.__step_context(self.steps[previous_step_index + 1])
-                    )
+                    context = self.__call_context(call)
                     # The goals will be loaded if used (Lazy Loading)
                     goals = self._goals
                     proof.steps.insert(

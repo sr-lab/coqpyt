@@ -535,6 +535,13 @@ def test_get_proofs_invalid_change(setup, teardown):
         check_rollback()
 
 
+@pytest.mark.parametrize("setup", [("test_bug.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_change_notation(setup, teardown):
+    # Just checking if the program does not crash
+    state.add_step(" destruct (a <? n).", len(state.steps) - 3)
+
+
 @pytest.mark.parametrize("setup", [("test_invalid_1.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_change_invalid(setup, teardown):

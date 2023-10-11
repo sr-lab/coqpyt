@@ -12,6 +12,7 @@ from pylspclient.lsp_structs import ResponseError, ErrorCodes, Diagnostic
 from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
 from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentType
 from coqlspclient.coq_lsp_client import CoqLspClient
+from coqlspclient.coq_exceptions import InvalidStepException, InvalidFileException
 from typing import List, Optional
 
 
@@ -513,12 +514,10 @@ class CoqFile(object):
         try:
             self.version += 1
             self.coq_lsp_client.didChange(
-                VersionedTextDocumentIdentifier(uri, self.version), 
-                [TextDocumentContentChangeEvent(None, None, text)]
+                VersionedTextDocumentIdentifier(uri, self.version),
+                [TextDocumentContentChangeEvent(None, None, text)],
             )
-            ast = self.coq_lsp_client.get_document(
-                TextDocumentIdentifier(uri)
-            ).spans
+            ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(uri)).spans
         except Exception as e:
             self.__handle_exception(e)
             raise e
@@ -611,7 +610,9 @@ class CoqFile(object):
                     )
             return self.steps[self.steps_taken - 1 : initial_steps_taken]
 
-    def delete_step(self, step_index: int, step_goals:Optional[GoalAnswer]=None) -> None:
+    def delete_step(
+        self, step_index: int, step_goals: Optional[GoalAnswer] = None
+    ) -> None:
         """Deletes a step from the file. The step must be inside a proof.
         This function will change the original file.
 
@@ -638,7 +639,9 @@ class CoqFile(object):
             end_line = lines[step.ast.range.end.line]
 
             start_line = self.__slice_line(
-                start_line, stop=prev_step.ast.range.end.character, range=prev_step.ast.range
+                start_line,
+                stop=prev_step.ast.range.end.character,
+                range=prev_step.ast.range,
             )
             end_line = self.__slice_line(
                 end_line, start=step.ast.range.end.character, range=step.ast.range
@@ -662,10 +665,15 @@ class CoqFile(object):
             step.diagnostics = self.steps[i].diagnostics
         self.steps = previous_steps
 
-    
-    def add_step(self, step_text: str, previous_step_index: int, step_goals:Optional[GoalAnswer]=None) -> None:
+    def add_step(
+        self,
+        step_text: str,
+        previous_step_index: int,
+        step_goals: Optional[GoalAnswer] = None,
+    ) -> None:
         """Adds a step to the file. The step must be inside a proof.
-        This function will change the original file.
+        This function will change the original file. If an exception is thrown
+        the file will not be changed.
 
         Args:
             step_text (str): The text of the step to add.
@@ -673,7 +681,12 @@ class CoqFile(object):
 
         Raises:
             NotImplementedError: If the step added is not on a proof.
+            InvalidFileException: If the file being changed is not valid.
+            InvalidStepException: If the step added is not valid
         """
+        if not self.is_valid:
+            raise InvalidFileException(self.path)
+
         if step_goals is None:
             step_goals = self._goals(self.steps[previous_step_index].ast.range.end)
         if not self.__in_proof(step_goals):
@@ -683,6 +696,7 @@ class CoqFile(object):
 
         with open(self.__path, "r") as f:
             lines = f.read().split("\n")
+        old_text = "\n".join(lines)
 
         with open(self.path, "w") as f:
             previous_step = self.steps[previous_step_index]
@@ -696,13 +710,28 @@ class CoqFile(object):
             )
             text = "\n".join(lines)
             f.write(text)
-            
+
         # Modify the previous steps instead of creating new ones
         # This is important to preserve their references
         # For instance, in the ProofFile
         previous_steps = self.steps
-        self.__update_steps()
+        old_diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics
         step_index = previous_step_index + 1
+        self.__update_steps()
+        if (
+            # We will add the new step to the previous_steps
+            len(self.steps) != len(previous_steps) + 1
+            or self.steps[step_index].ast.span is None
+            or not self.is_valid
+        ):
+            # Rollback changes
+            self.steps = previous_steps
+            self.coq_lsp_client.lsp_endpoint.diagnostics = old_diagnostics
+            self.is_valid = True
+            with open(self.path, "w") as f:
+                f.write(old_text)
+            raise InvalidStepException(step_text)
+        
         previous_steps.insert(step_index, self.steps[step_index])
         for i, step in enumerate(previous_steps):
             step.text, step.ast = self.steps[i].text, self.steps[i].ast

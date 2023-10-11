@@ -8,6 +8,7 @@ from typing import List, Tuple
 from coqlspclient.coq_lsp_structs import *
 from coqlspclient.coq_structs import TermType, Term, CoqError, CoqErrorCodes
 from coqlspclient.proof_file import ProofFile
+from coqlspclient.coq_exceptions import InvalidStepException, InvalidFileException
 
 versionId: VersionedTextDocumentIdentifier = None
 state: ProofFile = None
@@ -421,6 +422,7 @@ def test_get_proofs_change(setup, teardown):
     #     assert str(proofs[0].steps[i].goals) == str(goals[i])
 
     import cProfile
+
     profiler = cProfile.Profile()
     profiler.enable()
 
@@ -495,6 +497,49 @@ def test_get_proofs_change(setup, teardown):
     for i, step in enumerate(proofs[0].steps):
         assert step.text == texts[i]
         compare_context(contexts[i], proofs[0].steps[i].context)
+
+
+@pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_invalid_change(setup, teardown):
+    n_old_steps = len(state.steps)
+    old_diagnostics = state.diagnostics
+    old_goals = []
+    for proof in state.proofs:
+        for step in proof.steps:
+            old_goals.append(step.goals)
+
+    def check_rollback():
+        with open(state.path, "r") as f:
+            assert n_old_steps == len(state.steps)
+            assert old_diagnostics == state.diagnostics
+            assert state.is_valid
+            assert "invalid_tactic" not in f.read()
+            i = 0
+            for proof in state.proofs:
+                for step in proof.steps:
+                    assert step.goals == old_goals[i]
+                    i += 1
+
+    with pytest.raises(InvalidStepException):
+        state.add_step("invalid_tactic", 7)
+        check_rollback()
+    with pytest.raises(InvalidStepException):
+        state.add_step("invalid_tactic.", 7)
+        check_rollback()
+    with pytest.raises(InvalidStepException):
+        state.add_step("\n    invalid_tactic.", 7)
+        check_rollback()
+    with pytest.raises(InvalidStepException):
+        state.add_step("\n    invalid_tactic x $$$ y.", 7)
+        check_rollback()
+
+
+@pytest.mark.parametrize("setup", [("test_invalid_1.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_change_invalid(setup, teardown):
+    with pytest.raises(InvalidFileException):
+        state.add_step("Print plus.", 7)
 
 
 @pytest.mark.parametrize(

@@ -91,7 +91,12 @@ class Term:
 
 
 class ProofStep:
-    def __init__(self, step: Step, goals: Union[GoalAnswer, Callable[[Position], GoalAnswer]], context: List[Term]):
+    def __init__(
+        self,
+        step: Step,
+        goals: Union[GoalAnswer, Callable[[Position], GoalAnswer]],
+        context: List[Term],
+    ):
         self.step = step
         self._goals = goals
         self.context = context
@@ -103,7 +108,7 @@ class ProofStep:
             self._goals = goals
             return self._goals
         return self._goals
-    
+
     @goals.setter
     def goals(self, goals: Union[GoalAnswer, Callable[[Position], GoalAnswer]]):
         self._goals = goals

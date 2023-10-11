@@ -100,7 +100,9 @@ class _AuxFile(object):
         lines = self.read().split("\n")
         for diagnostic in self.coq_lsp_client.lsp_endpoint.diagnostics[uri]:
             command = lines[diagnostic.range.start.line : diagnostic.range.end.line + 1]
-            if len(command) == 1:
+            if len(command) == 0:
+                continue
+            elif len(command) == 1:
                 command[0] = command[0][
                     diagnostic.range.start.character : diagnostic.range.end.character
                     + 1
@@ -414,7 +416,7 @@ class ProofFile(CoqFile):
         return self.__proofs
 
     def add_step(self, step_text: str, previous_step_index: int):
-        # We should change the goals of all the steps in the same proof 
+        # We should change the goals of all the steps in the same proof
         # after the one that was changed
         # NOTE: We assume the proofs and steps are in the order they are written
         for proof in self.proofs:
@@ -444,11 +446,10 @@ class ProofFile(CoqFile):
                 proof.steps[e].goals = self._goals
             break
 
-
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]
-        # We should change the goals of all the steps in the same proof 
-        # after the one that was changed 
+        # We should change the goals of all the steps in the same proof
+        # after the one that was changed
         for proof in self.proofs:
             for i, proof_step in enumerate(proof.steps):
                 if proof_step.ast.range == step.ast.range:
@@ -462,7 +463,6 @@ class ProofFile(CoqFile):
                 # The goals will be loaded if used (Lazy Loading)
                 proof.steps[e].goals = self._goals
             break
-
 
     def close(self):
         """Closes all resources used by this object."""

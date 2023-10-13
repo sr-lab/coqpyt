@@ -213,10 +213,15 @@ class ProofFile(CoqFile):
                 path of the file.
         """
         super().__init__(file_path, library, timeout, workspace)
-        self.context = _AuxFile.get_context(self.path, self.timeout)
         self.__aux_file = _AuxFile(timeout=self.timeout)
-        self.__program_context: Dict[str, Tuple[Term, List]] = {}
-        self.__proofs = self.__get_proofs()
+    
+        try:
+            self.context = _AuxFile.get_context(self.path, self.timeout)
+            self.__program_context: Dict[str, Tuple[Term, List]] = {}
+            self.__proofs = self.__get_proofs()
+        except Exception as e:
+            self.close()
+            raise e
 
     def __enter__(self):
         return self

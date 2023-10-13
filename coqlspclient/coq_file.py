@@ -77,6 +77,8 @@ class CoqFile(object):
         self.context = FileContext()
         self.__anonymous_id: Optional[int] = None
         self.version = 1
+        self.__last_end_pos: Optional[Position] = None
+        self.__current_goals = None
 
     def __enter__(self):
         return self
@@ -758,7 +760,12 @@ class CoqFile(object):
         end_pos = (
             Position(0, 0) if self.steps_taken == 0 else self.prev_step.ast.range.end
         )
-        return self._goals(end_pos)
+
+        if end_pos != self.__last_end_pos:
+            self.__current_goals = self._goals(end_pos)
+            self.__last_end_pos = end_pos
+        
+        return self.__current_goals
 
     def save_vo(self):
         """Compiles the vo file for this Coq file."""

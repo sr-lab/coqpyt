@@ -1,4 +1,5 @@
 import os
+import hashlib
 import shutil
 import uuid
 import tempfile
@@ -24,6 +25,8 @@ from typing import List, Dict, Optional, Tuple
 
 
 class _AuxFile(object):
+    __CACHE: Dict[Tuple[str, str], FileContext] = {}
+
     def __init__(self, file_path: Optional[str] = None, timeout: int = 30):
         self.__init_path(file_path)
         uri = f"file://{self.path}"
@@ -158,18 +161,25 @@ class _AuxFile(object):
                 v_file = aux_file.get_diagnostics(
                     "Locate Library", library, last_line + i + 1
                 ).split()[-1][:-1]
-                coq_file = CoqFile(v_file, library=library, timeout=timeout)
-                coq_file.run()
+
+                with open(v_file, "r") as f:
+                    hash = hashlib.md5(f.read().encode("utf-8")).hexdigest()
+                if (v_file, hash) in _AuxFile.__CACHE:
+                    aux_context = _AuxFile.__CACHE[(v_file, hash)]
+                else:
+                    coq_file = CoqFile(v_file, library=library, timeout=timeout)
+                    coq_file.run()
+                    aux_context = coq_file.context
+                    _AuxFile.__CACHE[(v_file, hash)] = aux_context
+                    coq_file.close()
 
                 # FIXME: we ignore the usage of Local from imported files to
                 # simplify the implementation. However, they can be used:
                 # https://coq.inria.fr/refman/language/core/modules.html?highlight=local#coq:attr.local
-                for term in list(coq_file.context.terms.keys()):
-                    if coq_file.context.terms[term].text.startswith("Local"):
-                        coq_file.context.terms.pop(term)
-
-                context.update(**vars(coq_file.context))
-                coq_file.close()
+                for term in list(aux_context.terms.keys()):
+                    if aux_context.terms[term].text.startswith("Local"):
+                        aux_context.terms.pop(term)
+                context.update(**vars(aux_context))
 
         return context
 

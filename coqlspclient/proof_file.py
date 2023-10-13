@@ -368,10 +368,9 @@ class ProofFile(CoqFile):
             if CoqFile.expr(self.prev_step.ast)[0] == "VernacProof":
                 continue
             context_calls = self.__step_context(self.prev_step)
+            if self.prev_step.text.strip() == "":
+                continue
             steps.append((self.prev_step, goals, context_calls))
-
-        if self.checked and self.in_proof:
-            return None
 
         return steps
 
@@ -386,8 +385,7 @@ class ProofFile(CoqFile):
         # and should be overriden.
         if self.in_proof and len(self.curr_module_type) == 0:
             steps = self.__get_steps(proofs)
-            if steps is not None:
-                proofs.append((term, statement_context, steps))
+            proofs.append((term, statement_context, steps))
 
     def __call_context(self, calls: List[Tuple]):
         context, calls = [], [call[0](*call[1:]) for call in calls]
@@ -434,30 +432,38 @@ class ProofFile(CoqFile):
         # We should change the goals of all the steps in the same proof
         # after the one that was changed
         # NOTE: We assume the proofs and steps are in the order they are written
-        for proof in self.proofs:
+        def add_proof_step(super, i, goals=None):
+            super.add_step(step_text, previous_step_index, goals)
+            self.__aux_file.write("")
+            for step in self.steps[: previous_step_index + 1]:
+                self.__aux_file.append(step.text)
+
+            call = self.__step_context(self.steps[previous_step_index + 1])
+            self.__aux_file.didChange()
+
+            context = self.__call_context(call)
+            # The goals will be loaded if used (Lazy Loading)
+            goals = self._goals
+            proof.steps.insert(
+                i,
+                ProofStep(self.steps[previous_step_index + 1], goals, context),
+            )
+
+        for i, proof in enumerate(self.proofs):
+            # For a proof that did not end on the end of the file.
+            if len(proof.steps) == 0 and i == len(self.proofs) - 1:
+                add_proof_step(super(), 0)
+                break
+
             for i, step in enumerate(proof.steps):
                 equal_steps = step.ast.range == self.steps[previous_step_index].ast.range
                 if step.ast.range >= self.steps[previous_step_index].ast.range:
                     if not equal_steps:
                         # If we did not find the exact step we have to calculate the goals
                         # Because the step may be outside of a proof
-                        super().add_step(step_text, previous_step_index)
+                        add_proof_step(super(), max(0, i - 1))
                     else:
-                        super().add_step(step_text, previous_step_index, step.goals)
-                    self.__aux_file.write("")
-                    for step in self.steps[: previous_step_index + 1]:
-                        self.__aux_file.append(step.text)
-
-                    call = self.__step_context(self.steps[previous_step_index + 1])
-                    self.__aux_file.didChange()
-
-                    context = self.__call_context(call)
-                    # The goals will be loaded if used (Lazy Loading)
-                    goals = self._goals
-                    proof.steps.insert(
-                        min(i + 1, len(proof.steps) - 1) if equal_steps else max(0, i - 1),
-                        ProofStep(self.steps[previous_step_index + 1], goals, context),
-                    )
+                        add_proof_step(super(), min(i + 1, len(proof.steps)), step.goals)
                     break
             else:
                 continue

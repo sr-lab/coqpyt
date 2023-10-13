@@ -557,6 +557,19 @@ def test_get_proofs_change_invalid(setup, teardown):
         state.add_step("Print plus.", 7)
 
 
+@pytest.mark.parametrize("setup", [("test_change_empty.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_change_empty(setup, teardown):
+    state.add_step("\nAdmitted.", len(state.steps) - 2)
+    assert state.steps[-2].text == "\nAdmitted."
+    assert len(state.proofs[0].steps) == 1
+    assert state.proofs[0].steps[-1].text == "\nAdmitted."
+
+    state.delete_step(len(state.steps) - 2)
+    len(state.steps) == 3
+    assert len(state.proofs[0].steps) == 0
+
+
 @pytest.mark.parametrize(
     "setup", [("test_imports/test_import.v", "test_imports/")], indirect=True
 )
@@ -586,7 +599,8 @@ def test_imports(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_non_ending_proof.v", None)], indirect=True)
 def test_non_ending_proof(setup, teardown):
-    assert len(state.proofs) == 0
+    assert len(state.proofs) == 1
+    assert len(state.proofs[0].steps) == 3
 
 
 @pytest.mark.parametrize("setup", [("test_exists_notation.v", None)], indirect=True)

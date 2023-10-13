@@ -482,6 +482,30 @@ def test_get_proofs_valid_change(setup, teardown):
         assert step.text == texts[i]
         compare_context(contexts[i], proofs[0].steps[i].context)
 
+    # Add outside of proof
+    with pytest.raises(NotImplementedError):
+        state.add_step("\n    Print plus.", 25)
+
+    # Add step in beginning of proof
+    state.add_step("\n    Print plus.", 26)
+    assert state.steps[27].text == "\n    Print plus."
+
+    # Delete outside of proof
+    with pytest.raises(NotImplementedError):
+        state.delete_step(32)
+
+    # Add step to end of proof
+    state.add_step("\n    Print plus.", 31)
+    assert state.steps[32].text == "\n    Print plus."
+
+    # Delete step in beginning of proof
+    state.delete_step(27)
+    assert state.steps[27].text == "\n      intros n."
+
+    # Delete step in end of proof
+    state.delete_step(41)
+    assert state.steps[41].text == "\n    Admitted."
+
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)

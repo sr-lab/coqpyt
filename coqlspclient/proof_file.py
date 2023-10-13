@@ -431,8 +431,14 @@ class ProofFile(CoqFile):
         # NOTE: We assume the proofs and steps are in the order they are written
         for proof in self.proofs:
             for i, step in enumerate(proof.steps):
-                if step.ast.range >= self.steps[previous_step_index + 1].ast.range:
-                    super().add_step(step_text, previous_step_index, step.goals)
+                equal_steps = step.ast.range == self.steps[previous_step_index].ast.range
+                if step.ast.range >= self.steps[previous_step_index].ast.range:
+                    if not equal_steps:
+                        # If we did not find the exact step we have to calculate the goals
+                        # Because the step may be outside of a proof
+                        super().add_step(step_text, previous_step_index)
+                    else:
+                        super().add_step(step_text, previous_step_index, step.goals)
                     self.__aux_file.write("")
                     for step in self.steps[: previous_step_index + 1]:
                         self.__aux_file.append(step.text)
@@ -444,7 +450,7 @@ class ProofFile(CoqFile):
                     # The goals will be loaded if used (Lazy Loading)
                     goals = self._goals
                     proof.steps.insert(
-                        i,
+                        min(i + 1, len(proof.steps) - 1) if equal_steps else max(0, i - 1),
                         ProofStep(self.steps[previous_step_index + 1], goals, context),
                     )
                     break
@@ -473,6 +479,8 @@ class ProofFile(CoqFile):
                 # The goals will be loaded if used (Lazy Loading)
                 proof.steps[e].goals = self._goals
             break
+        else:
+            raise NotImplementedError("Deleting steps outside of a proof is not implemented yet")
 
     def close(self):
         """Closes all resources used by this object."""

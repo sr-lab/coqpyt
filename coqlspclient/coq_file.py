@@ -733,7 +733,7 @@ class CoqFile(object):
             with open(self.path, "w") as f:
                 f.write(old_text)
             raise InvalidStepException(step_text)
-        
+
         previous_steps.insert(step_index, self.steps[step_index])
         for i, step in enumerate(previous_steps):
             step.text, step.ast = self.steps[i].text, self.steps[i].ast
@@ -764,7 +764,7 @@ class CoqFile(object):
         if end_pos != self.__last_end_pos:
             self.__current_goals = self._goals(end_pos)
             self.__last_end_pos = end_pos
-        
+
         return self.__current_goals
 
     def save_vo(self):

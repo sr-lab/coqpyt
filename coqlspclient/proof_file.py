@@ -214,7 +214,7 @@ class ProofFile(CoqFile):
         """
         super().__init__(file_path, library, timeout, workspace)
         self.__aux_file = _AuxFile(timeout=self.timeout)
-    
+
         try:
             self.context = _AuxFile.get_context(self.path, self.timeout)
             self.__program_context: Dict[str, Tuple[Term, List]] = {}
@@ -456,14 +456,18 @@ class ProofFile(CoqFile):
                 break
 
             for i, step in enumerate(proof.steps):
-                equal_steps = step.ast.range == self.steps[previous_step_index].ast.range
+                equal_steps = (
+                    step.ast.range == self.steps[previous_step_index].ast.range
+                )
                 if step.ast.range >= self.steps[previous_step_index].ast.range:
                     if not equal_steps:
                         # If we did not find the exact step we have to calculate the goals
                         # Because the step may be outside of a proof
                         add_proof_step(super(), max(0, i - 1))
                     else:
-                        add_proof_step(super(), min(i + 1, len(proof.steps)), step.goals)
+                        add_proof_step(
+                            super(), min(i + 1, len(proof.steps)), step.goals
+                        )
                     break
             else:
                 continue
@@ -491,7 +495,9 @@ class ProofFile(CoqFile):
                 proof.steps[e].goals = self._goals
             break
         else:
-            raise NotImplementedError("Deleting steps outside of a proof is not implemented yet")
+            raise NotImplementedError(
+                "Deleting steps outside of a proof is not implemented yet"
+            )
 
     def close(self):
         """Closes all resources used by this object."""

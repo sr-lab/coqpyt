@@ -5,6 +5,7 @@ class InvalidStepException(Exception):
     def __str__(self):
         return "The step {} is not valid.".format(self.step)
 
+
 class InvalidFileException(Exception):
     def __init__(self, file: str):
         self.file: str = file

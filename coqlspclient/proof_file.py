@@ -176,7 +176,7 @@ class _AuxFile(object):
                 # FIXME: we ignore the usage of Local from imported files to
                 # simplify the implementation. However, they can be used:
                 # https://coq.inria.fr/refman/language/core/modules.html?highlight=local#coq:attr.local
-                for term in list(aux_context.terms.keys()):
+                for term in aux_context.terms.keys():
                     if aux_context.terms[term].text.startswith("Local"):
                         aux_context.terms.pop(term)
                 context.update(**vars(aux_context))

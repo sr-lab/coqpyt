@@ -413,7 +413,7 @@ class ProofFile(CoqFile):
             for term, calls, steps in proofs
         ]
         return list(map(lambda t: ProofTerm(*t), proof_steps))
-    
+
     def __find_step(self, range: Range) -> Optional[Tuple[ProofTerm, int]]:
         for proof in self.proofs:
             for i, proof_step in enumerate(proof.steps):
@@ -425,13 +425,41 @@ class ProofFile(CoqFile):
         else:
             return None
         return (proof, i)
-    
+
     def __find_proof(self, range: Range) -> Optional[ProofTerm]:
         for proof in self.proofs:
             for step in proof.steps:
                 if step.ast.range >= range:
                     return proof
         return None
+
+    def __find_prev(self, range: Range) -> Tuple[ProofTerm, Optional[int]]:
+        optional = self.__find_step(range)
+        if optional is None:
+            # When the step is the first step of the proof
+            proof = self.__find_proof(range)
+            # For a proof that did not end on the end of the file.
+            if proof is None and len(self.proofs[-1].steps) == 0:
+                proof = self.proofs[-1]
+            elif proof is None:
+                raise NotImplementedError(
+                    "Adding steps outside of a proof is not implemented yet"
+                )
+            return (proof, None)
+        else:
+            return optional
+
+    def __get_step(self, step_index):
+        self.__aux_file.write("")
+        for step in self.steps[: step_index + 1]:
+            self.__aux_file.append(step.text)
+        call = self.__step_context(self.steps[step_index])
+        self.__aux_file.didChange()
+
+        context = self.__call_context(call)
+        # The goals will be loaded if used (Lazy Loading)
+        goals = self._goals
+        return ProofStep(self.steps[step_index], goals, context)
 
     @property
     def proofs(self) -> List[ProofTerm]:
@@ -446,36 +474,13 @@ class ProofFile(CoqFile):
         return self.__proofs
 
     def add_step(self, step_text: str, previous_step_index: int):
-        optional = self.__find_step(self.steps[previous_step_index].ast.range)
-        if optional is None:
-            # When the step is the first step of the proof
-            proof = self.__find_proof(self.steps[previous_step_index].ast.range)
-            # For a proof that did not end on the end of the file.
-            if proof is None and len(self.proofs[-1].steps) == 0:
-                proof = self.proofs[-1]
-            elif proof is None:
-                raise NotImplementedError("Adding steps outside of a proof is not implemented yet")
+        proof, prev = self.__find_prev(self.steps[previous_step_index].ast.range)
+        if prev is None:
             prev = -1
             super().add_step(step_text, previous_step_index)
         else:
-            proof, prev = optional
             super().add_step(step_text, previous_step_index, proof.steps[prev].goals)
-
-        self.__aux_file.write("")
-        for step in self.steps[: previous_step_index + 1]:
-            self.__aux_file.append(step.text)
-
-        call = self.__step_context(self.steps[previous_step_index + 1])
-        self.__aux_file.didChange()
-
-        context = self.__call_context(call)
-        # The goals will be loaded if used (Lazy Loading)
-        goals = self._goals
-        proof.steps.insert(
-            prev + 1,
-            ProofStep(self.steps[previous_step_index + 1], goals, context),
-        )
-
+        proof.steps.insert(prev + 1, self.__get_step(previous_step_index + 1))
         # We should change the goals of all the steps in the same proof
         # after the one that was changed
         # NOTE: We assume the proofs and steps are in the order they are written
@@ -500,14 +505,49 @@ class ProofFile(CoqFile):
         super().delete_step(step_index, step_goals)
 
     def change_steps(self, changes: List[CoqChange]):
-        super().change_steps(changes)
+        goals = []
+        proofs_to_update: List[Tuple[ProofTerm, int]] = []
+
         for change in changes:
             if isinstance(change, CoqAddStep):
-                self.add_step(change.step_text, change.previous_step_index)
+                proof, i = self.__find_prev(
+                    self.steps[change.previous_step_index].ast.range
+                )
+                if i is not None:
+                    goals.append(proof.steps[i].goals)
+                else:
+                    goals.append(None)
+                proofs_to_update.append((proof, i))
             elif isinstance(change, CoqDeleteStep):
-                self.delete_step(change.step_index)
+                optional = self.__find_step(self.steps[change.step_index].ast.range)
+                if optional is not None:
+                    proof, i = optional
+                    goals.append(proof.steps[i].goals)
+                    proofs_to_update.append((proof, i))
+                else:
+                    raise NotImplementedError(
+                        "Deleting steps outside of a proof is not implemented yet"
+                    )
             else:
                 raise NotImplementedError(f"Unknown change: {change}")
+
+        super().change_steps(changes, goals=goals)
+
+        for j, change in enumerate(changes):
+            proof, i = proofs_to_update[j]
+            if isinstance(change, CoqAddStep):
+                if i is None:
+                    i = -1
+                proof.steps.insert(
+                    i + 1, self.__get_step(change.previous_step_index + 1)
+                )
+                i += 2
+            elif isinstance(change, CoqDeleteStep):
+                proof.steps.pop(i)
+
+            for e in range(i, len(proof.steps)):
+                # The goals will be loaded if used (Lazy Loading)
+                proof.steps[e].goals = self._goals
 
     def close(self):
         """Closes all resources used by this object."""

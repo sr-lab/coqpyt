@@ -9,6 +9,7 @@ from coqlspclient.coq_lsp_structs import *
 from coqlspclient.coq_structs import TermType, Term, CoqError, CoqErrorCodes
 from coqlspclient.proof_file import ProofFile
 from coqlspclient.coq_exceptions import *
+from coqlspclient.coq_changes import *
 
 versionId: VersionedTextDocumentIdentifier = None
 state: ProofFile = None
@@ -504,6 +505,69 @@ def test_get_proofs_valid_change(setup, teardown):
 
     # Delete step in end of proof
     state.delete_step(41)
+    assert state.steps[41].text == "\n    Admitted."
+
+
+@pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_change_steps(setup, teardown):
+    versionId.version += 1
+    proofs = state.proofs
+
+    state.change_steps(
+        [
+            CoqDeleteStep(6),
+            CoqAddStep("\n      intros n.", 5),
+            CoqAddStep("\n      Print minus.", 7),
+        ]
+    )
+
+    texts = [
+        "\n      intros n.",
+        "\n      Print plus.",
+        "\n      Print minus.",
+        "\n      Print Nat.add.",
+        "\n      reduce_eq.",
+    ]
+    contexts = [
+        [],
+        [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
+        [("Notation minus := Nat.sub (only parsing).", TermType.NOTATION, [])],
+        [
+            (
+                'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
+                TermType.FIXPOINT,
+                [],
+            )
+        ],
+        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
+    ]
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == texts[i]
+        compare_context(contexts[i], proofs[0].steps[i].context)
+
+    # Add outside of proof
+    with pytest.raises(NotImplementedError):
+        state.change_steps([CoqAddStep("\n    Print plus.", 25)])
+
+    # Add step in beginning of proof
+    state.change_steps([CoqAddStep("\n    Print plus.", 26)])
+    assert state.steps[27].text == "\n    Print plus."
+
+    # # Delete outside of proof
+    with pytest.raises(NotImplementedError):
+        state.change_steps([CoqDeleteStep(32)])
+
+    # # Add step to end of proof
+    state.change_steps([CoqAddStep("\n    Print plus.", 31)])
+    assert state.steps[32].text == "\n    Print plus."
+
+    # # Delete step in beginning of proof
+    state.change_steps([CoqDeleteStep(27)])
+    assert state.steps[27].text == "\n      intros n."
+
+    # # Delete step in end of proof
+    state.change_steps([CoqDeleteStep(41)])
     assert state.steps[41].text == "\n    Admitted."
 
 

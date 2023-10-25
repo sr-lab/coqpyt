@@ -662,18 +662,29 @@ class CoqFile(object):
         if self.steps_taken - 1 > previous_step_index:
             self.steps_taken += 1
 
-    def __change_steps(self, changes: List[CoqChange]):
+    def __change_steps(
+        self, changes: List[CoqChange], goals: Optional[List[GoalAnswer]]
+    ):
+        if goals is not None and len(changes) != len(goals):
+            raise RuntimeError("The number of goals must match the number of changes")
+        elif goals is None:
+            goals = [None for _ in changes]
         offset_steps = 0
         previous_steps_size = len(self.steps)
 
-        for change in changes:
+        for i, change in enumerate(changes):
             if isinstance(change, CoqAddStep):
                 self._add_step(
-                    change.step_text, change.previous_step_index, validate_file=False
+                    change.step_text,
+                    change.previous_step_index,
+                    step_goals=goals[i],
+                    validate_file=False,
                 )
                 offset_steps += 1
             elif isinstance(change, CoqDeleteStep):
-                self._delete_step(change.step_index, validate_file=False)
+                self._delete_step(
+                    change.step_index, step_goals=goals[i], validate_file=False
+                )
                 offset_steps -= 1
             else:
                 raise NotImplementedError(f"Unknown change: {change}")
@@ -802,13 +813,15 @@ class CoqFile(object):
         """
         self.__make_change(self._add_step, step_text, previous_step_index, step_goals)
 
-    def change_steps(self, changes: List[CoqChange]):
-        """Changes the steps of the Coq file.
+    def change_steps(
+        self, changes: List[CoqChange], goals: Optional[List[GoalAnswer]] = None
+    ):
+        """Changes the steps of the Coq file transactionally.
 
         Args:
             changes (List[CoqChange]): The changes to be applied to the Coq file.
         """
-        self.__make_change(self.__change_steps, changes)
+        self.__make_change(self.__change_steps, changes, goals)
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.

@@ -104,9 +104,7 @@ class ProofStep:
     @property
     def goals(self) -> GoalAnswer:
         if callable(self._goals):
-            goals = self._goals(self.ast.range.start)
-            self._goals = goals
-            return self._goals
+            self._goals = self._goals(self.ast.range.start)
         return self._goals
 
     @goals.setter

@@ -13,6 +13,7 @@ from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
 from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentType
 from coqlspclient.coq_lsp_client import CoqLspClient
 from coqlspclient.coq_exceptions import *
+from coqlspclient.coq_changes import *
 from typing import List, Optional
 
 
@@ -545,9 +546,12 @@ class CoqFile(object):
             with open(self.path, "w") as f:
                 f.write(old_text)
             raise e
-        
+
     def _delete_step(
-        self, step_index: int, step_goals: Optional[GoalAnswer] = None
+        self,
+        step_index: int,
+        step_goals: Optional[GoalAnswer] = None,
+        validate_file: bool = True,
     ) -> None:
         if step_goals is None:
             step_goals = self._goals(self.steps[step_index - 1].ast.range.end)
@@ -586,7 +590,7 @@ class CoqFile(object):
         # For instance, in the ProofFile
         previous_steps = self.steps
         self.__update_steps()
-        if (
+        if validate_file and (
             # We will remove the step from the previous steps
             len(self.steps) != len(previous_steps) - 1
             or not self.is_valid
@@ -598,12 +602,13 @@ class CoqFile(object):
             step.text, step.ast = self.steps[i].text, self.steps[i].ast
             step.diagnostics = self.steps[i].diagnostics
         self.steps = previous_steps
-    
+
     def _add_step(
         self,
         step_text: str,
         previous_step_index: int,
         step_goals: Optional[GoalAnswer] = None,
+        validate_file: bool = True,
     ) -> None:
         if not self.is_valid:
             raise InvalidFileException(self.path)
@@ -641,10 +646,13 @@ class CoqFile(object):
         step_index = previous_step_index + 1
         self.__update_steps()
         if (
-            # We will add the new step to the previous_steps
-            len(self.steps) != len(previous_steps) + 1
-            or self.steps[step_index].ast.span is None
-            or not self.is_valid
+            validate_file
+            and (
+                # We will add the new step to the previous_steps
+                len(self.steps) != len(previous_steps) + 1
+                or self.steps[step_index].ast.span is None
+                or not self.is_valid
+            )
         ):
             raise InvalidStepException(step_text)
 
@@ -656,6 +664,26 @@ class CoqFile(object):
 
         if self.steps_taken - 1 > previous_step_index:
             self.steps_taken += 1
+
+    def __change_steps(self, changes: List[CoqChange]):
+        offset_steps = 0
+        previous_steps_size = len(self.steps)
+
+        for change in changes:
+            if isinstance(change, CoqAddStep):
+                self._add_step(change.step_text, change.previous_step_index, validate_file=False)
+                offset_steps += 1
+            elif isinstance(change, CoqDeleteStep):
+                self._delete_step(change.step_index, validate_file=False)
+                offset_steps -= 1
+            else:
+                raise NotImplementedError(f"Unknown change: {change}")
+        
+        if (
+            len(self.steps) != previous_steps_size + offset_steps
+            or not self.is_valid
+        ):
+            raise InvalidChangeException()
 
     @property
     def timeout(self) -> int:
@@ -777,6 +805,14 @@ class CoqFile(object):
             InvalidStepException: If the step added is not valid
         """
         self.__make_change(self._add_step, step_text, previous_step_index, step_goals)
+
+    def change_steps(self, changes: List[CoqChange]):
+        """Changes the steps of the Coq file.
+
+        Args:
+            changes (List[CoqChange]): The changes to be applied to the Coq file.
+        """
+        self.__make_change(self.__change_steps, changes)
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.

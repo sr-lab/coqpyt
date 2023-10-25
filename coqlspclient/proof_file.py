@@ -498,11 +498,6 @@ class ProofFile(CoqFile):
             )
 
     def change_steps(self, changes: List[CoqChange]):
-        """Changes the steps of the Coq file.
-
-        Args:
-            changes (List[CoqChange]): The changes to be applied to the Coq file.
-        """
         for change in changes:
             if isinstance(change, CoqAddStep):
                 self.add_step(change.step_text, change.previous_step_index)

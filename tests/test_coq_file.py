@@ -2,6 +2,8 @@ import os
 import shutil
 import pytest
 from coqlspclient.coq_file import CoqFile
+from coqlspclient.coq_changes import *
+from coqlspclient.coq_exceptions import *
 
 coq_file: CoqFile = None
 
@@ -82,6 +84,43 @@ def test_add_step():
 
         with pytest.raises(NotImplementedError):
             coq_file.add_step("\n      Print minus.", 0)
+    finally:
+        coq_file.close()
+        if os.path.exists(new_file_path):
+            os.remove(new_file_path)
+
+
+def test_change_steps():
+    file_path = os.path.join("tests/resources", "test_valid.v")
+    new_file_path = os.path.join("tests/resources", "test_valid_change_steps.v")
+    shutil.copyfile(file_path, new_file_path)
+    coq_file = CoqFile(new_file_path, timeout=60)
+
+    assert coq_file.steps[8].text == "\n      Print Nat.add."
+    assert coq_file.steps[8].ast.range.start.line == 12
+
+    try:
+        changes = [
+            CoqAddStep("\n      Print minus.", 7),
+            CoqAddStep("\n      Print minus.", 6),
+            CoqDeleteStep(9), # Delete first print minus
+            CoqDeleteStep(19) # Delete Compute True /\ True. 
+        ]
+        coq_file.change_steps(changes)
+        steps = coq_file.exec(nsteps=8)
+        assert steps[-1].text == "\n      Print minus."
+        assert steps[-1].ast.range.start.line == 11
+        steps = coq_file.exec(nsteps=1)
+        assert steps[-1].text == "\n      Print plus."
+        assert coq_file.steps[8].ast.range.start.line == 12
+        steps = coq_file.exec(nsteps=11)
+        assert steps[-1].text == "\n    reflexivity."
+
+        with pytest.raises(InvalidChangeException):
+            coq_file.change_steps([
+                CoqAddStep("\n      Print minus.", 7),
+                CoqDeleteStep(11) # delete reduce_eq
+            ])
     finally:
         coq_file.close()
         if os.path.exists(new_file_path):

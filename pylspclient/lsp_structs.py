@@ -80,6 +80,8 @@ class Range(object):
         return self.start >= __value.end
 
     def __lt__(self, __value: object) -> bool:
+        if not isinstance(__value, Range):
+            raise TypeError(f"Invalid type for comparison: {type(__value).__name__}")
         return self.end <= __value.start
 
     def __le__(self, __value: object) -> bool:

@@ -176,7 +176,7 @@ class _AuxFile(object):
                 # FIXME: we ignore the usage of Local from imported files to
                 # simplify the implementation. However, they can be used:
                 # https://coq.inria.fr/refman/language/core/modules.html?highlight=local#coq:attr.local
-                for term in aux_context.terms.keys():
+                for term in list(aux_context.terms.keys()):
                     if aux_context.terms[term].text.startswith("Local"):
                         aux_context.terms.pop(term)
                 context.update(**vars(aux_context))
@@ -189,10 +189,6 @@ class ProofFile(CoqFile):
     ProofState will run the file from its current state, i.e., if the file
     has finished its execution, ProofState won't return anything. The Coq file
     will be fully checked after the creation of a ProofState.
-
-    FIXME
-    Attributes:
-        coq_file (CoqFile): Coq file to interact with
     """
 
     def __init__(
@@ -216,7 +212,8 @@ class ProofFile(CoqFile):
         self.__aux_file = _AuxFile(timeout=self.timeout)
 
         try:
-            self.context = _AuxFile.get_context(self.path, self.timeout)
+            # We need to update the context already defined in the CoqFile
+            self.context.update(_AuxFile.get_context(self.path, self.timeout).terms)
             self.__program_context: Dict[str, Tuple[Term, List]] = {}
             self.__proofs = self.__get_proofs()
         except Exception as e:

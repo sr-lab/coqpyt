@@ -226,7 +226,7 @@ class CoqFile(object):
 
         # For where-notations, the character count does not include the closing
         # parenthesis when present.
-        if stop is not None and chr(line[stop]) == ")":
+        if stop is not None and len(line) > stop and chr(line[stop]) == ")":
             stop += 1
         return line[start:stop].decode()
 
@@ -704,11 +704,14 @@ class CoqFile(object):
             previous_step = self.steps[previous_step_index]
             end_line = previous_step.ast.range.end.line
             end_char = previous_step.ast.range.end.character
-            # FIXME use slice line
             lines[end_line] = (
-                lines[end_line][: end_char + 1]
+                self.__slice_line(
+                    lines[end_line], stop=end_char, range=previous_step.ast.range
+                )
                 + step_text
-                + lines[end_line][end_char + 1 :]
+                + self.__slice_line(
+                    lines[end_line], start=end_char + 1, range=previous_step.ast.range
+                )
             )
             text = "\n".join(lines)
             f.write(text)

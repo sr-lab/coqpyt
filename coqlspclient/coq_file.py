@@ -12,7 +12,7 @@ from pylspclient.lsp_structs import ResponseError, ErrorCodes, Diagnostic
 from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
 from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentType
 from coqlspclient.coq_lsp_client import CoqLspClient
-from coqlspclient.coq_exceptions import InvalidStepException, InvalidFileException
+from coqlspclient.coq_exceptions import *
 from typing import List, Optional
 
 
@@ -526,6 +526,137 @@ class CoqFile(object):
         self.__init_steps(text, ast)
         self.__validate()
 
+    def __make_change(self, change_function, *args):
+        previous_steps = self.steps
+        old_steps_taken = self.steps_taken
+        old_diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics
+        with open(self.__path, "r") as f:
+            lines = f.read().split("\n")
+        old_text = "\n".join(lines)
+
+        try:
+            change_function(*args)
+        except InvalidChangeException as e:
+            # Rollback changes
+            self.steps = previous_steps
+            self.steps_taken = old_steps_taken
+            self.coq_lsp_client.lsp_endpoint.diagnostics = old_diagnostics
+            self.is_valid = True
+            with open(self.path, "w") as f:
+                f.write(old_text)
+            raise e
+        
+    def _delete_step(
+        self, step_index: int, step_goals: Optional[GoalAnswer] = None
+    ) -> None:
+        if step_goals is None:
+            step_goals = self._goals(self.steps[step_index - 1].ast.range.end)
+        if not self.__in_proof(step_goals):
+            raise NotImplementedError(
+                "Deleting steps outside of a proof is not implemented yet"
+            )
+
+        with open(self.__path, "r") as f:
+            lines = f.readlines()
+
+        with open(self.path, "w") as f:
+            step = self.steps[step_index]
+            prev_step = self.steps[step_index - 1]
+            start_line = lines[prev_step.ast.range.end.line]
+            end_line = lines[step.ast.range.end.line]
+
+            start_line = self.__slice_line(
+                start_line,
+                stop=prev_step.ast.range.end.character,
+                range=prev_step.ast.range,
+            )
+            end_line = self.__slice_line(
+                end_line, start=step.ast.range.end.character, range=step.ast.range
+            )
+            if prev_step.ast.range.end.line == step.ast.range.end.line:
+                lines[prev_step.ast.range.end.line] = start_line + end_line
+            else:
+                lines[prev_step.ast.range.end.line] = start_line
+                lines[step.ast.range.end.line] = end_line
+            text = "".join(lines)
+            f.write(text)
+
+        # Modify the previous steps instead of creating new ones
+        # This is important to preserve their references
+        # For instance, in the ProofFile
+        previous_steps = self.steps
+        self.__update_steps()
+        if (
+            # We will remove the step from the previous steps
+            len(self.steps) != len(previous_steps) - 1
+            or not self.is_valid
+        ):
+            raise InvalidDeleteException(self.steps[step_index].text)
+
+        previous_steps.pop(step_index)
+        for i, step in enumerate(previous_steps):
+            step.text, step.ast = self.steps[i].text, self.steps[i].ast
+            step.diagnostics = self.steps[i].diagnostics
+        self.steps = previous_steps
+    
+    def _add_step(
+        self,
+        step_text: str,
+        previous_step_index: int,
+        step_goals: Optional[GoalAnswer] = None,
+    ) -> None:
+        if not self.is_valid:
+            raise InvalidFileException(self.path)
+
+        if step_goals is None:
+            step_goals = self._goals(self.steps[previous_step_index].ast.range.end)
+        if not self.__in_proof(step_goals):
+            raise NotImplementedError(
+                "Adding steps outside of a proof is not implemented yet"
+            )
+
+        with open(self.__path, "r") as f:
+            lines = f.read().split("\n")
+
+        with open(self.path, "w") as f:
+            previous_step = self.steps[previous_step_index]
+            end_line = previous_step.ast.range.end.line
+            end_char = previous_step.ast.range.end.character
+            lines[end_line] = (
+                self.__slice_line(
+                    lines[end_line], stop=end_char, range=previous_step.ast.range
+                )
+                + step_text
+                + self.__slice_line(
+                    lines[end_line], start=end_char + 1, range=previous_step.ast.range
+                )
+            )
+            text = "\n".join(lines)
+            f.write(text)
+
+        # Modify the previous steps instead of creating new ones
+        # This is important to preserve their references
+        # For instance, in the ProofFile
+        previous_steps = self.steps
+        step_index = previous_step_index + 1
+        self.__update_steps()
+        if (
+            # We will add the new step to the previous_steps
+            len(self.steps) != len(previous_steps) + 1
+            or self.steps[step_index].ast.span is None
+            or not self.is_valid
+        ):
+            raise InvalidStepException(step_text)
+
+        previous_steps.insert(step_index, self.steps[step_index])
+        for i, step in enumerate(previous_steps):
+            step.text, step.ast = self.steps[i].text, self.steps[i].ast
+            step.diagnostics = self.steps[i].diagnostics
+        self.steps = previous_steps
+
+        if self.steps_taken - 1 > previous_step_index:
+            self.steps_taken += 1
+
     @property
     def timeout(self) -> int:
         """The timeout of the coq-lsp client.
@@ -624,48 +755,7 @@ class CoqFile(object):
         Raises:
             NotImplementedError: If the step is outside a proof.
         """
-        if step_goals is None:
-            step_goals = self._goals(self.steps[step_index - 1].ast.range.end)
-        if not self.__in_proof(step_goals):
-            raise NotImplementedError(
-                "Deleting steps outside of a proof is not implemented yet"
-            )
-
-        with open(self.__path, "r") as f:
-            lines = f.readlines()
-
-        with open(self.path, "w") as f:
-            step = self.steps[step_index]
-            prev_step = self.steps[step_index - 1]
-            start_line = lines[prev_step.ast.range.end.line]
-            end_line = lines[step.ast.range.end.line]
-
-            start_line = self.__slice_line(
-                start_line,
-                stop=prev_step.ast.range.end.character,
-                range=prev_step.ast.range,
-            )
-            end_line = self.__slice_line(
-                end_line, start=step.ast.range.end.character, range=step.ast.range
-            )
-            if prev_step.ast.range.end.line == step.ast.range.end.line:
-                lines[prev_step.ast.range.end.line] = start_line + end_line
-            else:
-                lines[prev_step.ast.range.end.line] = start_line
-                lines[step.ast.range.end.line] = end_line
-            text = "".join(lines)
-            f.write(text)
-
-        # Modify the previous steps instead of creating new ones
-        # This is important to preserve their references
-        # For instance, in the ProofFile
-        previous_steps = self.steps
-        self.__update_steps()
-        previous_steps.pop(step_index)
-        for i, step in enumerate(previous_steps):
-            step.text, step.ast = self.steps[i].text, self.steps[i].ast
-            step.diagnostics = self.steps[i].diagnostics
-        self.steps = previous_steps
+        self.__make_change(self._delete_step, step_index, step_goals)
 
     def add_step(
         self,
@@ -686,65 +776,7 @@ class CoqFile(object):
             InvalidFileException: If the file being changed is not valid.
             InvalidStepException: If the step added is not valid
         """
-        if not self.is_valid:
-            raise InvalidFileException(self.path)
-
-        if step_goals is None:
-            step_goals = self._goals(self.steps[previous_step_index].ast.range.end)
-        if not self.__in_proof(step_goals):
-            raise NotImplementedError(
-                "Adding steps outside of a proof is not implemented yet"
-            )
-
-        with open(self.__path, "r") as f:
-            lines = f.read().split("\n")
-        old_text = "\n".join(lines)
-
-        with open(self.path, "w") as f:
-            previous_step = self.steps[previous_step_index]
-            end_line = previous_step.ast.range.end.line
-            end_char = previous_step.ast.range.end.character
-            lines[end_line] = (
-                self.__slice_line(
-                    lines[end_line], stop=end_char, range=previous_step.ast.range
-                )
-                + step_text
-                + self.__slice_line(
-                    lines[end_line], start=end_char + 1, range=previous_step.ast.range
-                )
-            )
-            text = "\n".join(lines)
-            f.write(text)
-
-        # Modify the previous steps instead of creating new ones
-        # This is important to preserve their references
-        # For instance, in the ProofFile
-        previous_steps = self.steps
-        old_diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics
-        step_index = previous_step_index + 1
-        self.__update_steps()
-        if (
-            # We will add the new step to the previous_steps
-            len(self.steps) != len(previous_steps) + 1
-            or self.steps[step_index].ast.span is None
-            or not self.is_valid
-        ):
-            # Rollback changes
-            self.steps = previous_steps
-            self.coq_lsp_client.lsp_endpoint.diagnostics = old_diagnostics
-            self.is_valid = True
-            with open(self.path, "w") as f:
-                f.write(old_text)
-            raise InvalidStepException(step_text)
-
-        previous_steps.insert(step_index, self.steps[step_index])
-        for i, step in enumerate(previous_steps):
-            step.text, step.ast = self.steps[i].text, self.steps[i].ast
-            step.diagnostics = self.steps[i].diagnostics
-        self.steps = previous_steps
-
-        if self.steps_taken - 1 > previous_step_index:
-            self.steps_taken += 1
+        self.__make_change(self._add_step, step_text, previous_step_index, step_goals)
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.

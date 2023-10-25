@@ -8,7 +8,7 @@ from typing import List, Tuple
 from coqlspclient.coq_lsp_structs import *
 from coqlspclient.coq_structs import TermType, Term, CoqError, CoqErrorCodes
 from coqlspclient.proof_file import ProofFile
-from coqlspclient.coq_exceptions import InvalidStepException, InvalidFileException
+from coqlspclient.coq_exceptions import *
 
 versionId: VersionedTextDocumentIdentifier = None
 state: ProofFile = None
@@ -529,6 +529,12 @@ def test_get_proofs_invalid_change(setup, teardown):
                     assert step.goals == old_goals[i]
                     i += 1
 
+    with pytest.raises(InvalidDeleteException):
+        state.delete_step(9)
+        check_rollback()
+    with pytest.raises(InvalidDeleteException):
+        state.delete_step(16)
+        check_rollback()
     with pytest.raises(InvalidStepException):
         state.add_step("invalid_tactic", 7)
         check_rollback()

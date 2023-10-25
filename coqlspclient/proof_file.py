@@ -21,6 +21,7 @@ from coqlspclient.coq_structs import (
 from coqlspclient.coq_lsp_structs import Result, Query, GoalAnswer
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.coq_lsp_client import CoqLspClient
+from coqlspclient.coq_changes import *
 from typing import List, Dict, Optional, Tuple
 
 
@@ -495,6 +496,20 @@ class ProofFile(CoqFile):
             raise NotImplementedError(
                 "Deleting steps outside of a proof is not implemented yet"
             )
+
+    def change_steps(self, changes: List[CoqChange]):
+        """Changes the steps of the Coq file.
+
+        Args:
+            changes (List[CoqChange]): The changes to be applied to the Coq file.
+        """
+        for change in changes:
+            if isinstance(change, CoqAddStep):
+                self.add_step(change.step_text, change.previous_step_index)
+            elif isinstance(change, CoqDeleteStep):
+                self.delete_step(change.step_index)
+            else:
+                raise NotImplementedError(f"Unknown change: {change}")
 
     def close(self):
         """Closes all resources used by this object."""

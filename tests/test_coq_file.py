@@ -103,8 +103,8 @@ def test_change_steps():
         changes = [
             CoqAddStep("\n      Print minus.", 7),
             CoqAddStep("\n      Print minus.", 6),
-            CoqDeleteStep(9), # Delete first print minus
-            CoqDeleteStep(19) # Delete Compute True /\ True. 
+            CoqDeleteStep(9),  # Delete first print minus
+            CoqDeleteStep(19),  # Delete Compute True /\ True.
         ]
         coq_file.change_steps(changes)
         steps = coq_file.exec(nsteps=8)
@@ -117,10 +117,12 @@ def test_change_steps():
         assert steps[-1].text == "\n    reflexivity."
 
         with pytest.raises(InvalidChangeException):
-            coq_file.change_steps([
-                CoqAddStep("\n      Print minus.", 7),
-                CoqDeleteStep(11) # delete reduce_eq
-            ])
+            coq_file.change_steps(
+                [
+                    CoqAddStep("\n      Print minus.", 7),
+                    CoqDeleteStep(11),  # delete reduce_eq
+                ]
+            )
     finally:
         coq_file.close()
         if os.path.exists(new_file_path):

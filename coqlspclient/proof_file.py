@@ -18,7 +18,7 @@ from coqlspclient.coq_structs import (
     ProofTerm,
     FileContext,
 )
-from coqlspclient.coq_lsp_structs import Result, Query, GoalAnswer
+from coqlspclient.coq_lsp_structs import Result, Query, GoalAnswer, Range
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.coq_lsp_client import CoqLspClient
 from coqlspclient.coq_changes import *
@@ -413,6 +413,25 @@ class ProofFile(CoqFile):
             for term, calls, steps in proofs
         ]
         return list(map(lambda t: ProofTerm(*t), proof_steps))
+    
+    def __find_step(self, range: Range) -> Optional[Tuple[ProofTerm, int]]:
+        for proof in self.proofs:
+            for i, proof_step in enumerate(proof.steps):
+                if proof_step.ast.range == range:
+                    break
+            else:
+                continue
+            break
+        else:
+            return None
+        return (proof, i)
+    
+    def __find_proof(self, range: Range) -> Optional[ProofTerm]:
+        for proof in self.proofs:
+            for step in proof.steps:
+                if step.ast.range >= range:
+                    return proof
+        return None
 
     @property
     def proofs(self) -> List[ProofTerm]:
@@ -427,77 +446,61 @@ class ProofFile(CoqFile):
         return self.__proofs
 
     def add_step(self, step_text: str, previous_step_index: int):
+        optional = self.__find_step(self.steps[previous_step_index].ast.range)
+        if optional is None:
+            # When the step is the first step of the proof
+            proof = self.__find_proof(self.steps[previous_step_index].ast.range)
+            # For a proof that did not end on the end of the file.
+            if proof is None and len(self.proofs[-1].steps) == 0:
+                proof = self.proofs[-1]
+            elif proof is None:
+                raise NotImplementedError("Adding steps outside of a proof is not implemented yet")
+            prev = -1
+            super().add_step(step_text, previous_step_index)
+        else:
+            proof, prev = optional
+            super().add_step(step_text, previous_step_index, proof.steps[prev].goals)
+
+        self.__aux_file.write("")
+        for step in self.steps[: previous_step_index + 1]:
+            self.__aux_file.append(step.text)
+
+        call = self.__step_context(self.steps[previous_step_index + 1])
+        self.__aux_file.didChange()
+
+        context = self.__call_context(call)
+        # The goals will be loaded if used (Lazy Loading)
+        goals = self._goals
+        proof.steps.insert(
+            prev + 1,
+            ProofStep(self.steps[previous_step_index + 1], goals, context),
+        )
+
         # We should change the goals of all the steps in the same proof
         # after the one that was changed
         # NOTE: We assume the proofs and steps are in the order they are written
-        def add_proof_step(super, i, goals=None):
-            super.add_step(step_text, previous_step_index, goals)
-            self.__aux_file.write("")
-            for step in self.steps[: previous_step_index + 1]:
-                self.__aux_file.append(step.text)
-
-            call = self.__step_context(self.steps[previous_step_index + 1])
-            self.__aux_file.didChange()
-
-            context = self.__call_context(call)
+        for e in range(prev + 2, len(proof.steps)):
             # The goals will be loaded if used (Lazy Loading)
-            goals = self._goals
-            proof.steps.insert(
-                i,
-                ProofStep(self.steps[previous_step_index + 1], goals, context),
-            )
-
-        for i, proof in enumerate(self.proofs):
-            # For a proof that did not end on the end of the file.
-            if len(proof.steps) == 0 and i == len(self.proofs) - 1:
-                add_proof_step(super(), 0)
-                break
-
-            for i, step in enumerate(proof.steps):
-                equal_steps = (
-                    step.ast.range == self.steps[previous_step_index].ast.range
-                )
-                if step.ast.range >= self.steps[previous_step_index].ast.range:
-                    if not equal_steps:
-                        # If we did not find the exact step we have to calculate the goals
-                        # Because the step may be outside of a proof
-                        add_proof_step(super(), max(0, i - 1))
-                    else:
-                        add_proof_step(
-                            super(), min(i + 1, len(proof.steps)), step.goals
-                        )
-                    break
-            else:
-                continue
-
-            for e in range(i + 1, len(proof.steps)):
-                # The goals will be loaded if used (Lazy Loading)
-                proof.steps[e].goals = self._goals
-            break
+            proof.steps[e].goals = self._goals
 
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]
-        # We should change the goals of all the steps in the same proof
-        # after the one that was changed
-        for proof in self.proofs:
-            for i, proof_step in enumerate(proof.steps):
-                if proof_step.ast.range == step.ast.range:
-                    super().delete_step(step_index, proof_step.goals)
-                    proof.steps.pop(i)
-                    break
-            else:
-                continue
-
+        optional = self.__find_step(step.ast.range)
+        if optional is not None:
+            proof, i = optional
+            step_goals = proof.steps[i].goals
+            proof.steps.pop(i)
             for e in range(i, len(proof.steps)):
                 # The goals will be loaded if used (Lazy Loading)
                 proof.steps[e].goals = self._goals
-            break
         else:
             raise NotImplementedError(
                 "Deleting steps outside of a proof is not implemented yet"
             )
+        super().delete_step(step_index, step_goals)
 
     def change_steps(self, changes: List[CoqChange]):
+        super().change_steps(changes)
         for change in changes:
             if isinstance(change, CoqAddStep):
                 self.add_step(change.step_text, change.previous_step_index)

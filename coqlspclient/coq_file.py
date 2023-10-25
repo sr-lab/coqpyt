@@ -645,14 +645,11 @@ class CoqFile(object):
         previous_steps = self.steps
         step_index = previous_step_index + 1
         self.__update_steps()
-        if (
-            validate_file
-            and (
-                # We will add the new step to the previous_steps
-                len(self.steps) != len(previous_steps) + 1
-                or self.steps[step_index].ast.span is None
-                or not self.is_valid
-            )
+        if validate_file and (
+            # We will add the new step to the previous_steps
+            len(self.steps) != len(previous_steps) + 1
+            or self.steps[step_index].ast.span is None
+            or not self.is_valid
         ):
             raise InvalidStepException(step_text)
 
@@ -671,18 +668,17 @@ class CoqFile(object):
 
         for change in changes:
             if isinstance(change, CoqAddStep):
-                self._add_step(change.step_text, change.previous_step_index, validate_file=False)
+                self._add_step(
+                    change.step_text, change.previous_step_index, validate_file=False
+                )
                 offset_steps += 1
             elif isinstance(change, CoqDeleteStep):
                 self._delete_step(change.step_index, validate_file=False)
                 offset_steps -= 1
             else:
                 raise NotImplementedError(f"Unknown change: {change}")
-        
-        if (
-            len(self.steps) != previous_steps_size + offset_steps
-            or not self.is_valid
-        ):
+
+        if len(self.steps) != previous_steps_size + offset_steps or not self.is_valid:
             raise InvalidChangeException()
 
     @property

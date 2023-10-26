@@ -22,6 +22,7 @@ from coqlspclient.coq_lsp_structs import Result, Query, GoalAnswer, Range
 from coqlspclient.coq_file import CoqFile
 from coqlspclient.coq_lsp_client import CoqLspClient
 from coqlspclient.coq_changes import *
+from coqlspclient.coq_exceptions import *
 from typing import List, Dict, Optional, Tuple
 
 
@@ -487,9 +488,9 @@ class ProofFile(CoqFile):
         proof, prev = self.__find_prev(self.steps[previous_step_index].ast.range)
         if prev is None:
             prev = -1
-            super().add_step(step_text, previous_step_index)
+            self._make_change(self._add_step, step_text, previous_step_index)
         else:
-            super().add_step(step_text, previous_step_index, proof.steps[prev].goals)
+            self._make_change(self._add_step, step_text, previous_step_index, True)
         proof.steps.insert(prev + 1, self.__get_step(previous_step_index + 1))
         # We should change the goals of all the steps in the same proof
         # after the one that was changed
@@ -503,7 +504,6 @@ class ProofFile(CoqFile):
         optional = self.__find_step(step.ast.range)
         if optional is not None:
             proof, i = optional
-            step_goals = proof.steps[i].goals
             proof.steps.pop(i)
             for e in range(i, len(proof.steps)):
                 # The goals will be loaded if used (Lazy Loading)
@@ -512,28 +512,39 @@ class ProofFile(CoqFile):
             raise NotImplementedError(
                 "Deleting steps outside of a proof is not implemented yet"
             )
-        super().delete_step(step_index, step_goals)
+        self._make_change(self._delete_step, step_index, True)
 
     def change_steps(self, changes: List[CoqChange]):
-        goals = []
-        proofs_to_update: List[Tuple[ProofTerm, int]] = []
-
+        offset_steps = 0
+        previous_steps_size = len(self.steps)
+    
         for change in changes:
             if isinstance(change, CoqAddStep):
                 proof, i = self.__find_prev(
                     self.steps[change.previous_step_index].ast.range
                 )
-                if i is not None:
-                    goals.append(proof.steps[i].goals)
-                else:
-                    goals.append(None)
-                proofs_to_update.append((proof, i))
+                self._add_step(
+                    change.step_text,
+                    change.previous_step_index,
+                    in_proof=i is not None,
+                    validate_file=False,
+                )
+                if i is None:
+                    i = -1
+                proof.steps.insert(
+                    i + 1, self.__get_step(change.previous_step_index + 1)
+                )
+                i += 2
+                offset_steps += 1
             elif isinstance(change, CoqDeleteStep):
                 optional = self.__find_step(self.steps[change.step_index].ast.range)
                 if optional is not None:
                     proof, i = optional
-                    goals.append(proof.steps[i].goals)
-                    proofs_to_update.append((proof, i))
+                    self._delete_step(
+                        change.step_index, in_proof=True, validate_file=False
+                    )
+                    proof.steps.pop(i)
+                    offset_steps -= 1
                 else:
                     raise NotImplementedError(
                         "Deleting steps outside of a proof is not implemented yet"
@@ -541,23 +552,12 @@ class ProofFile(CoqFile):
             else:
                 raise NotImplementedError(f"Unknown change: {change}")
 
-        super().change_steps(changes, goals=goals)
-
-        for j, change in enumerate(changes):
-            proof, i = proofs_to_update[j]
-            if isinstance(change, CoqAddStep):
-                if i is None:
-                    i = -1
-                proof.steps.insert(
-                    i + 1, self.__get_step(change.previous_step_index + 1)
-                )
-                i += 2
-            elif isinstance(change, CoqDeleteStep):
-                proof.steps.pop(i)
-
             for e in range(i, len(proof.steps)):
                 # The goals will be loaded if used (Lazy Loading)
                 proof.steps[e].goals = self._goals
+
+        if len(self.steps) != previous_steps_size + offset_steps or not self.is_valid:
+            raise InvalidChangeException()
 
     def close(self):
         """Closes all resources used by this object."""

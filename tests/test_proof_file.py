@@ -552,7 +552,7 @@ def test_get_proofs_valid_change(setup, teardown):
 
     # Delete outside of proof
     with pytest.raises(NotImplementedError):
-        state.delete_step(32)
+        state.delete_step(33)
 
     # Add step to end of proof
     state.add_step("\n    Print plus.", 31)
@@ -619,7 +619,7 @@ def test_get_proofs_change_steps(setup, teardown):
 
     # # Delete outside of proof
     with pytest.raises(NotImplementedError):
-        state.change_steps([CoqDeleteStep(32)])
+        state.change_steps([CoqDeleteStep(33)])
 
     # # Add step to end of proof
     state.change_steps([CoqAddStep("\n    Print plus.", 31)])
@@ -970,3 +970,18 @@ def test_goal(setup, teardown):
             ],
             proof.context,
         )
+
+@pytest.mark.parametrize("setup", [("test_simple_file.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_simple_file_changes(setup, teardown):
+    state.change_steps(
+        [
+            CoqDeleteStep(1),
+            CoqDeleteStep(1),
+            CoqDeleteStep(2),
+            CoqDeleteStep(2),
+            CoqDeleteStep(2),
+            CoqAddStep("\nAdmitted.", 0),
+            CoqAddStep("\nAdmitted.", 2),
+        ]
+    )

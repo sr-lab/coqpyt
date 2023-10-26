@@ -14,7 +14,7 @@ from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentT
 from coqlspclient.coq_lsp_client import CoqLspClient
 from coqlspclient.coq_exceptions import *
 from coqlspclient.coq_changes import *
-from typing import List, Optional
+from typing import List, Optional, Callable
 
 
 class CoqFile(object):
@@ -527,7 +527,7 @@ class CoqFile(object):
         self.__init_steps(text, ast)
         self.__validate()
 
-    def __make_change(self, change_function, *args):
+    def _make_change(self, change_function, *args):
         previous_steps = self.steps
         old_steps_taken = self.steps_taken
         old_diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics
@@ -550,12 +550,12 @@ class CoqFile(object):
     def _delete_step(
         self,
         step_index: int,
-        step_goals: Optional[GoalAnswer] = None,
+        in_proof: bool = False,
         validate_file: bool = True,
     ) -> None:
-        if step_goals is None:
-            step_goals = self._goals(self.steps[step_index - 1].ast.range.end)
-        if not self.__in_proof(step_goals):
+        if not in_proof and not self.__in_proof(
+            self._goals(self.steps[step_index - 1].ast.range.end)
+        ):
             raise NotImplementedError(
                 "Deleting steps outside of a proof is not implemented yet"
             )
@@ -607,17 +607,17 @@ class CoqFile(object):
         self,
         step_text: str,
         previous_step_index: int,
-        step_goals: Optional[GoalAnswer] = None,
+        in_proof: bool = False,
         validate_file: bool = True,
     ) -> None:
-        if not self.is_valid:
+        if validate_file and not self.is_valid:
             raise InvalidFileException(self.path)
 
-        if step_goals is None:
-            step_goals = self._goals(self.steps[previous_step_index].ast.range.end)
-        if not self.__in_proof(step_goals):
+        if not in_proof and not self.__in_proof(
+            self._goals(self.steps[previous_step_index].ast.range.end)
+        ):
             raise NotImplementedError(
-                "Adding steps outside of a proof is not implemented yet"
+                "Deleting steps outside of a proof is not implemented yet"
             )
 
         with open(self.__path, "r") as f:
@@ -662,13 +662,9 @@ class CoqFile(object):
         if self.steps_taken - 1 > previous_step_index:
             self.steps_taken += 1
 
-    def __change_steps(
-        self, changes: List[CoqChange], goals: Optional[List[GoalAnswer]]
+    def _change_steps(
+        self, changes: List[CoqChange]
     ):
-        if goals is not None and len(changes) != len(goals):
-            raise RuntimeError("The number of goals must match the number of changes")
-        elif goals is None:
-            goals = [None for _ in changes]
         offset_steps = 0
         previous_steps_size = len(self.steps)
 
@@ -677,13 +673,12 @@ class CoqFile(object):
                 self._add_step(
                     change.step_text,
                     change.previous_step_index,
-                    step_goals=goals[i],
                     validate_file=False,
                 )
                 offset_steps += 1
             elif isinstance(change, CoqDeleteStep):
                 self._delete_step(
-                    change.step_index, step_goals=goals[i], validate_file=False
+                    change.step_index, validate_file=False
                 )
                 offset_steps -= 1
             else:
@@ -778,9 +773,7 @@ class CoqFile(object):
                     )
             return self.steps[self.steps_taken - 1 : initial_steps_taken]
 
-    def delete_step(
-        self, step_index: int, step_goals: Optional[GoalAnswer] = None
-    ) -> None:
+    def delete_step(self, step_index: int) -> None:
         """Deletes a step from the file. The step must be inside a proof.
         This function will change the original file.
 
@@ -790,13 +783,12 @@ class CoqFile(object):
         Raises:
             NotImplementedError: If the step is outside a proof.
         """
-        self.__make_change(self._delete_step, step_index, step_goals)
+        self._make_change(self._delete_step, step_index)
 
     def add_step(
         self,
         step_text: str,
         previous_step_index: int,
-        step_goals: Optional[GoalAnswer] = None,
     ) -> None:
         """Adds a step to the file. The step must be inside a proof.
         This function will change the original file. If an exception is thrown
@@ -811,17 +803,15 @@ class CoqFile(object):
             InvalidFileException: If the file being changed is not valid.
             InvalidStepException: If the step added is not valid
         """
-        self.__make_change(self._add_step, step_text, previous_step_index, step_goals)
+        self._make_change(self._add_step, step_text, previous_step_index)
 
-    def change_steps(
-        self, changes: List[CoqChange], goals: Optional[List[GoalAnswer]] = None
-    ):
+    def change_steps(self, changes: List[CoqChange]):
         """Changes the steps of the Coq file transactionally.
 
         Args:
             changes (List[CoqChange]): The changes to be applied to the Coq file.
         """
-        self.__make_change(self.__change_steps, changes, goals)
+        self._make_change(self._change_steps, changes)
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.

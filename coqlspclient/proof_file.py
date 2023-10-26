@@ -357,18 +357,28 @@ class ProofFile(CoqFile):
                 raise e
 
             self.__step()
+            # Nested proofs
             if CoqFile.get_term_type(self.prev_step.ast) != TermType.OTHER:
                 self.__get_proof(proofs)
                 # Pass Qed if it exists
                 while not self.in_proof and not self.checked:
                     self.__step()
                 continue
-            if CoqFile.expr(self.prev_step.ast)[0] == "VernacProof":
-                continue
             context_calls = self.__step_context(self.prev_step)
             if self.prev_step.text.strip() == "":
                 continue
             steps.append((self.prev_step, goals, context_calls))
+
+        try:
+            goals = self.current_goals()
+        except Exception as e:
+            self.__aux_file.close()
+            raise e
+        if (
+            self.steps_taken < len(self.steps)
+            and CoqFile.expr(self.curr_step.ast)[0] == "VernacEndProof"
+        ):
+            steps.append((self.curr_step, goals, []))
 
         return steps
 

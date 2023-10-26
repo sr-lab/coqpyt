@@ -69,12 +69,19 @@ def test_get_proofs(setup, teardown):
     assert len(proofs) == 4
 
     texts = [
+        "\n    Proof.",
         "\n      intros n.",
         "\n      Print plus.",
         "\n      Print Nat.add.",
         "\n      reduce_eq.",
     ]
     goals = [
+        GoalAnswer(
+            versionId,
+            Position(8, 47),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
         GoalAnswer(
             versionId,
             Position(9, 10),
@@ -102,6 +109,7 @@ def test_get_proofs(setup, teardown):
     ]
     contexts = [
         [],
+        [],
         [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
         [
             (
@@ -126,12 +134,19 @@ def test_get_proofs(setup, teardown):
         compare_context(contexts[i], proofs[0].steps[i].context)
 
     texts = [
+        "\n  Proof.",
         "\n    intros n m.",
         "\n    rewrite -> (plus_O_n (S n * m)).",
         "\n    Compute True /\\ True.",
         "\n    reflexivity.",
     ]
     goals = [
+        GoalAnswer(
+            versionId,
+            Position(20, 28),
+            [],
+            GoalConfig([Goal([], "∀ n m : nat, 0 + S n * m = S n * m")], [], [], []),
+        ),
         GoalAnswer(
             versionId,
             Position(21, 8),
@@ -174,6 +189,7 @@ def test_get_proofs(setup, teardown):
     ]
     contexts = [
         [],
+        [],
         [
             ("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, []),
             ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
@@ -190,6 +206,7 @@ def test_get_proofs(setup, teardown):
         [],
     ]
     ranges = [
+        (21, 2, 21, 8),
         (22, 4, 22, 15),
         (23, 4, 23, 36),
         (24, 4, 24, 25),
@@ -286,12 +303,21 @@ def test_get_proofs(setup, teardown):
         compare_context(contexts[i], proofs[2].steps[i].context)
 
     texts = [
+        "\n    Proof.",
         "\n      intros n m.",
         "\n      rewrite <- (Fst.plus_O_n (|n| * m)).",
         "\n      Compute {| Fst.fst := n; Fst.snd := n |}.",
         "\n      reflexivity.",
     ]
     goals = [
+        GoalAnswer(
+            versionId,
+            Position(45, 30),
+            [],
+            GoalConfig(
+                [Goal([], "∀ n m : nat, | n | * m = 0 + | n | * m")], [], [], []
+            ),
+        ),
         GoalAnswer(
             versionId,
             Position(46, 10),
@@ -335,6 +361,7 @@ def test_get_proofs(setup, teardown):
         ),
     ]
     contexts = [
+        [],
         [],
         [
             (
@@ -389,11 +416,19 @@ def test_get_proofs_valid_change(setup, teardown):
     versionId.version += 1
     proofs = state.proofs
     texts = [
+        "\n    Proof.",
         "\n      Print plus.",
         "\n      Print Nat.add.",
         "\n      reduce_eq.",
+        "\n    Qed.",
     ]
     goals = [
+        GoalAnswer(
+            VersionedTextDocumentIdentifier(versionId.uri, 1),
+            Position(8, 47),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
         GoalAnswer(
             versionId,
             Position(10, 6),
@@ -412,6 +447,12 @@ def test_get_proofs_valid_change(setup, teardown):
             [],
             GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
         ),
+        GoalAnswer(
+            versionId,
+            Position(13, 4),
+            [],
+            GoalConfig([], [], [], []),
+        ),
     ]
     for i, step in enumerate(proofs[0].steps):
         assert step.text == texts[i]
@@ -422,12 +463,20 @@ def test_get_proofs_valid_change(setup, teardown):
     versionId.version += 1
     proofs = state.proofs
     texts = [
+        "\n    Proof.",
         "\n      intros n.",
         "\n      Print plus.",
         "\n      Print Nat.add.",
         "\n      reduce_eq.",
+        "\n    Qed.",
     ]
     goals = [
+        GoalAnswer(
+            VersionedTextDocumentIdentifier(versionId.uri, 1),
+            Position(8, 47),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
         GoalAnswer(
             versionId,
             Position(10, 6),
@@ -452,6 +501,12 @@ def test_get_proofs_valid_change(setup, teardown):
             [],
             GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
         ),
+        GoalAnswer(
+            versionId,
+            Position(14, 4),
+            [],
+            GoalConfig([], [], [], []),
+        ),
     ]
     for i, step in enumerate(proofs[0].steps):
         assert step.text == texts[i]
@@ -460,13 +515,16 @@ def test_get_proofs_valid_change(setup, teardown):
     # Check if context is changed correctly
     state.add_step("\n      Print minus.", 7)
     texts = [
+        "\n    Proof.",
         "\n      intros n.",
         "\n      Print plus.",
         "\n      Print minus.",
         "\n      Print Nat.add.",
         "\n      reduce_eq.",
+        "\n    Qed.",
     ]
     contexts = [
+        [],
         [],
         [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
         [("Notation minus := Nat.sub (only parsing).", TermType.NOTATION, [])],
@@ -478,6 +536,7 @@ def test_get_proofs_valid_change(setup, teardown):
             )
         ],
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
+        [],
     ]
     for i, step in enumerate(proofs[0].steps):
         assert step.text == texts[i]
@@ -523,13 +582,16 @@ def test_get_proofs_change_steps(setup, teardown):
     )
 
     texts = [
+        "\n    Proof.",
         "\n      intros n.",
         "\n      Print plus.",
         "\n      Print minus.",
         "\n      Print Nat.add.",
         "\n      reduce_eq.",
+        "\n    Qed.",
     ]
     contexts = [
+        [],
         [],
         [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
         [("Notation minus := Nat.sub (only parsing).", TermType.NOTATION, [])],
@@ -541,6 +603,7 @@ def test_get_proofs_change_steps(setup, teardown):
             )
         ],
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
+        [],
     ]
     for i, step in enumerate(proofs[0].steps):
         assert step.text == texts[i]
@@ -632,12 +695,12 @@ def test_get_proofs_change_invalid(setup, teardown):
 def test_get_proofs_change_empty(setup, teardown):
     state.add_step("\nAdmitted.", len(state.steps) - 2)
     assert state.steps[-2].text == "\nAdmitted."
-    assert len(state.proofs[0].steps) == 1
+    assert len(state.proofs[0].steps) == 2
     assert state.proofs[0].steps[-1].text == "\nAdmitted."
 
     state.delete_step(len(state.steps) - 2)
-    len(state.steps) == 3
-    assert len(state.proofs[0].steps) == 0
+    assert len(state.steps) == 3
+    assert len(state.proofs[0].steps) == 1
 
 
 @pytest.mark.parametrize(
@@ -647,6 +710,7 @@ def test_imports(setup, teardown):
     proofs = state.proofs
     assert len(proofs) == 2
     context = [
+        [],
         [],
         [
             ("Local Theorem plus_O_n : forall n:nat, 0 + n = n.", TermType.THEOREM, []),
@@ -659,6 +723,7 @@ def test_imports(setup, teardown):
         ],
         [],  # FIXME: in the future we should get a Local Theorem from other file here
         [("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, [])],
+        [],
         [],
     ]
 
@@ -723,17 +788,19 @@ def test_nested_proofs(setup, teardown):
     proofs = state.proofs
     assert len(proofs) == 4
 
-    steps = ["\n    intros n.", "\n    simpl; reflexivity."]
-    assert len(proofs[0].steps) == 2
+    steps = ["\n    intros n.", "\n    simpl; reflexivity.", "\n    Qed."]
+    assert len(proofs[0].steps) == len(steps)
     for i, step in enumerate(proofs[0].steps):
         assert step.text == steps[i]
 
     steps = [
+        "\nProof.",
         "\nintros n m.",
         "\n\nrewrite <- (plus_O_n ((S n) * m)).",
         "\nreflexivity.",
+        "\nQed.",
     ]
-    assert len(proofs[1].steps) == 3
+    assert len(proofs[1].steps) == len(steps)
     for i, step in enumerate(proofs[1].steps):
         assert step.text == steps[i]
 
@@ -772,14 +839,16 @@ def test_bullets(setup, teardown):
     proofs = state.proofs
     assert len(proofs) == 1
     steps = [
+        "\nProof.",
         "\n    intros x y.",
         " split.",
         "\n    -",
         "reflexivity.",
         "\n    -",
         " reflexivity.",
+        "\nQed.",
     ]
-    assert len(proofs[0].steps) == 6
+    assert len(proofs[0].steps) == len(steps)
     for i, step in enumerate(proofs[0].steps):
         assert step.text == steps[i]
 
@@ -825,7 +894,7 @@ def test_obligation(setup, teardown):
             + programs[i][1]
             + "."
         )
-        assert len(proof.steps) == 1
+        assert len(proof.steps) == 2
         assert proof.steps[0].text == "\n  dummy_tactic n e."
 
 
@@ -839,7 +908,7 @@ def test_module_type(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_type_class.v", None)], indirect=True)
 def test_type_class(setup, teardown):
     assert len(state.proofs) == 2
-    assert len(state.proofs[0].steps) == 2
+    assert len(state.proofs[0].steps) == 4
     assert (
         state.proofs[0].text
         == "#[refine] Global Instance unit_EqDec : TypeClass.EqDecNew unit := { eqb_new x y := true }."

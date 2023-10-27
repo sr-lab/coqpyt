@@ -138,13 +138,25 @@ def test_where_notation(setup, teardown):
         == 'Fixpoint plus_test (n m : nat) {struct n} : nat := match n with | O => m | S p => S (p + m) end where "n + m" := (plus n m) : test_scope and "n - m" := (minus n m).'
     )
     assert "n - m" in coq_file.context.terms
-    assert coq_file.context.terms["n - m"].text == 'Fixpoint plus_test (n m : nat) {struct n} : nat := match n with | O => m | S p => S (p + m) end where "n + m" := (plus n m) : test_scope and "n - m" := (minus n m).'
+    assert (
+        coq_file.context.terms["n - m"].text
+        == 'Fixpoint plus_test (n m : nat) {struct n} : nat := match n with | O => m | S p => S (p + m) end where "n + m" := (plus n m) : test_scope and "n - m" := (minus n m).'
+    )
     assert "A & B" in coq_file.context.terms
-    assert coq_file.context.terms["A & B"].text == "Inductive and' (A B : Prop) : Prop := conj' : A -> B -> A & B where \"A & B\" := (and' A B)."
+    assert (
+        coq_file.context.terms["A & B"].text
+        == "Inductive and' (A B : Prop) : Prop := conj' : A -> B -> A & B where \"A & B\" := (and' A B)."
+    )
     assert "'ONE'" in coq_file.context.terms
-    assert coq_file.context.terms["'ONE'"].text == "Fixpoint incr (n : nat) : nat := n + ONE where \"'ONE'\" := 1."
+    assert (
+        coq_file.context.terms["'ONE'"].text
+        == "Fixpoint incr (n : nat) : nat := n + ONE where \"'ONE'\" := 1."
+    )
     assert "x 🀄 y" in coq_file.context.terms
-    assert coq_file.context.terms["x 🀄 y"].text == 'Fixpoint unicode x y := x 🀄 y where "x 🀄 y" := (plus_test x y).'
+    assert (
+        coq_file.context.terms["x 🀄 y"].text
+        == 'Fixpoint unicode x y := x 🀄 y where "x 🀄 y" := (plus_test x y).'
+    )
 
 
 @pytest.mark.parametrize("setup", ["test_get_notation.v"], indirect=True)

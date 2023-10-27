@@ -213,7 +213,9 @@ class CoqFile(object):
 
         return [None]
 
-    def __short_text(self, text: str, curr_step: RangedSpan, prev_step: Optional[RangedSpan] = None):
+    def __short_text(
+        self, text: str, curr_step: RangedSpan, prev_step: Optional[RangedSpan] = None
+    ):
         curr_range = curr_step.range
         nlines = curr_range.end.line - curr_range.start.line + 1
         lines = text.split("\n")[-nlines:]
@@ -224,9 +226,9 @@ class CoqFile(object):
         else:
             start = curr_range.start.character - prev_range.end.character
 
-        lines[-1] = lines[-1][:curr_range.end.character]
+        lines[-1] = lines[-1][: curr_range.end.character]
         lines[0] = lines[0][start:]
-        
+
         return " ".join(" ".join(lines).split())
 
     def __add_term(self, name: str, step: Step, term_type: TermType):
@@ -537,8 +539,8 @@ class CoqFile(object):
             end_line = lines[step.ast.range.end.line]
 
             start_line = start_line[: prev_step.ast.range.end.character]
-            end_line = end_line[step.ast.range.end.character:]
-            
+            end_line = end_line[step.ast.range.end.character :]
+
             if prev_step.ast.range.end.line == step.ast.range.end.line:
                 lines[prev_step.ast.range.end.line] = start_line + end_line
             else:
@@ -590,9 +592,7 @@ class CoqFile(object):
             end_line = previous_step.ast.range.end.line
             end_char = previous_step.ast.range.end.character
             lines[end_line] = (
-                lines[end_line][:end_char]
-                + step_text
-                + lines[end_line][end_char + 1:]
+                lines[end_line][:end_char] + step_text + lines[end_line][end_char + 1 :]
             )
             text = "\n".join(lines)
             f.write(text)

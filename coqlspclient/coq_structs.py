@@ -91,10 +91,11 @@ class Term:
     @property
     def text(self) -> str:
         return self.step.short_text
-    
+
     @property
     def ast(self) -> RangedSpan:
         return self.step.ast
+
 
 class ProofStep:
     def __init__(

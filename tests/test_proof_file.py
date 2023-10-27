@@ -971,6 +971,7 @@ def test_goal(setup, teardown):
             proof.context,
         )
 
+
 @pytest.mark.parametrize("setup", [("test_simple_file.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_simple_file_changes(setup, teardown):
@@ -985,3 +986,19 @@ def test_simple_file_changes(setup, teardown):
             CoqAddStep("\nAdmitted.", 2),
         ]
     )
+    assert len(state.steps) == 5
+    assert len(state.proofs) == 2
+
+    steps = [
+        "Example test1: 1 + 1 = 2.",
+        "\nAdmitted.",
+        "\n\nExample test2: 1 + 1 + 1= 3.",
+        "\nAdmitted.",
+    ]
+    for i, step in enumerate(steps):
+        assert step == state.steps[i].text
+
+    assert state.proofs[0].text == steps[0]
+    assert state.proofs[0].steps[0].text == steps[1]
+    assert state.proofs[1].text == steps[2].strip()
+    assert state.proofs[1].steps[0].text == steps[3]

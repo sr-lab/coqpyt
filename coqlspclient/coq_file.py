@@ -662,9 +662,7 @@ class CoqFile(object):
         if self.steps_taken - 1 > previous_step_index:
             self.steps_taken += 1
 
-    def _change_steps(
-        self, changes: List[CoqChange]
-    ):
+    def _change_steps(self, changes: List[CoqChange]):
         offset_steps = 0
         previous_steps_size = len(self.steps)
 
@@ -677,9 +675,7 @@ class CoqFile(object):
                 )
                 offset_steps += 1
             elif isinstance(change, CoqDeleteStep):
-                self._delete_step(
-                    change.step_index, validate_file=False
-                )
+                self._delete_step(change.step_index, validate_file=False)
                 offset_steps -= 1
             else:
                 raise NotImplementedError(f"Unknown change: {change}")

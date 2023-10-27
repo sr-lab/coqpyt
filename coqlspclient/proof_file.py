@@ -447,6 +447,11 @@ class ProofFile(CoqFile):
     def __find_prev(self, range: Range) -> Tuple[ProofTerm, Optional[int]]:
         optional = self.__find_step(range)
         if optional is None:
+            # Previous step may be the definition of the proof
+            for proof in self.proofs:
+                if proof.ast.range == range:
+                    return (proof, -1)
+
             # When the step is the first step of the proof
             proof = self.__find_proof(range)
             # For a proof that did not end on the end of the file.
@@ -517,7 +522,7 @@ class ProofFile(CoqFile):
     def change_steps(self, changes: List[CoqChange]):
         offset_steps = 0
         previous_steps_size = len(self.steps)
-    
+
         for change in changes:
             if isinstance(change, CoqAddStep):
                 proof, i = self.__find_prev(

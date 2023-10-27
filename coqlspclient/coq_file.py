@@ -58,8 +58,7 @@ class CoqFile(object):
             uri = f"file://{self.__path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
         uri = f"file://{self.__path}"
-        with open(self.__path, "r") as f:
-            text = f.read()
+        text = self.__read()
 
         try:
             self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
@@ -130,7 +129,13 @@ class CoqFile(object):
         curr_lines[-1] = curr_lines[-1][:end_char]
         curr_lines[0] = curr_lines[0][start_char:]
         step_text = "\n".join(curr_lines)
-        return Step(step_text, step_ast)
+
+        if index == 0:
+            short_text = self.__short_text(step_text, step_ast)
+        else:
+            short_text = self.__short_text(step_text, step_ast, prev_step_ast)
+
+        return Step(step_text, short_text, step_ast)
 
     def __init_steps(self, text: str, ast: List[RangedSpan]):
         lines = text.split("\n")
@@ -208,48 +213,24 @@ class CoqFile(object):
 
         return [None]
 
-    def __slice_line(
-        self,
-        line: str,
-        start: Optional[int] = None,
-        stop: Optional[int] = None,
-        range: Optional[Range] = None,
-    ):
-        if range is None:
-            return line[start:stop]
-
-        # A range will be provided when range.character is measured in bytes,
-        # rather than characters. If so, the string must be encoded before
-        # indexing. This special treatment is necessary for handling Unicode
-        # characters which take up more than 1 byte. Currently necessary to
-        # handle where-notations.
-        line = line.encode("utf-8")
-
-        # For where-notations, the character count does not include the closing
-        # parenthesis when present.
-        if stop is not None and len(line) > stop and chr(line[stop]) == ")":
-            stop += 1
-        return line[start:stop].decode()
-
-    def __short_text(self, range: Optional[Range] = None):
-        curr_range = self.curr_step.ast.range if range is None else range
+    def __short_text(self, text: str, curr_step: RangedSpan, prev_step: Optional[RangedSpan] = None):
+        curr_range = curr_step.range
         nlines = curr_range.end.line - curr_range.start.line + 1
-        lines = self.curr_step.text.split("\n")[-nlines:]
+        lines = text.split("\n")[-nlines:]
 
-        prev_range = None if self.steps_taken == 0 else self.prev_step.ast.range
+        prev_range = None if prev_step is None else prev_step.range
         if prev_range is None or prev_range.end.line < curr_range.start.line:
             start = curr_range.start.character
         else:
             start = curr_range.start.character - prev_range.end.character
 
-        lines[-1] = self.__slice_line(
-            lines[-1], stop=curr_range.end.character, range=range
-        )
-        lines[0] = self.__slice_line(lines[0], start=start, range=range)
+        lines[-1] = lines[-1][:curr_range.end.character]
+        lines[0] = lines[0][start:]
+        
         return " ".join(" ".join(lines).split())
 
-    def __add_term(self, name: str, ast: RangedSpan, text: str, term_type: TermType):
-        term = Term(text, ast, term_type, self.path, self.curr_module[:])
+    def __add_term(self, name: str, step: Step, term_type: TermType):
+        term = Term(step, term_type, self.path, self.curr_module[:])
         if term.type == TermType.NOTATION:
             self.context.update(terms={name: term})
             return
@@ -340,25 +321,10 @@ class CoqFile(object):
 
         # handles when multiple notations are defined
         for span in spans:
-            start = Position(
-                span["ntn_decl_string"]["loc"]["line_nb"] - 1,
-                span["ntn_decl_string"]["loc"]["bp"]
-                - span["ntn_decl_string"]["loc"]["bol_pos"],
-            )
-            end = Position(
-                span["ntn_decl_interp"]["loc"]["line_nb_last"] - 1,
-                span["ntn_decl_interp"]["loc"]["ep"]
-                - span["ntn_decl_interp"]["loc"]["bol_pos"],
-            )
-            range = Range(start, end)
-            text = self.__short_text(range=range)
             name = FileContext.get_notation_key(
                 span["ntn_decl_string"]["v"], span["ntn_decl_scope"]
             )
-            if span["ntn_decl_scope"] is not None:
-                text += " : " + span["ntn_decl_scope"]
-            text = "Notation " + text
-            self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
+            self.__add_term(name, self.curr_step, TermType.NOTATION)
 
     def __process_step(self, sign):
         def traverse_expr(expr):
@@ -400,7 +366,9 @@ class CoqFile(object):
             # TODO: A negative sign should handle things differently. For example:
             #   - names should be removed from the context
             #   - curr_module should change as you leave or re-enter modules
-            text = self.__short_text()
+
+            text = self.curr_step.short_text
+
             # FIXME Let (and maybe Variable) should be handled. However,
             # I think we can't handle them as normal Locals since they are
             # specific to a section.
@@ -451,15 +419,15 @@ class CoqFile(object):
                 name = text.split('"')[1].strip()
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(name, self.curr_step.ast, text, TermType.NOTATION)
+                self.__add_term(name, self.curr_step, TermType.NOTATION)
             elif expr[0] == "VernacSyntacticDefinition":
                 name = text.split(" ")[1]
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(name, self.curr_step.ast, text, TermType.NOTATION)
+                self.__add_term(name, self.curr_step, TermType.NOTATION)
             elif expr[0] == "VernacInstance" and expr[1][0]["v"][0] == "Anonymous":
                 # FIXME: The name should be "<Class>_instance_N"
-                self.__add_term("_anonymous", self.curr_step.ast, text, term_type)
+                self.__add_term("_anonymous", self.curr_step, term_type)
             elif expr[0] == "VernacDefinition" and expr[2][0]["v"][0] == "Anonymous":
                 # We associate the anonymous term to the same name used internally by Coq
                 if self.__anonymous_id is None:
@@ -467,17 +435,17 @@ class CoqFile(object):
                 else:
                     name = f"Unnamed_thm{self.__anonymous_id}"
                     self.__anonymous_id += 1
-                self.__add_term(name, self.curr_step.ast, text, term_type)
+                self.__add_term(name, self.curr_step, term_type)
             elif term_type == TermType.DERIVE:
                 name = CoqFile.get_ident(expr[2][0])
-                self.__add_term(name, self.curr_step.ast, text, term_type)
+                self.__add_term(name, self.curr_step, term_type)
                 if expr[1][0] == "Derive":
                     prop = CoqFile.get_ident(expr[2][2])
-                    self.__add_term(prop, self.curr_step.ast, text, term_type)
+                    self.__add_term(prop, self.curr_step, term_type)
             else:
                 names = traverse_expr(expr)
                 for name in names:
-                    self.__add_term(name, self.curr_step.ast, text, term_type)
+                    self.__add_term(name, self.curr_step, term_type)
 
             self.__handle_where_notations(expr, term_type)
         finally:
@@ -531,8 +499,7 @@ class CoqFile(object):
         previous_steps = self.steps
         old_steps_taken = self.steps_taken
         old_diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics
-        with open(self.__path, "r") as f:
-            lines = f.read().split("\n")
+        lines = self.__read().split("\n")
         old_text = "\n".join(lines)
 
         try:
@@ -569,14 +536,9 @@ class CoqFile(object):
             start_line = lines[prev_step.ast.range.end.line]
             end_line = lines[step.ast.range.end.line]
 
-            start_line = self.__slice_line(
-                start_line,
-                stop=prev_step.ast.range.end.character,
-                range=prev_step.ast.range,
-            )
-            end_line = self.__slice_line(
-                end_line, start=step.ast.range.end.character, range=step.ast.range
-            )
+            start_line = start_line[: prev_step.ast.range.end.character]
+            end_line = end_line[step.ast.range.end.character:]
+            
             if prev_step.ast.range.end.line == step.ast.range.end.line:
                 lines[prev_step.ast.range.end.line] = start_line + end_line
             else:
@@ -628,13 +590,9 @@ class CoqFile(object):
             end_line = previous_step.ast.range.end.line
             end_char = previous_step.ast.range.end.character
             lines[end_line] = (
-                self.__slice_line(
-                    lines[end_line], stop=end_char, range=previous_step.ast.range
-                )
+                lines[end_line][:end_char]
                 + step_text
-                + self.__slice_line(
-                    lines[end_line], start=end_char + 1, range=previous_step.ast.range
-                )
+                + lines[end_line][end_char + 1:]
             )
             text = "\n".join(lines)
             f.write(text)

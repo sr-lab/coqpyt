@@ -429,20 +429,9 @@ class ProofFile(CoqFile):
         for proof in self.proofs:
             for i, proof_step in enumerate(proof.steps):
                 if proof_step.ast.range == range:
-                    break
-            else:
-                continue
-            break
+                    return (proof, i)
         else:
             return None
-        return (proof, i)
-
-    def __find_proof(self, range: Range) -> Optional[ProofTerm]:
-        for proof in self.proofs:
-            for step in proof.steps:
-                if step.ast.range >= range:
-                    return proof
-        return None
 
     def __find_prev(self, range: Range) -> Tuple[ProofTerm, Optional[int]]:
         optional = self.__find_step(range)
@@ -452,16 +441,9 @@ class ProofFile(CoqFile):
                 if proof.ast.range == range:
                     return (proof, -1)
 
-            # When the step is the first step of the proof
-            proof = self.__find_proof(range)
-            # For a proof that did not end on the end of the file.
-            if proof is None and len(self.proofs[-1].steps) == 0:
-                proof = self.proofs[-1]
-            elif proof is None:
-                raise NotImplementedError(
-                    "Adding steps outside of a proof is not implemented yet"
-                )
-            return (proof, None)
+            raise NotImplementedError(
+                "Adding steps outside of a proof is not implemented yet"
+            )
         else:
             return optional
 
@@ -491,8 +473,7 @@ class ProofFile(CoqFile):
 
     def add_step(self, step_text: str, previous_step_index: int):
         proof, prev = self.__find_prev(self.steps[previous_step_index].ast.range)
-        if prev is None:
-            prev = -1
+        if prev == -1:
             self._make_change(self._add_step, step_text, previous_step_index)
         else:
             self._make_change(self._add_step, step_text, previous_step_index, True)

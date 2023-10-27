@@ -123,7 +123,7 @@ def test_get_proofs(setup, teardown):
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
+        ('Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.', TermType.NOTATION, []),
     ]
 
     compare_context(statement_context, proofs[0].context)
@@ -192,7 +192,7 @@ def test_get_proofs(setup, teardown):
         [],
         [
             ("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, []),
-            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+            ('Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.', TermType.NOTATION, []),
             (
                 "Inductive nat : Set := | O : nat | S : nat -> nat.",
                 TermType.INDUCTIVE,
@@ -200,7 +200,7 @@ def test_get_proofs(setup, teardown):
             ),
         ],
         [
-            ('Notation "A /\\ B" := (and A B) : type_scope', TermType.NOTATION, []),
+            ('Inductive and (A B:Prop) : Prop := conj : A -> B -> A /\ B where "A /\ B" := (and A B) : type_scope.', TermType.NOTATION, []),
             ("Inductive True : Prop := I : True.", TermType.INDUCTIVE, []),
         ],
         [],
@@ -220,8 +220,8 @@ def test_get_proofs(setup, teardown):
             [],
         ),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
-        ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+        ('Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.', TermType.NOTATION, []),
+        ('Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.', TermType.NOTATION, []),
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
     ]
 
@@ -292,7 +292,7 @@ def test_get_proofs(setup, teardown):
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
+        ('Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.', TermType.NOTATION, []),
     ]
 
     compare_context(statement_context, proofs[2].context)
@@ -369,7 +369,7 @@ def test_get_proofs(setup, teardown):
                 TermType.THEOREM,
                 ["Extra", "Fst"],
             ),
-            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+            ('Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.', TermType.NOTATION, []),
             (
                 'Notation "| a |" := (S a) (at level 30, right associativity).',
                 TermType.NOTATION,
@@ -393,9 +393,9 @@ def test_get_proofs(setup, teardown):
             [],
         ),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+        ('Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.', TermType.NOTATION, []),
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
-        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
+        ('Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.', TermType.NOTATION, []),
     ]
 
     compare_context(statement_context, proofs[3].context)
@@ -714,7 +714,7 @@ def test_imports(setup, teardown):
         [],
         [
             ("Local Theorem plus_O_n : forall n:nat, 0 + n = n.", TermType.THEOREM, []),
-            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+            ('Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.', TermType.NOTATION, []),
             (
                 "Inductive nat : Set := | O : nat | S : nat -> nat.",
                 TermType.INDUCTIVE,

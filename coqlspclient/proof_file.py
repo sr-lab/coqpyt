@@ -430,22 +430,21 @@ class ProofFile(CoqFile):
             for i, proof_step in enumerate(proof.steps):
                 if proof_step.ast.range == range:
                     return (proof, i)
-        else:
-            return None
+        return None
 
     def __find_prev(self, range: Range) -> Tuple[ProofTerm, Optional[int]]:
         optional = self.__find_step(range)
-        if optional is None:
-            # Previous step may be the definition of the proof
-            for proof in self.proofs:
-                if proof.ast.range == range:
-                    return (proof, -1)
-
-            raise NotImplementedError(
-                "Adding steps outside of a proof is not implemented yet"
-            )
-        else:
+        if optional is not None:
             return optional
+            
+        # Previous step may be the definition of the proof
+        for proof in self.proofs:
+            if proof.ast.range == range:
+                return (proof, -1)
+
+        raise NotImplementedError(
+            "Adding steps outside of a proof is not implemented yet"
+        )
 
     def __get_step(self, step_index):
         self.__aux_file.write("")
@@ -488,16 +487,16 @@ class ProofFile(CoqFile):
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]
         optional = self.__find_step(step.ast.range)
-        if optional is not None:
-            proof, i = optional
-            proof.steps.pop(i)
-            for e in range(i, len(proof.steps)):
-                # The goals will be loaded if used (Lazy Loading)
-                proof.steps[e].goals = self._goals
-        else:
+        if optional is None:
             raise NotImplementedError(
                 "Deleting steps outside of a proof is not implemented yet"
             )
+
+        proof, i = optional
+        proof.steps.pop(i)
+        for e in range(i, len(proof.steps)):
+            # The goals will be loaded if used (Lazy Loading)
+            proof.steps[e].goals = self._goals
         self._make_change(self._delete_step, step_index, True)
 
     def change_steps(self, changes: List[CoqChange]):
@@ -512,11 +511,9 @@ class ProofFile(CoqFile):
                 self._add_step(
                     change.step_text,
                     change.previous_step_index,
-                    in_proof=i is not None,
+                    in_proof=True,
                     validate_file=False,
                 )
-                if i is None:
-                    i = -1
                 proof.steps.insert(
                     i + 1, self.__get_step(change.previous_step_index + 1)
                 )
@@ -524,17 +521,17 @@ class ProofFile(CoqFile):
                 offset_steps += 1
             elif isinstance(change, CoqDeleteStep):
                 optional = self.__find_step(self.steps[change.step_index].ast.range)
-                if optional is not None:
-                    proof, i = optional
-                    self._delete_step(
-                        change.step_index, in_proof=True, validate_file=False
-                    )
-                    proof.steps.pop(i)
-                    offset_steps -= 1
-                else:
+                if optional is None:
                     raise NotImplementedError(
                         "Deleting steps outside of a proof is not implemented yet"
                     )
+
+                proof, i = optional
+                self._delete_step(
+                    change.step_index, in_proof=True, validate_file=False
+                )
+                proof.steps.pop(i)
+                offset_steps -= 1
             else:
                 raise NotImplementedError(f"Unknown change: {change}")
 

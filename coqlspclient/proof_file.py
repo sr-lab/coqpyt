@@ -436,7 +436,7 @@ class ProofFile(CoqFile):
         optional = self.__find_step(range)
         if optional is not None:
             return optional
-            
+
         # Previous step may be the definition of the proof
         for proof in self.proofs:
             if proof.ast.range == range:
@@ -527,9 +527,7 @@ class ProofFile(CoqFile):
                     )
 
                 proof, i = optional
-                self._delete_step(
-                    change.step_index, in_proof=True, validate_file=False
-                )
+                self._delete_step(change.step_index, in_proof=True, validate_file=False)
                 proof.steps.pop(i)
                 offset_steps -= 1
             else:

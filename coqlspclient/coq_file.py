@@ -2,12 +2,19 @@ import os
 import shutil
 import uuid
 import tempfile
-from pylspclient.lsp_structs import TextDocumentItem, TextDocumentIdentifier
+from pylspclient.lsp_structs import (
+    TextDocumentItem,
+    TextDocumentIdentifier,
+    VersionedTextDocumentIdentifier,
+    TextDocumentContentChangeEvent,
+)
 from pylspclient.lsp_structs import ResponseError, ErrorCodes, Diagnostic
 from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
 from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentType
 from coqlspclient.coq_lsp_client import CoqLspClient
-from typing import List, Optional
+from coqlspclient.coq_exceptions import *
+from coqlspclient.coq_changes import *
+from typing import List, Optional, Callable
 
 
 class CoqFile(object):
@@ -51,8 +58,7 @@ class CoqFile(object):
             uri = f"file://{self.__path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
         uri = f"file://{self.__path}"
-        with open(self.__path, "r") as f:
-            text = f.read()
+        text = self.__read()
 
         try:
             self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
@@ -61,6 +67,7 @@ class CoqFile(object):
             self.__handle_exception(e)
             raise e
 
+        self.steps_taken: int = 0
         self.__init_steps(text, ast)
         self.__validate()
         self.curr_module: List[str] = []
@@ -69,6 +76,9 @@ class CoqFile(object):
         self.__segment_stack: List[SegmentType] = []
         self.context = FileContext()
         self.__anonymous_id: Optional[int] = None
+        self.version = 1
+        self.__last_end_pos: Optional[Position] = None
+        self.__current_goals = None
 
     def __enter__(self):
         return self
@@ -103,21 +113,35 @@ class CoqFile(object):
         if self.__from_lib:
             os.remove(self.__path)
 
+    def __init_step(
+        self,
+        lines: List[str],
+        index: int,
+        step_ast: RangedSpan,
+        prev_step_ast: RangedSpan,
+    ):
+        start_line = 0 if index == 0 else prev_step_ast.range.end.line
+        start_char = 0 if index == 0 else prev_step_ast.range.end.character
+        end_line = step_ast.range.end.line
+        end_char = step_ast.range.end.character
+
+        curr_lines = lines[start_line : end_line + 1]
+        curr_lines[-1] = curr_lines[-1][:end_char]
+        curr_lines[0] = curr_lines[0][start_char:]
+        step_text = "\n".join(curr_lines)
+
+        if index == 0:
+            short_text = self.__short_text(step_text, step_ast)
+        else:
+            short_text = self.__short_text(step_text, step_ast, prev_step_ast)
+
+        return Step(step_text, short_text, step_ast)
+
     def __init_steps(self, text: str, ast: List[RangedSpan]):
         lines = text.split("\n")
         self.steps: List[Step] = []
         for i, curr_ast in enumerate(ast):
-            start_line = 0 if i == 0 else ast[i - 1].range.end.line
-            start_char = 0 if i == 0 else ast[i - 1].range.end.character
-            end_line = curr_ast.range.end.line
-            end_char = curr_ast.range.end.character
-
-            curr_lines = lines[start_line : end_line + 1]
-            curr_lines[-1] = curr_lines[-1][:end_char]
-            curr_lines[0] = curr_lines[0][start_char:]
-            step_text = "\n".join(curr_lines)
-            self.steps.append(Step(step_text, curr_ast))
-        self.steps_taken: int = 0
+            self.steps.append(self.__init_step(lines, i, curr_ast, ast[i - 1]))
 
     def __validate(self):
         uri = f"file://{self.__path}"
@@ -138,11 +162,11 @@ class CoqFile(object):
                     break
 
     @property
-    def __curr_step(self):
+    def curr_step(self):
         return self.steps[self.steps_taken]
 
     @property
-    def __prev_step(self):
+    def prev_step(self):
         return self.steps[self.steps_taken - 1]
 
     @staticmethod
@@ -189,42 +213,26 @@ class CoqFile(object):
 
         return [None]
 
-    def __short_text(self, range: Optional[Range] = None):
-        def slice_line(
-            line: str, start: Optional[int] = None, stop: Optional[int] = None
-        ):
-            if range is None:
-                return line[start:stop]
-
-            # A range will be provided when range.character is measured in bytes,
-            # rather than characters. If so, the string must be encoded before
-            # indexing. This special treatment is necessary for handling Unicode
-            # characters which take up more than 1 byte. Currently necessary to
-            # handle where-notations.
-            line = line.encode("utf-8")
-
-            # For where-notations, the character count does not include the closing
-            # parenthesis when present.
-            if stop is not None and chr(line[stop]) == ")":
-                stop += 1
-            return line[start:stop].decode()
-
-        curr_range = self.__curr_step.ast.range if range is None else range
+    def __short_text(
+        self, text: str, curr_step: RangedSpan, prev_step: Optional[RangedSpan] = None
+    ):
+        curr_range = curr_step.range
         nlines = curr_range.end.line - curr_range.start.line + 1
-        lines = self.__curr_step.text.split("\n")[-nlines:]
+        lines = text.split("\n")[-nlines:]
 
-        prev_range = None if self.steps_taken == 0 else self.__prev_step.ast.range
+        prev_range = None if prev_step is None else prev_step.range
         if prev_range is None or prev_range.end.line < curr_range.start.line:
             start = curr_range.start.character
         else:
             start = curr_range.start.character - prev_range.end.character
 
-        lines[-1] = slice_line(lines[-1], stop=curr_range.end.character)
-        lines[0] = slice_line(lines[0], start=start)
+        lines[-1] = lines[-1][: curr_range.end.character]
+        lines[0] = lines[0][start:]
+
         return " ".join(" ".join(lines).split())
 
-    def __add_term(self, name: str, ast: RangedSpan, text: str, term_type: TermType):
-        term = Term(text, ast, term_type, self.path, self.curr_module[:])
+    def __add_term(self, name: str, step: Step, term_type: TermType):
+        term = Term(step, term_type, self.path, self.curr_module[:])
         if term.type == TermType.NOTATION:
             self.context.update(terms={name: term})
             return
@@ -315,25 +323,10 @@ class CoqFile(object):
 
         # handles when multiple notations are defined
         for span in spans:
-            start = Position(
-                span["ntn_decl_string"]["loc"]["line_nb"] - 1,
-                span["ntn_decl_string"]["loc"]["bp"]
-                - span["ntn_decl_string"]["loc"]["bol_pos"],
-            )
-            end = Position(
-                span["ntn_decl_interp"]["loc"]["line_nb_last"] - 1,
-                span["ntn_decl_interp"]["loc"]["ep"]
-                - span["ntn_decl_interp"]["loc"]["bol_pos"],
-            )
-            range = Range(start, end)
-            text = self.__short_text(range=range)
             name = FileContext.get_notation_key(
                 span["ntn_decl_string"]["v"], span["ntn_decl_scope"]
             )
-            if span["ntn_decl_scope"] is not None:
-                text += " : " + span["ntn_decl_scope"]
-            text = "Notation " + text
-            self.__add_term(name, RangedSpan(range, span), text, TermType.NOTATION)
+            self.__add_term(name, self.curr_step, TermType.NOTATION)
 
     def __process_step(self, sign):
         def traverse_expr(expr):
@@ -375,7 +368,9 @@ class CoqFile(object):
             # TODO: A negative sign should handle things differently. For example:
             #   - names should be removed from the context
             #   - curr_module should change as you leave or re-enter modules
-            text = self.__short_text()
+
+            text = self.curr_step.short_text
+
             # FIXME Let (and maybe Variable) should be handled. However,
             # I think we can't handle them as normal Locals since they are
             # specific to a section.
@@ -388,7 +383,7 @@ class CoqFile(object):
             ]:
                 if text.startswith(keyword):
                     return
-            expr = CoqFile.expr(self.__curr_step.ast)
+            expr = CoqFile.expr(self.curr_step.ast)
             if expr == [None]:
                 return
             if expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve":
@@ -426,15 +421,15 @@ class CoqFile(object):
                 name = text.split('"')[1].strip()
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(name, self.__curr_step.ast, text, TermType.NOTATION)
+                self.__add_term(name, self.curr_step, TermType.NOTATION)
             elif expr[0] == "VernacSyntacticDefinition":
                 name = text.split(" ")[1]
                 if text[:-1].split(":")[-1].endswith("_scope"):
                     name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(name, self.__curr_step.ast, text, TermType.NOTATION)
+                self.__add_term(name, self.curr_step, TermType.NOTATION)
             elif expr[0] == "VernacInstance" and expr[1][0]["v"][0] == "Anonymous":
                 # FIXME: The name should be "<Class>_instance_N"
-                self.__add_term("_anonymous", self.__curr_step.ast, text, term_type)
+                self.__add_term("_anonymous", self.curr_step, term_type)
             elif expr[0] == "VernacDefinition" and expr[2][0]["v"][0] == "Anonymous":
                 # We associate the anonymous term to the same name used internally by Coq
                 if self.__anonymous_id is None:
@@ -442,21 +437,209 @@ class CoqFile(object):
                 else:
                     name = f"Unnamed_thm{self.__anonymous_id}"
                     self.__anonymous_id += 1
-                self.__add_term(name, self.__curr_step.ast, text, term_type)
+                self.__add_term(name, self.curr_step, term_type)
             elif term_type == TermType.DERIVE:
                 name = CoqFile.get_ident(expr[2][0])
-                self.__add_term(name, self.__curr_step.ast, text, term_type)
+                self.__add_term(name, self.curr_step, term_type)
                 if expr[1][0] == "Derive":
                     prop = CoqFile.get_ident(expr[2][2])
-                    self.__add_term(prop, self.__curr_step.ast, text, term_type)
+                    self.__add_term(prop, self.curr_step, term_type)
             else:
                 names = traverse_expr(expr)
                 for name in names:
-                    self.__add_term(name, self.__curr_step.ast, text, term_type)
+                    self.__add_term(name, self.curr_step, term_type)
 
             self.__handle_where_notations(expr, term_type)
         finally:
             self.steps_taken += sign
+
+    def __read(self):
+        with open(self.path, "r") as f:
+            return f.read()
+
+    def _goals(self, end_pos: Position):
+        uri = f"file://{self.__path}"
+        try:
+            return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+
+    def __in_proof(self, goals: Optional[GoalAnswer]):
+        def empty_stack(stack):
+            # e.g. [([], [])]
+            for tuple in stack:
+                if len(tuple[0]) > 0 or len(tuple[1]) > 0:
+                    return False
+            return True
+
+        goals = goals.goals
+        return goals is not None and (
+            len(goals.goals) > 0
+            or not empty_stack(goals.stack)
+            or len(goals.shelf) > 0
+            or goals.bullet is not None
+        )
+
+    def __update_steps(self):
+        uri = f"file://{self.path}"
+        text = self.__read()
+        try:
+            self.version += 1
+            self.coq_lsp_client.didChange(
+                VersionedTextDocumentIdentifier(uri, self.version),
+                [TextDocumentContentChangeEvent(None, None, text)],
+            )
+            ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(uri)).spans
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+        self.__init_steps(text, ast)
+        self.__validate()
+
+    def _make_change(self, change_function, *args):
+        previous_steps = self.steps
+        old_steps_taken = self.steps_taken
+        old_diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics
+        lines = self.__read().split("\n")
+        old_text = "\n".join(lines)
+
+        try:
+            change_function(*args)
+        except InvalidChangeException as e:
+            # Rollback changes
+            self.steps = previous_steps
+            self.steps_taken = old_steps_taken
+            self.coq_lsp_client.lsp_endpoint.diagnostics = old_diagnostics
+            self.is_valid = True
+            with open(self.path, "w") as f:
+                f.write(old_text)
+            raise e
+
+    def _delete_step(
+        self,
+        step_index: int,
+        in_proof: bool = False,
+        validate_file: bool = True,
+    ) -> None:
+        if not in_proof and not self.__in_proof(
+            self._goals(self.steps[step_index - 1].ast.range.end)
+        ):
+            raise NotImplementedError(
+                "Deleting steps outside of a proof is not implemented yet"
+            )
+
+        with open(self.__path, "r") as f:
+            lines = f.readlines()
+
+        with open(self.path, "w") as f:
+            step = self.steps[step_index]
+            prev_step = self.steps[step_index - 1]
+            start_line = lines[prev_step.ast.range.end.line]
+            end_line = lines[step.ast.range.end.line]
+
+            start_line = start_line[: prev_step.ast.range.end.character]
+            end_line = end_line[step.ast.range.end.character :]
+
+            if prev_step.ast.range.end.line == step.ast.range.end.line:
+                lines[prev_step.ast.range.end.line] = start_line + end_line
+            else:
+                lines[prev_step.ast.range.end.line] = start_line
+                lines[step.ast.range.end.line] = end_line
+            text = "".join(lines)
+            f.write(text)
+
+        # Modify the previous steps instead of creating new ones
+        # This is important to preserve their references
+        # For instance, in the ProofFile
+        previous_steps = self.steps
+        self.__update_steps()
+        if validate_file and (
+            # We will remove the step from the previous steps
+            len(self.steps) != len(previous_steps) - 1
+            or not self.is_valid
+        ):
+            raise InvalidDeleteException(self.steps[step_index].text)
+
+        previous_steps.pop(step_index)
+        for i, step in enumerate(previous_steps):
+            step.text, step.ast = self.steps[i].text, self.steps[i].ast
+            step.diagnostics = self.steps[i].diagnostics
+        self.steps = previous_steps
+
+    def _add_step(
+        self,
+        step_text: str,
+        previous_step_index: int,
+        in_proof: bool = False,
+        validate_file: bool = True,
+    ) -> None:
+        if validate_file and not self.is_valid:
+            raise InvalidFileException(self.path)
+
+        if not in_proof and not self.__in_proof(
+            self._goals(self.steps[previous_step_index].ast.range.end)
+        ):
+            raise NotImplementedError(
+                "Deleting steps outside of a proof is not implemented yet"
+            )
+
+        with open(self.__path, "r") as f:
+            lines = f.read().split("\n")
+
+        with open(self.path, "w") as f:
+            previous_step = self.steps[previous_step_index]
+            end_line = previous_step.ast.range.end.line
+            end_char = previous_step.ast.range.end.character
+            lines[end_line] = (
+                lines[end_line][:end_char] + step_text + lines[end_line][end_char + 1 :]
+            )
+            text = "\n".join(lines)
+            f.write(text)
+
+        # Modify the previous steps instead of creating new ones
+        # This is important to preserve their references
+        # For instance, in the ProofFile
+        previous_steps = self.steps
+        step_index = previous_step_index + 1
+        self.__update_steps()
+        if validate_file and (
+            # We will add the new step to the previous_steps
+            len(self.steps) != len(previous_steps) + 1
+            or self.steps[step_index].ast.span is None
+            or not self.is_valid
+        ):
+            raise InvalidStepException(step_text)
+
+        previous_steps.insert(step_index, self.steps[step_index])
+        for i, step in enumerate(previous_steps):
+            step.text, step.ast = self.steps[i].text, self.steps[i].ast
+            step.diagnostics = self.steps[i].diagnostics
+        self.steps = previous_steps
+
+        if self.steps_taken - 1 > previous_step_index:
+            self.steps_taken += 1
+
+    def _change_steps(self, changes: List[CoqChange]):
+        offset_steps = 0
+        previous_steps_size = len(self.steps)
+
+        for i, change in enumerate(changes):
+            if isinstance(change, CoqAddStep):
+                self._add_step(
+                    change.step_text,
+                    change.previous_step_index,
+                    validate_file=False,
+                )
+                offset_steps += 1
+            elif isinstance(change, CoqDeleteStep):
+                self._delete_step(change.step_index, validate_file=False)
+                offset_steps -= 1
+            else:
+                raise NotImplementedError(f"Unknown change: {change}")
+
+        if len(self.steps) != previous_steps_size + offset_steps or not self.is_valid:
+            raise InvalidChangeException()
 
     @property
     def timeout(self) -> int:
@@ -481,21 +664,7 @@ class CoqFile(object):
         Returns:
             bool: True if the current step is inside a proof
         """
-
-        def empty_stack(stack):
-            # e.g. [([], [])]
-            for tuple in stack:
-                if len(tuple[0]) > 0 or len(tuple[1]) > 0:
-                    return False
-            return True
-
-        goals = self.current_goals().goals
-        return goals is not None and (
-            len(goals.goals) > 0
-            or not empty_stack(goals.stack)
-            or len(goals.shelf) > 0
-            or goals.bullet is not None
-        )
+        return self.__in_proof(self.current_goals())
 
     @property
     def terms(self) -> List[Term]:
@@ -541,9 +710,62 @@ class CoqFile(object):
             nsteps * sign,
             len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
-        for _ in range(nsteps):
-            self.__process_step(sign)
-        return self.steps[initial_steps_taken : self.steps_taken]
+
+        # FIXME: for now we ignore the terms in the context when going backwards
+        # on the file
+        if sign == 1:
+            for _ in range(nsteps):
+                self.__process_step(sign)
+            return self.steps[initial_steps_taken : self.steps_taken]
+        else:
+            for _ in range(nsteps):
+                self.steps_taken -= 1
+                if not self.in_proof:
+                    self.steps_taken = initial_steps_taken
+                    raise NotImplementedError(
+                        "Going backwards outside of a proof is not implemented yet"
+                    )
+            return self.steps[self.steps_taken - 1 : initial_steps_taken]
+
+    def delete_step(self, step_index: int) -> None:
+        """Deletes a step from the file. The step must be inside a proof.
+        This function will change the original file.
+
+        Args:
+            step_index (int): The index of the step to remove.
+
+        Raises:
+            NotImplementedError: If the step is outside a proof.
+        """
+        self._make_change(self._delete_step, step_index)
+
+    def add_step(
+        self,
+        step_text: str,
+        previous_step_index: int,
+    ) -> None:
+        """Adds a step to the file. The step must be inside a proof.
+        This function will change the original file. If an exception is thrown
+        the file will not be changed.
+
+        Args:
+            step_text (str): The text of the step to add.
+            previous_step_index (int): The index of the previous step of the new step.
+
+        Raises:
+            NotImplementedError: If the step added is not on a proof.
+            InvalidFileException: If the file being changed is not valid.
+            InvalidStepException: If the step added is not valid
+        """
+        self._make_change(self._add_step, step_text, previous_step_index)
+
+    def change_steps(self, changes: List[CoqChange]):
+        """Changes the steps of the Coq file transactionally.
+
+        Args:
+            changes (List[CoqChange]): The changes to be applied to the Coq file.
+        """
+        self._make_change(self._change_steps, changes)
 
     def run(self) -> List[Step]:
         """Executes all the steps in the file.
@@ -559,15 +781,15 @@ class CoqFile(object):
         Returns:
             Optional[GoalAnswer]: Goals in the current position if there are goals
         """
-        uri = f"file://{self.__path}"
         end_pos = (
-            Position(0, 0) if self.steps_taken == 0 else self.__prev_step.ast.range.end
+            Position(0, 0) if self.steps_taken == 0 else self.prev_step.ast.range.end
         )
-        try:
-            return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
-        except Exception as e:
-            self.__handle_exception(e)
-            raise e
+
+        if end_pos != self.__last_end_pos:
+            self.__current_goals = self._goals(end_pos)
+            self.__last_end_pos = end_pos
+
+        return self.__current_goals
 
     def save_vo(self):
         """Compiles the vo file for this Coq file."""

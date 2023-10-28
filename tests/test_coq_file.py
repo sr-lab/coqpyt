@@ -1,6 +1,9 @@
 import os
+import shutil
 import pytest
 from coqlspclient.coq_file import CoqFile
+from coqlspclient.coq_changes import *
+from coqlspclient.coq_exceptions import *
 
 coq_file: CoqFile = None
 
@@ -24,22 +27,136 @@ def test_is_valid(setup, teardown):
     assert coq_file.is_valid
 
 
+@pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
+def test_negative_step(setup, teardown):
+    steps = coq_file.exec(nsteps=8)
+    assert steps[-1].text == "\n      Print plus."
+    steps = coq_file.exec(nsteps=-1)
+    assert steps[0].text == "\n      intros n."
+    steps = coq_file.exec(nsteps=-2)
+    with pytest.raises(NotImplementedError):
+        coq_file.exec(nsteps=-1)
+
+
+def test_delete_step():
+    file_path = os.path.join("tests/resources", "test_valid.v")
+    new_file_path = os.path.join("tests/resources", "test_valid_delete.v")
+    shutil.copyfile(file_path, new_file_path)
+    coq_file = CoqFile(new_file_path, timeout=60)
+
+    assert coq_file.steps[8].text == "\n      Print Nat.add."
+    assert coq_file.steps[8].ast.range.start.line == 12
+
+    try:
+        coq_file.delete_step(7)
+        assert coq_file.steps[7].text == "\n      Print Nat.add."
+        assert coq_file.steps[7].ast.range.start.line == 11
+        with open(new_file_path, "r") as f:
+            assert "Print plus." not in f.read()
+
+        with pytest.raises(NotImplementedError):
+            coq_file.delete_step(0)
+    finally:
+        coq_file.close()
+        if os.path.exists(new_file_path):
+            os.remove(new_file_path)
+
+
+def test_add_step():
+    file_path = os.path.join("tests/resources", "test_valid.v")
+    new_file_path = os.path.join("tests/resources", "test_valid_add.v")
+    shutil.copyfile(file_path, new_file_path)
+    coq_file = CoqFile(new_file_path, timeout=60)
+
+    assert coq_file.steps[8].text == "\n      Print Nat.add."
+    assert coq_file.steps[8].ast.range.start.line == 12
+
+    try:
+        steps = coq_file.exec(nsteps=8)
+        assert steps[-1].text == "\n      Print plus."
+        coq_file.add_step("\n      Print minus.", 7)
+        steps = coq_file.exec(nsteps=1)
+        assert steps[-1].text == "\n      Print minus."
+        coq_file.add_step("\n      Print minus.", 6)
+        steps = coq_file.exec(nsteps=1)
+        assert steps[-1].text == "\n      Print Nat.add."
+        assert steps[-1].ast.range.start.line == 14
+
+        with pytest.raises(NotImplementedError):
+            coq_file.add_step("\n      Print minus.", 0)
+    finally:
+        coq_file.close()
+        if os.path.exists(new_file_path):
+            os.remove(new_file_path)
+
+
+def test_change_steps():
+    file_path = os.path.join("tests/resources", "test_valid.v")
+    new_file_path = os.path.join("tests/resources", "test_valid_change_steps.v")
+    shutil.copyfile(file_path, new_file_path)
+    coq_file = CoqFile(new_file_path, timeout=60)
+
+    assert coq_file.steps[8].text == "\n      Print Nat.add."
+    assert coq_file.steps[8].ast.range.start.line == 12
+
+    try:
+        changes = [
+            CoqAddStep("\n      Print minus.", 7),
+            CoqAddStep("\n      Print minus.", 6),
+            CoqDeleteStep(9),  # Delete first print minus
+            CoqDeleteStep(19),  # Delete Compute True /\ True.
+        ]
+        coq_file.change_steps(changes)
+        steps = coq_file.exec(nsteps=8)
+        assert steps[-1].text == "\n      Print minus."
+        assert steps[-1].ast.range.start.line == 11
+        steps = coq_file.exec(nsteps=1)
+        assert steps[-1].text == "\n      Print plus."
+        assert coq_file.steps[8].ast.range.start.line == 12
+        steps = coq_file.exec(nsteps=11)
+        assert steps[-1].text == "\n    reflexivity."
+
+        with pytest.raises(InvalidChangeException):
+            coq_file.change_steps(
+                [
+                    CoqAddStep("\n      Print minus.", 7),
+                    CoqDeleteStep(11),  # delete reduce_eq
+                ]
+            )
+    finally:
+        coq_file.close()
+        if os.path.exists(new_file_path):
+            os.remove(new_file_path)
+
+
 @pytest.mark.parametrize("setup", ["test_where_notation.v"], indirect=True)
 def test_where_notation(setup, teardown):
     coq_file.run()
     assert "n + m : test_scope" in coq_file.context.terms
     assert (
         coq_file.context.terms["n + m : test_scope"].text
-        == 'Notation "n + m" := (plus n m) : test_scope'
+        == 'Fixpoint plus_test (n m : nat) {struct n} : nat := match n with | O => m | S p => S (p + m) end where "n + m" := (plus n m) : test_scope and "n - m" := (minus n m).'
     )
     assert "n - m" in coq_file.context.terms
-    assert coq_file.context.terms["n - m"].text == 'Notation "n - m" := (minus n m)'
+    assert (
+        coq_file.context.terms["n - m"].text
+        == 'Fixpoint plus_test (n m : nat) {struct n} : nat := match n with | O => m | S p => S (p + m) end where "n + m" := (plus n m) : test_scope and "n - m" := (minus n m).'
+    )
     assert "A & B" in coq_file.context.terms
-    assert coq_file.context.terms["A & B"].text == 'Notation "A & B" := (and\' A B)'
+    assert (
+        coq_file.context.terms["A & B"].text
+        == "Inductive and' (A B : Prop) : Prop := conj' : A -> B -> A & B where \"A & B\" := (and' A B)."
+    )
     assert "'ONE'" in coq_file.context.terms
-    assert coq_file.context.terms["'ONE'"].text == "Notation \"'ONE'\" := 1"
+    assert (
+        coq_file.context.terms["'ONE'"].text
+        == "Fixpoint incr (n : nat) : nat := n + ONE where \"'ONE'\" := 1."
+    )
     assert "x 🀄 y" in coq_file.context.terms
-    assert coq_file.context.terms["x 🀄 y"].text == 'Notation "x 🀄 y" := (plus_test x y)'
+    assert (
+        coq_file.context.terms["x 🀄 y"].text
+        == 'Fixpoint unicode x y := x 🀄 y where "x 🀄 y" := (plus_test x y).'
+    )
 
 
 @pytest.mark.parametrize("setup", ["test_get_notation.v"], indirect=True)

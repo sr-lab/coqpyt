@@ -1,14 +1,20 @@
 import os
+import shutil
+import uuid
 import subprocess
 import pytest
+import tempfile
 from typing import List, Tuple
 from coqlspclient.coq_lsp_structs import *
 from coqlspclient.coq_structs import TermType, Term, CoqError, CoqErrorCodes
-from coqlspclient.proof_state import ProofState, CoqFile
+from coqlspclient.proof_file import ProofFile
+from coqlspclient.coq_exceptions import *
+from coqlspclient.coq_changes import *
 
 versionId: VersionedTextDocumentIdentifier = None
-state: ProofState = None
+state: ProofFile = None
 workspace: str = None
+file_path: str = ""
 
 
 def compare_context(
@@ -23,14 +29,21 @@ def compare_context(
 
 @pytest.fixture
 def setup(request):
-    global state, versionId, workspace
+    global state, versionId, workspace, file_path
     file_path, workspace = request.param[0], request.param[1]
-    file_path = os.path.join("tests/resources", file_path)
+    if len(request.param) == 3 and request.param[2]:
+        new_path = os.path.join(
+            tempfile.gettempdir(), "test" + str(uuid.uuid4()).replace("-", "") + ".v"
+        )
+        shutil.copyfile(os.path.join("tests/resources", file_path), new_path)
+        file_path = new_path
+    else:
+        file_path = os.path.join("tests/resources", file_path)
     if workspace is not None:
         workspace = os.path.join(os.getcwd(), "tests/resources", workspace)
         subprocess.run(f"cd {workspace} && make", shell=True, capture_output=True)
     uri = "file://" + file_path
-    state = ProofState(CoqFile(file_path, timeout=60, workspace=workspace))
+    state = ProofFile(file_path, timeout=60, workspace=workspace)
     versionId = VersionedTextDocumentIdentifier(uri, 1)
     yield
 
@@ -41,6 +54,13 @@ def teardown(request):
     if workspace is not None:
         subprocess.run(f"cd {workspace} && make clean", shell=True, capture_output=True)
     state.close()
+    if (
+        hasattr(request, "param")
+        and len(request.param) == 1
+        and request.param[0]
+        and os.path.exists(file_path)
+    ):
+        os.remove(file_path)
 
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None)], indirect=True)
@@ -49,12 +69,19 @@ def test_get_proofs(setup, teardown):
     assert len(proofs) == 4
 
     texts = [
+        "\n    Proof.",
         "\n      intros n.",
         "\n      Print plus.",
         "\n      Print Nat.add.",
         "\n      reduce_eq.",
     ]
     goals = [
+        GoalAnswer(
+            versionId,
+            Position(8, 47),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
         GoalAnswer(
             versionId,
             Position(9, 10),
@@ -82,6 +109,7 @@ def test_get_proofs(setup, teardown):
     ]
     contexts = [
         [],
+        [],
         [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
         [
             (
@@ -95,7 +123,11 @@ def test_get_proofs(setup, teardown):
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
+        (
+            'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
+            TermType.NOTATION,
+            [],
+        ),
     ]
 
     compare_context(statement_context, proofs[0].context)
@@ -106,12 +138,19 @@ def test_get_proofs(setup, teardown):
         compare_context(contexts[i], proofs[0].steps[i].context)
 
     texts = [
+        "\n  Proof.",
         "\n    intros n m.",
         "\n    rewrite -> (plus_O_n (S n * m)).",
         "\n    Compute True /\\ True.",
         "\n    reflexivity.",
     ]
     goals = [
+        GoalAnswer(
+            versionId,
+            Position(20, 28),
+            [],
+            GoalConfig([Goal([], "∀ n m : nat, 0 + S n * m = S n * m")], [], [], []),
+        ),
         GoalAnswer(
             versionId,
             Position(21, 8),
@@ -154,9 +193,14 @@ def test_get_proofs(setup, teardown):
     ]
     contexts = [
         [],
+        [],
         [
             ("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, []),
-            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+            (
+                'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.',
+                TermType.NOTATION,
+                [],
+            ),
             (
                 "Inductive nat : Set := | O : nat | S : nat -> nat.",
                 TermType.INDUCTIVE,
@@ -164,12 +208,17 @@ def test_get_proofs(setup, teardown):
             ),
         ],
         [
-            ('Notation "A /\\ B" := (and A B) : type_scope', TermType.NOTATION, []),
+            (
+                'Inductive and (A B:Prop) : Prop := conj : A -> B -> A /\ B where "A /\ B" := (and A B) : type_scope.',
+                TermType.NOTATION,
+                [],
+            ),
             ("Inductive True : Prop := I : True.", TermType.INDUCTIVE, []),
         ],
         [],
     ]
     ranges = [
+        (21, 2, 21, 8),
         (22, 4, 22, 15),
         (23, 4, 23, 36),
         (24, 4, 24, 25),
@@ -183,8 +232,16 @@ def test_get_proofs(setup, teardown):
             [],
         ),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
-        ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+        (
+            'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
+            TermType.NOTATION,
+            [],
+        ),
+        (
+            'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.',
+            TermType.NOTATION,
+            [],
+        ),
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
     ]
 
@@ -255,7 +312,11 @@ def test_get_proofs(setup, teardown):
     statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
+        (
+            'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
+            TermType.NOTATION,
+            [],
+        ),
     ]
 
     compare_context(statement_context, proofs[2].context)
@@ -266,12 +327,21 @@ def test_get_proofs(setup, teardown):
         compare_context(contexts[i], proofs[2].steps[i].context)
 
     texts = [
+        "\n    Proof.",
         "\n      intros n m.",
         "\n      rewrite <- (Fst.plus_O_n (|n| * m)).",
         "\n      Compute {| Fst.fst := n; Fst.snd := n |}.",
         "\n      reflexivity.",
     ]
     goals = [
+        GoalAnswer(
+            versionId,
+            Position(45, 30),
+            [],
+            GoalConfig(
+                [Goal([], "∀ n m : nat, | n | * m = 0 + | n | * m")], [], [], []
+            ),
+        ),
         GoalAnswer(
             versionId,
             Position(46, 10),
@@ -316,13 +386,18 @@ def test_get_proofs(setup, teardown):
     ]
     contexts = [
         [],
+        [],
         [
             (
                 "Theorem plus_O_n : forall n:nat, n = 0 + n.",
                 TermType.THEOREM,
                 ["Extra", "Fst"],
             ),
-            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+            (
+                'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.',
+                TermType.NOTATION,
+                [],
+            ),
             (
                 'Notation "| a |" := (S a) (at level 30, right associativity).',
                 TermType.NOTATION,
@@ -346,9 +421,17 @@ def test_get_proofs(setup, teardown):
             [],
         ),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+        (
+            'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.',
+            TermType.NOTATION,
+            [],
+        ),
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
-        ('Notation "n + m" := (add n m) : nat_scope', TermType.NOTATION, []),
+        (
+            'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
+            TermType.NOTATION,
+            [],
+        ),
     ]
 
     compare_context(statement_context, proofs[3].context)
@@ -361,6 +444,301 @@ def test_get_proofs(setup, teardown):
         compare_context(contexts[i], proofs[3].steps[i].context)
 
 
+@pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_valid_change(setup, teardown):
+    state.delete_step(6)
+
+    versionId.version += 1
+    proofs = state.proofs
+    texts = [
+        "\n    Proof.",
+        "\n      Print plus.",
+        "\n      Print Nat.add.",
+        "\n      reduce_eq.",
+        "\n    Qed.",
+    ]
+    goals = [
+        GoalAnswer(
+            VersionedTextDocumentIdentifier(versionId.uri, 1),
+            Position(8, 47),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(10, 6),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(11, 6),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(12, 6),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(13, 4),
+            [],
+            GoalConfig([], [], [], []),
+        ),
+    ]
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == texts[i]
+        assert str(proofs[0].steps[i].goals) == str(goals[i])
+
+    state.add_step("\n      intros n.", 5)
+
+    versionId.version += 1
+    proofs = state.proofs
+    texts = [
+        "\n    Proof.",
+        "\n      intros n.",
+        "\n      Print plus.",
+        "\n      Print Nat.add.",
+        "\n      reduce_eq.",
+        "\n    Qed.",
+    ]
+    goals = [
+        GoalAnswer(
+            VersionedTextDocumentIdentifier(versionId.uri, 1),
+            Position(8, 47),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(10, 6),
+            [],
+            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(11, 6),
+            [],
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(12, 6),
+            [],
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(13, 6),
+            [],
+            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
+        ),
+        GoalAnswer(
+            versionId,
+            Position(14, 4),
+            [],
+            GoalConfig([], [], [], []),
+        ),
+    ]
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == texts[i]
+        assert str(proofs[0].steps[i].goals) == str(goals[i])
+
+    # Check if context is changed correctly
+    state.add_step("\n      Print minus.", 7)
+    texts = [
+        "\n    Proof.",
+        "\n      intros n.",
+        "\n      Print plus.",
+        "\n      Print minus.",
+        "\n      Print Nat.add.",
+        "\n      reduce_eq.",
+        "\n    Qed.",
+    ]
+    contexts = [
+        [],
+        [],
+        [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
+        [("Notation minus := Nat.sub (only parsing).", TermType.NOTATION, [])],
+        [
+            (
+                'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
+                TermType.FIXPOINT,
+                [],
+            )
+        ],
+        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
+        [],
+    ]
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == texts[i]
+        compare_context(contexts[i], proofs[0].steps[i].context)
+
+    # Add outside of proof
+    with pytest.raises(NotImplementedError):
+        state.add_step("\n    Print plus.", 25)
+
+    # Add step in beginning of proof
+    state.add_step("\n    Print plus.", 26)
+    assert state.steps[27].text == "\n    Print plus."
+
+    # Delete outside of proof
+    with pytest.raises(NotImplementedError):
+        state.delete_step(33)
+
+    # Add step to end of proof
+    state.add_step("\n    Print plus.", 31)
+    assert state.steps[32].text == "\n    Print plus."
+
+    # Delete step in beginning of proof
+    state.delete_step(27)
+    assert state.steps[27].text == "\n      intros n."
+
+    # Delete step in end of proof
+    state.delete_step(41)
+    assert state.steps[41].text == "\n    Admitted."
+
+
+@pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_change_steps(setup, teardown):
+    versionId.version += 1
+    proofs = state.proofs
+
+    state.change_steps(
+        [
+            CoqDeleteStep(6),
+            CoqAddStep("\n      intros n.", 5),
+            CoqAddStep("\n      Print minus.", 7),
+        ]
+    )
+
+    texts = [
+        "\n    Proof.",
+        "\n      intros n.",
+        "\n      Print plus.",
+        "\n      Print minus.",
+        "\n      Print Nat.add.",
+        "\n      reduce_eq.",
+        "\n    Qed.",
+    ]
+    contexts = [
+        [],
+        [],
+        [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
+        [("Notation minus := Nat.sub (only parsing).", TermType.NOTATION, [])],
+        [
+            (
+                'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
+                TermType.FIXPOINT,
+                [],
+            )
+        ],
+        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
+        [],
+    ]
+    for i, step in enumerate(proofs[0].steps):
+        assert step.text == texts[i]
+        compare_context(contexts[i], proofs[0].steps[i].context)
+
+    # Add outside of proof
+    with pytest.raises(NotImplementedError):
+        state.change_steps([CoqAddStep("\n    Print plus.", 25)])
+
+    # Add step in beginning of proof
+    state.change_steps([CoqAddStep("\n    Print plus.", 26)])
+    assert state.steps[27].text == "\n    Print plus."
+
+    # # Delete outside of proof
+    with pytest.raises(NotImplementedError):
+        state.change_steps([CoqDeleteStep(33)])
+
+    # # Add step to end of proof
+    state.change_steps([CoqAddStep("\n    Print plus.", 31)])
+    assert state.steps[32].text == "\n    Print plus."
+
+    # # Delete step in beginning of proof
+    state.change_steps([CoqDeleteStep(27)])
+    assert state.steps[27].text == "\n      intros n."
+
+    # # Delete step in end of proof
+    state.change_steps([CoqDeleteStep(41)])
+    assert state.steps[41].text == "\n    Admitted."
+
+
+@pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_invalid_change(setup, teardown):
+    n_old_steps = len(state.steps)
+    old_diagnostics = state.diagnostics
+    old_goals = []
+    for proof in state.proofs:
+        for step in proof.steps:
+            old_goals.append(step.goals)
+
+    def check_rollback():
+        with open(state.path, "r") as f:
+            assert n_old_steps == len(state.steps)
+            assert old_diagnostics == state.diagnostics
+            assert state.is_valid
+            assert "invalid_tactic" not in f.read()
+            i = 0
+            for proof in state.proofs:
+                for step in proof.steps:
+                    assert step.goals == old_goals[i]
+                    i += 1
+
+    with pytest.raises(InvalidDeleteException):
+        state.delete_step(9)
+        check_rollback()
+    with pytest.raises(InvalidDeleteException):
+        state.delete_step(16)
+        check_rollback()
+    with pytest.raises(InvalidStepException):
+        state.add_step("invalid_tactic", 7)
+        check_rollback()
+    with pytest.raises(InvalidStepException):
+        state.add_step("invalid_tactic.", 7)
+        check_rollback()
+    with pytest.raises(InvalidStepException):
+        state.add_step("\n    invalid_tactic.", 7)
+        check_rollback()
+    with pytest.raises(InvalidStepException):
+        state.add_step("\n    invalid_tactic x $$$ y.", 7)
+        check_rollback()
+
+
+@pytest.mark.parametrize("setup", [("test_bug.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_change_notation(setup, teardown):
+    # Just checking if the program does not crash
+    state.add_step(" destruct (a <? n).", len(state.steps) - 3)
+
+
+@pytest.mark.parametrize("setup", [("test_invalid_1.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_change_invalid(setup, teardown):
+    with pytest.raises(InvalidFileException):
+        state.add_step("Print plus.", 7)
+
+
+@pytest.mark.parametrize("setup", [("test_change_empty.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_get_proofs_change_empty(setup, teardown):
+    state.add_step("\nAdmitted.", len(state.steps) - 2)
+    assert state.steps[-2].text == "\nAdmitted."
+    assert len(state.proofs[0].steps) == 2
+    assert state.proofs[0].steps[-1].text == "\nAdmitted."
+
+    state.delete_step(len(state.steps) - 2)
+    assert len(state.steps) == 3
+    assert len(state.proofs[0].steps) == 1
+
+
 @pytest.mark.parametrize(
     "setup", [("test_imports/test_import.v", "test_imports/")], indirect=True
 )
@@ -369,9 +747,14 @@ def test_imports(setup, teardown):
     assert len(proofs) == 2
     context = [
         [],
+        [],
         [
             ("Local Theorem plus_O_n : forall n:nat, 0 + n = n.", TermType.THEOREM, []),
-            ('Notation "n * m" := (mul n m) : nat_scope', TermType.NOTATION, []),
+            (
+                'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.',
+                TermType.NOTATION,
+                [],
+            ),
             (
                 "Inductive nat : Set := | O : nat | S : nat -> nat.",
                 TermType.INDUCTIVE,
@@ -380,6 +763,7 @@ def test_imports(setup, teardown):
         ],
         [],  # FIXME: in the future we should get a Local Theorem from other file here
         [("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, [])],
+        [],
         [],
     ]
 
@@ -390,7 +774,8 @@ def test_imports(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_non_ending_proof.v", None)], indirect=True)
 def test_non_ending_proof(setup, teardown):
-    assert len(state.proofs) == 0
+    assert len(state.proofs) == 1
+    assert len(state.proofs[0].steps) == 3
 
 
 @pytest.mark.parametrize("setup", [("test_exists_notation.v", None)], indirect=True)
@@ -443,17 +828,19 @@ def test_nested_proofs(setup, teardown):
     proofs = state.proofs
     assert len(proofs) == 4
 
-    steps = ["\n    intros n.", "\n    simpl; reflexivity."]
-    assert len(proofs[0].steps) == 2
+    steps = ["\n    intros n.", "\n    simpl; reflexivity.", "\n    Qed."]
+    assert len(proofs[0].steps) == len(steps)
     for i, step in enumerate(proofs[0].steps):
         assert step.text == steps[i]
 
     steps = [
+        "\nProof.",
         "\nintros n m.",
         "\n\nrewrite <- (plus_O_n ((S n) * m)).",
         "\nreflexivity.",
+        "\nQed.",
     ]
-    assert len(proofs[1].steps) == 3
+    assert len(proofs[1].steps) == len(steps)
     for i, step in enumerate(proofs[1].steps):
         assert step.text == steps[i]
 
@@ -492,14 +879,16 @@ def test_bullets(setup, teardown):
     proofs = state.proofs
     assert len(proofs) == 1
     steps = [
+        "\nProof.",
         "\n    intros x y.",
         " split.",
         "\n    -",
         "reflexivity.",
         "\n    -",
         " reflexivity.",
+        "\nQed.",
     ]
-    assert len(proofs[0].steps) == 6
+    assert len(proofs[0].steps) == len(steps)
     for i, step in enumerate(proofs[0].steps):
         assert step.text == steps[i]
 
@@ -545,7 +934,7 @@ def test_obligation(setup, teardown):
             + programs[i][1]
             + "."
         )
-        assert len(proof.steps) == 1
+        assert len(proof.steps) == 2
         assert proof.steps[0].text == "\n  dummy_tactic n e."
 
 
@@ -559,7 +948,7 @@ def test_module_type(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_type_class.v", None)], indirect=True)
 def test_type_class(setup, teardown):
     assert len(state.proofs) == 2
-    assert len(state.proofs[0].steps) == 2
+    assert len(state.proofs[0].steps) == 4
     assert (
         state.proofs[0].text
         == "#[refine] Global Instance unit_EqDec : TypeClass.EqDecNew unit := { eqb_new x y := true }."
@@ -621,3 +1010,35 @@ def test_goal(setup, teardown):
             ],
             proof.context,
         )
+
+
+@pytest.mark.parametrize("setup", [("test_simple_file.v", None, True)], indirect=True)
+@pytest.mark.parametrize("teardown", [(True,)], indirect=True)
+def test_simple_file_changes(setup, teardown):
+    state.change_steps(
+        [
+            CoqDeleteStep(1),
+            CoqDeleteStep(1),
+            CoqDeleteStep(2),
+            CoqDeleteStep(2),
+            CoqDeleteStep(2),
+            CoqAddStep("\nAdmitted.", 0),
+            CoqAddStep("\nAdmitted.", 2),
+        ]
+    )
+    assert len(state.steps) == 5
+    assert len(state.proofs) == 2
+
+    steps = [
+        "Example test1: 1 + 1 = 2.",
+        "\nAdmitted.",
+        "\n\nExample test2: 1 + 1 + 1= 3.",
+        "\nAdmitted.",
+    ]
+    for i, step in enumerate(steps):
+        assert step == state.steps[i].text
+
+    assert state.proofs[0].text == steps[0]
+    assert state.proofs[0].steps[0].text == steps[1]
+    assert state.proofs[1].text == steps[2].strip()
+    assert state.proofs[1].steps[0].text == steps[3]

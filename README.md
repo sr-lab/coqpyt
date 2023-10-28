@@ -20,7 +20,7 @@ python -m pip install -e .
 ```python
 import os
 from coqlspclient.coq_file import CoqFile
-from coqlspclient.proof_state import ProofState
+from coqlspclient.proof_file import ProofFile
 from coqlspclient.coq_structs import TermType
 
 # Open Coq file
@@ -55,33 +55,32 @@ with CoqFile(os.path.join(os.getcwd(), "examples/example.v")) as coq_file:
     # Get all terms defined until now
     print("Number of terms:", len(coq_file.context.terms))
 
-with CoqFile(os.path.join(os.getcwd(), "examples/example.v")) as coq_file:
-    with ProofState(coq_file) as proof_state:
-        # Number of proofs in the file
-        print("Number of proofs:", len(proof_state.proofs))
-        print("Proof:", proof_state.proofs[0].text)
+with ProofFile(os.path.join(os.getcwd(), "examples/example.v")) as proof_file:
+    # Number of proofs in the file
+    print("Number of proofs:", len(proof_file.proofs))
+    print("Proof:", proof_file.proofs[0].text)
 
-        # Print steps of proof
-        for step in proof_state.proofs[0].steps:
-            print(step.text, end="")
-        print()
+    # Print steps of proof
+    for step in proof_file.proofs[0].steps:
+        print(step.text, end="")
+    print()
 
-        # Get the context used in the third step
-        print(proof_state.proofs[0].steps[2].context)
-        # Print the goals in the third step
-        print(proof_state.proofs[0].steps[2].goals)
+    # Get the context used in the third step
+    print(proof_file.proofs[0].steps[2].context)
+    # Print the goals in the third step
+    print(proof_file.proofs[0].steps[2].goals)
 
-        # Print number of terms in context
-        print("Number of terms:", len(proof_state.context.terms))
-        # Filter for Notations only
-        print("Number of notations:",
-            len(
-                list(filter(
-                    lambda term: term.type == TermType.NOTATION,
-                    proof_state.context.terms.values(),
-                ))
-            )
+    # Print number of terms in context
+    print("Number of terms:", len(proof_file.context.terms))
+    # Filter for Notations only
+    print("Number of notations:",
+        len(
+            list(filter(
+                lambda term: term.type == TermType.NOTATION,
+                proof_file.context.terms.values(),
+            ))
         )
+    )
 ```
 
 ### Run tests

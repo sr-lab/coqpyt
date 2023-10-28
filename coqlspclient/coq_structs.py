@@ -1,8 +1,8 @@
 import re
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Union, Callable
 from coqlspclient.coq_lsp_structs import RangedSpan, GoalAnswer
-from pylspclient.lsp_structs import Diagnostic
+from pylspclient.lsp_structs import Diagnostic, Position
 
 
 class SegmentType(Enum):
@@ -51,8 +51,9 @@ class CoqError(Exception):
 
 
 class Step(object):
-    def __init__(self, text: str, ast: RangedSpan):
+    def __init__(self, text: str, short_text: str, ast: RangedSpan):
         self.text = text
+        self.short_text = short_text
         self.ast = ast
         self.diagnostics: List[Diagnostic] = []
 
@@ -60,8 +61,7 @@ class Step(object):
 class Term:
     def __init__(
         self,
-        text: str,
-        ast: RangedSpan,
+        step: Step,
         term_type: TermType,
         file_path: str,
         module: List[str],
@@ -75,8 +75,7 @@ class Term:
             file_path (str): The file where the term is.
             module (str): The module where the term is.
         """
-        self.text = text
-        self.ast = ast
+        self.step = step
         self.type = term_type
         self.file_path = file_path
         self.module = module
@@ -89,17 +88,52 @@ class Term:
     def __hash__(self) -> int:
         return hash(self.text)
 
+    @property
+    def text(self) -> str:
+        return self.step.short_text
 
-class ProofStep(Step):
-    def __init__(self, step: Step, goals: GoalAnswer, context: List[Term]):
-        super().__init__(step.text, step.ast)
-        self.goals = goals
+    @property
+    def ast(self) -> RangedSpan:
+        return self.step.ast
+
+
+class ProofStep:
+    def __init__(
+        self,
+        step: Step,
+        goals: Union[GoalAnswer, Callable[[Position], GoalAnswer]],
+        context: List[Term],
+    ):
+        self.step = step
+        self._goals = goals
         self.context = context
+
+    @property
+    def goals(self) -> GoalAnswer:
+        if callable(self._goals):
+            self._goals = self._goals(self.ast.range.start)
+        return self._goals
+
+    @goals.setter
+    def goals(self, goals: Union[GoalAnswer, Callable[[Position], GoalAnswer]]):
+        self._goals = goals
+
+    @property
+    def ast(self) -> RangedSpan:
+        return self.step.ast
+
+    @property
+    def text(self) -> str:
+        return self.step.text
+
+    @property
+    def diagnostics(self) -> List[Diagnostic]:
+        return self.step.diagnostics
 
 
 class ProofTerm(Term):
     def __init__(self, term: Term, context: List[Term], steps: List[ProofStep]):
-        super().__init__(term.text, term.ast, term.type, term.file_path, term.module)
+        super().__init__(term.step, term.type, term.file_path, term.module)
         self.steps = steps
         self.context = context
 

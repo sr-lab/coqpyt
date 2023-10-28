@@ -116,6 +116,7 @@ class CoqLspClient(LspClient):
             textDocument (TextDocumentItem): Text document to open
         """
         self.__completed_operation = False
+        self.lsp_endpoint.diagnostics[textDocument.uri] = []
         super().didOpen(textDocument)
         self.__wait_for_operation()
 
@@ -131,6 +132,7 @@ class CoqLspClient(LspClient):
             contentChanges (list[TextDocumentContentChangeEvent]): Changes made.
         """
         self.__completed_operation = False
+        self.lsp_endpoint.diagnostics[textDocument.uri] = []
         super().didChange(textDocument, contentChanges)
         self.__wait_for_operation()
 

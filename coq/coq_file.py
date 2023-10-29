@@ -2,18 +2,18 @@ import os
 import shutil
 import uuid
 import tempfile
-from pylspclient.lsp_structs import (
+from lsp.lsp_structs import (
     TextDocumentItem,
     TextDocumentIdentifier,
     VersionedTextDocumentIdentifier,
     TextDocumentContentChangeEvent,
 )
-from pylspclient.lsp_structs import ResponseError, ErrorCodes, Diagnostic
-from coqlspclient.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
-from coqlspclient.coq_structs import Step, FileContext, Term, TermType, SegmentType
-from coqlspclient.coq_lsp_client import CoqLspClient
-from coqlspclient.coq_exceptions import *
-from coqlspclient.coq_changes import *
+from lsp.lsp_structs import ResponseError, ErrorCodes, Diagnostic
+from coq.lsp.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
+from coq.coq_structs import Step, FileContext, Term, TermType, SegmentType
+from coq.lsp.coq_lsp_client import CoqLspClient
+from coq.coq_exceptions import *
+from coq.coq_changes import *
 from typing import List, Optional, Callable
 
 

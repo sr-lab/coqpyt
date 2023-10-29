@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Dict, Optional, Any, List, Tuple
-from pylspclient.lsp_structs import Range, VersionedTextDocumentIdentifier, Position
+from lsp.lsp_structs import Range, VersionedTextDocumentIdentifier, Position
 
 
 class Hyp(object):

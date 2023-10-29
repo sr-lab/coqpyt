@@ -1,7 +1,7 @@
 from __future__ import print_function
 import threading
 import logging
-from pylspclient import lsp_structs
+from lsp import lsp_structs
 from typing import Dict, List
 
 

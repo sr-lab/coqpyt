@@ -1,8 +1,8 @@
-# coq-lsp-pyclient
+# CoqPyt
 
-Python client for [coq-lsp](https://github.com/ejgallego/coq-lsp).
+Interact with Coq files and navigate through your proofs using our Python client for [coq-lsp](https://github.com/ejgallego/coq-lsp).
 
-Abstraction to interact with Coq files, get their context, execute them, among other operations.
+Execute Coq files, retrieve the generated context and edit proofs through addition and removal of steps.
 
 ## Installation
 
@@ -19,9 +19,9 @@ python -m pip install -e .
 ## Usage
 ```python
 import os
-from coqlspclient.coq_file import CoqFile
-from coqlspclient.proof_file import ProofFile
-from coqlspclient.coq_structs import TermType
+from coq.base_file import CoqFile
+from coq.proof_file import ProofFile
+from coq.structs import TermType
 
 # Open Coq file
 with CoqFile(os.path.join(os.getcwd(), "examples/example.v")) as coq_file:

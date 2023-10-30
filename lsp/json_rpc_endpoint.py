@@ -1,7 +1,7 @@
 from __future__ import print_function
 import json
 import logging
-from pylspclient import lsp_structs
+from lsp import structs
 import threading
 
 JSON_RPC_REQ_FORMAT = "Content-Length: {json_string_len}\r\n\r\n{json_string}"
@@ -72,8 +72,8 @@ class JsonRpcEndpoint(object):
                 if self.message_size.isdigit():
                     self.message_size = int(self.message_size)
                 else:
-                    raise lsp_structs.ResponseError(
-                        lsp_structs.ErrorCodes.ParseError, "Bad header: size is not int"
+                    raise structs.ResponseError(
+                        structs.ErrorCodes.ParseError, "Bad header: size is not int"
                     )
             while True:
                 # read header
@@ -83,8 +83,8 @@ class JsonRpcEndpoint(object):
                     return None
                 line = line.decode("utf-8")
                 if not line.endswith("\r\n"):
-                    raise lsp_structs.ResponseError(
-                        lsp_structs.ErrorCodes.ParseError, "Bad header: missing newline"
+                    raise structs.ResponseError(
+                        structs.ErrorCodes.ParseError, "Bad header: missing newline"
                     )
                 # remove the "\r\n"
                 line = line[:-2]
@@ -94,8 +94,8 @@ class JsonRpcEndpoint(object):
                 elif line.startswith(LEN_HEADER):
                     line = line[len(LEN_HEADER) :]
                     if not line.isdigit():
-                        raise lsp_structs.ResponseError(
-                            lsp_structs.ErrorCodes.ParseError,
+                        raise structs.ResponseError(
+                            structs.ErrorCodes.ParseError,
                             "Bad header: size is not int",
                         )
                     self.message_size = int(line)
@@ -106,12 +106,12 @@ class JsonRpcEndpoint(object):
                     line = line.split(LEN_HEADER)
                     if len(line) == 2:
                         self.message_size = line[1]
-                    raise lsp_structs.ResponseError(
-                        lsp_structs.ErrorCodes.ParseError, "Bad header: unknown header"
+                    raise structs.ResponseError(
+                        structs.ErrorCodes.ParseError, "Bad header: unknown header"
                     )
             if not self.message_size:
-                raise lsp_structs.ResponseError(
-                    lsp_structs.ErrorCodes.ParseError, "Bad header: missing size"
+                raise structs.ResponseError(
+                    structs.ErrorCodes.ParseError, "Bad header: missing size"
                 )
 
             jsonrpc_res = self.stdout.read(self.message_size).decode("utf-8")

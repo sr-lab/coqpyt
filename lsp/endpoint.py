@@ -1,7 +1,7 @@
 from __future__ import print_function
 import threading
 import logging
-from pylspclient import lsp_structs
+from lsp import structs
 from typing import Dict, List
 
 
@@ -18,7 +18,7 @@ class LspEndpoint(threading.Thread):
         self.next_id = 0
         self.timeout = timeout
         self.shutdown_flag = False
-        self.diagnostics: Dict[str, List[lsp_structs.Diagnostic]] = {}
+        self.diagnostics: Dict[str, List[structs.Diagnostic]] = {}
 
     def handle_result(self, rpc_id, result, error):
         self.response_dict[rpc_id] = (result, error)
@@ -48,8 +48,8 @@ class LspEndpoint(threading.Thread):
                     if rpc_id:
                         # a call for method
                         if method not in self.method_callbacks:
-                            raise lsp_structs.ResponseError(
-                                lsp_structs.ErrorCodes.MethodNotFound,
+                            raise structs.ResponseError(
+                                structs.ErrorCodes.MethodNotFound,
                                 "Method not found: {method}".format(method=method),
                             )
                         result = self.method_callbacks[method](params)
@@ -64,13 +64,13 @@ class LspEndpoint(threading.Thread):
                                     if params["uri"] not in self.diagnostics:
                                         self.diagnostics[params["uri"]] = []
                                     self.diagnostics[params["uri"]].append(
-                                        lsp_structs.Diagnostic(**diagnostic)
+                                        structs.Diagnostic(**diagnostic)
                                     )
                         if method in self.notify_callbacks:
                             self.notify_callbacks[method](params)
                 else:
                     self.handle_result(rpc_id, result, error)
-            except lsp_structs.ResponseError as e:
+            except structs.ResponseError as e:
                 self.send_response(rpc_id, None, e)
 
     def send_response(self, id, result, error):
@@ -109,7 +109,7 @@ class LspEndpoint(threading.Thread):
         self.event_dict.pop(current_id)
         result, error = self.response_dict.pop(current_id)
         if error:
-            raise lsp_structs.ResponseError(
+            raise structs.ResponseError(
                 error.get("code"), error.get("message"), error.get("data")
             )
         return result

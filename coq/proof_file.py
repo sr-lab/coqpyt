@@ -3,14 +3,14 @@ import hashlib
 import shutil
 import uuid
 import tempfile
-from pylspclient.lsp_structs import (
+from lsp.structs import (
     TextDocumentItem,
     VersionedTextDocumentIdentifier,
     TextDocumentContentChangeEvent,
     ResponseError,
     ErrorCodes,
 )
-from coqlspclient.coq_structs import (
+from coq.structs import (
     TermType,
     Step,
     Term,
@@ -18,11 +18,11 @@ from coqlspclient.coq_structs import (
     ProofTerm,
     FileContext,
 )
-from coqlspclient.coq_lsp_structs import Result, Query, GoalAnswer, Range
-from coqlspclient.coq_file import CoqFile
-from coqlspclient.coq_lsp_client import CoqLspClient
-from coqlspclient.coq_changes import *
-from coqlspclient.coq_exceptions import *
+from coq.lsp.structs import Result, Query, GoalAnswer, Range
+from coq.base_file import CoqFile
+from coq.lsp.client import CoqLspClient
+from coq.changes import *
+from coq.exceptions import *
 from typing import List, Dict, Optional, Tuple
 
 
@@ -199,6 +199,8 @@ class ProofFile(CoqFile):
         library: Optional[str] = None,
         timeout: int = 30,
         workspace: Optional[str] = None,
+        coq_lsp: str = "coq-lsp",
+        coqtop: str = "coqtop",
     ):
         """Creates a ProofFile.
 
@@ -209,8 +211,12 @@ class ProofFile(CoqFile):
             workspace(Optional[str], optional): Absolute path for the workspace.
                 If the workspace is not defined, the workspace is equal to the
                 path of the file.
+            coq_lsp(str, optional): Path to the coq-lsp binary. Defaults to "coq-lsp".
+            coqtop(str, optional): Path to the coqtop binary used to compile the Coq libraries
+                imported by coq-lsp. This is NOT passed as a parameter to coq-lsp, it is
+                simply used to check the Coq version in use. Defaults to "coqtop".
         """
-        super().__init__(file_path, library, timeout, workspace)
+        super().__init__(file_path, library, timeout, workspace, coq_lsp, coqtop)
         self.__aux_file = _AuxFile(timeout=self.timeout)
 
         try:
@@ -279,7 +285,7 @@ class ProofFile(CoqFile):
                             stack.append(v)
             return res
 
-        return traverse_expr(CoqFile.expr(step.ast))
+        return traverse_expr(self.expr(step.ast))
 
     def __get_last_term(self):
         terms = self.terms
@@ -313,9 +319,9 @@ class ProofFile(CoqFile):
         # 3 - Obligation N
         # 4 - Next Obligation of id
         # 5 - Next Obligation
-        tag = CoqFile.expr(self.prev_step.ast)[1][1]
+        tag = self.expr(self.prev_step.ast)[1][1]
         if tag in [0, 1, 4]:
-            id = traverse_expr(CoqFile.expr(self.prev_step.ast))
+            id = traverse_expr(self.expr(self.prev_step.ast))
             # This works because the obligation must be in the
             # same module as the program
             id = ".".join(self.curr_module + [id])
@@ -359,7 +365,7 @@ class ProofFile(CoqFile):
 
             self.__step()
             # Nested proofs
-            if CoqFile.get_term_type(self.prev_step.ast) != TermType.OTHER:
+            if self.get_term_type(self.prev_step.ast) != TermType.OTHER:
                 self.__get_proof(proofs)
                 # Pass Qed if it exists
                 while not self.in_proof and not self.checked:
@@ -377,7 +383,7 @@ class ProofFile(CoqFile):
             raise e
         if (
             self.steps_taken < len(self.steps)
-            and CoqFile.expr(self.curr_step.ast)[0] == "VernacEndProof"
+            and self.expr(self.curr_step.ast)[0] == "VernacEndProof"
         ):
             steps.append((self.curr_step, goals, []))
 
@@ -385,9 +391,9 @@ class ProofFile(CoqFile):
 
     def __get_proof(self, proofs):
         term, statement_context = None, None
-        if CoqFile.get_term_type(self.prev_step.ast) == TermType.OBLIGATION:
+        if self.get_term_type(self.prev_step.ast) == TermType.OBLIGATION:
             term, statement_context = self.__get_program_context()
-        elif CoqFile.get_term_type(self.prev_step.ast) != TermType.OTHER:
+        elif self.get_term_type(self.prev_step.ast) != TermType.OTHER:
             term = self.__get_last_term()
             statement_context = self.__step_context(self.prev_step)
         # HACK: We ignore proofs inside a Module Type since they can't be used outside

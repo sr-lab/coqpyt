@@ -199,6 +199,8 @@ class ProofFile(CoqFile):
         library: Optional[str] = None,
         timeout: int = 30,
         workspace: Optional[str] = None,
+        coq_lsp: str = "coq-lsp",
+        coqtop: str = "coqtop",
     ):
         """Creates a ProofFile.
 
@@ -209,8 +211,12 @@ class ProofFile(CoqFile):
             workspace(Optional[str], optional): Absolute path for the workspace.
                 If the workspace is not defined, the workspace is equal to the
                 path of the file.
+            coq_lsp(str, optional): Path to the coq-lsp binary. Defaults to "coq-lsp".
+            coqtop(str, optional): Path to the coqtop binary used to compile the Coq libraries
+                imported by coq-lsp. This is NOT passed as a parameter to coq-lsp, it is
+                simply used to check the Coq version in use. Defaults to "coqtop".
         """
-        super().__init__(file_path, library, timeout, workspace)
+        super().__init__(file_path, library, timeout, workspace, coq_lsp, coqtop)
         self.__aux_file = _AuxFile(timeout=self.timeout)
 
         try:

@@ -27,6 +27,7 @@ class CoqLspClient(LspClient):
         root_uri: str,
         timeout: int = 30,
         memory_limit: int = 2097152,
+        coq_lsp: str = "coq-lsp",
         init_options: Dict = __DEFAULT_INIT_OPTIONS,
     ):
         """Creates a CoqLspClient
@@ -38,6 +39,7 @@ class CoqLspClient(LspClient):
                 Defaults to 2.
             memory_limit (int, optional): RAM limit for the coq-lsp process
                 in kbytes. Defaults to 2097152.
+            coq_lsp(str, optional): Path to the coq-lsp binary. Defaults to "coq-lsp".
             init_options (Dict, optional): Initialization options for coq-lsp server.
                 Available options are:
                     max_errors (int): Maximum number of errors per file, after that,
@@ -56,7 +58,7 @@ class CoqLspClient(LspClient):
         """
         self.file_progress: Dict[str, List[CoqFileProgressParams]] = {}
         proc = subprocess.Popen(
-            f"ulimit -v {memory_limit}; coq-lsp",
+            f"ulimit -v {memory_limit}; {coq_lsp}",
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
             shell=True,

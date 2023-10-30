@@ -42,6 +42,8 @@ class CoqFile(object):
         library: Optional[str] = None,
         timeout: int = 30,
         workspace: Optional[str] = None,
+        coq_lsp: str = "coq-lsp",
+        coqtop: str = "coqtop",
     ):
         """Creates a CoqFile.
 
@@ -52,13 +54,17 @@ class CoqFile(object):
             workspace(Optional[str], optional): Absolute path for the workspace.
                 If the workspace is not defined, the workspace is equal to the
                 path of the file.
+            coq_lsp(str, optional): Path to the coq-lsp binary. Defaults to "coq-lsp".
+            coqtop(str, optional): Path to the coqtop binary used to compile the Coq libraries
+                imported by coq-lsp. This is NOT passed as a parameter to coq-lsp, it is
+                simply used to check the Coq version in use. Defaults to "coqtop".
         """
         self.__init_path(file_path, library)
         if workspace is not None:
             uri = f"file://{workspace}"
         else:
             uri = f"file://{self.__path}"
-        self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
+        self.coq_lsp_client = CoqLspClient(uri, timeout=timeout, coq_lsp=coq_lsp)
         uri = f"file://{self.__path}"
         text = self.__read()
 
@@ -72,7 +78,7 @@ class CoqFile(object):
         self.steps_taken: int = 0
         self.__init_steps(text, ast)
         self.__validate()
-        self.__init_coq_version()
+        self.__init_coq_version(coqtop)
         self.curr_module: List[str] = []
         self.curr_module_type: List[str] = []
         self.curr_section: List[str] = []
@@ -164,12 +170,16 @@ class CoqFile(object):
                     step.diagnostics.append(diagnostic)
                     break
 
-    def __init_coq_version(self):
-        output = subprocess.check_output("coqtop -v", shell=True)
+    def __init_coq_version(self, coqtop):
+        output = subprocess.check_output(f"{coqtop} -v", shell=True)
         coq_version = output.decode("utf-8").split("\n")[0].split()[-1]
         outdated = version.parse(coq_version) < version.parse("8.18")
 
-        # We ignore the tags [VernacSynterp] and [VernacSynPure]
+        # For version 8.18, we ignore the tags [VernacSynterp] and [VernacSynPure]
+        # and use the "ntn_decl" prefix when handling where notations
+        # For older versions, we only tested 8.17, so we provide no claims about
+        # versions prior to that.
+
         self.__expr = lambda e: e if outdated else e[1]
         self.__where_notation_key = "decl_ntn" if outdated else "ntn_decl"
 

@@ -2,6 +2,7 @@ import os
 import shutil
 import uuid
 import tempfile
+import subprocess
 from lsp.lsp_structs import (
     TextDocumentItem,
     TextDocumentIdentifier,
@@ -9,12 +10,13 @@ from lsp.lsp_structs import (
     TextDocumentContentChangeEvent,
 )
 from lsp.lsp_structs import ResponseError, ErrorCodes, Diagnostic
-from coq.lsp.coq_lsp_structs import Position, GoalAnswer, RangedSpan, Range
+from coq.lsp.coq_lsp_structs import Position, GoalAnswer, RangedSpan
 from coq.coq_structs import Step, FileContext, Term, TermType, SegmentType
 from coq.lsp.coq_lsp_client import CoqLspClient
 from coq.coq_exceptions import *
 from coq.coq_changes import *
-from typing import List, Optional, Callable
+from typing import List, Optional
+from packaging import version
 
 
 class CoqFile(object):
@@ -70,6 +72,7 @@ class CoqFile(object):
         self.steps_taken: int = 0
         self.__init_steps(text, ast)
         self.__validate()
+        self.__init_coq_version()
         self.curr_module: List[str] = []
         self.curr_module_type: List[str] = []
         self.curr_section: List[str] = []
@@ -161,6 +164,15 @@ class CoqFile(object):
                     step.diagnostics.append(diagnostic)
                     break
 
+    def __init_coq_version(self):
+        output = subprocess.check_output("coqtop -v", shell=True)
+        coq_version = output.decode("utf-8").split("\n")[0].split()[-1]
+        outdated = version.parse(coq_version) < version.parse("8.18")
+
+        # We ignore the tags [VernacSynterp] and [VernacSynPure]
+        self.__expr = lambda e: e if outdated else e[1]
+        self.__where_notation_key = "decl_ntn" if outdated else "ntn_decl"
+
     @property
     def curr_step(self):
         return self.steps[self.steps_taken]
@@ -199,8 +211,7 @@ class CoqFile(object):
             return el[1]
         return None
 
-    @staticmethod
-    def expr(step: RangedSpan) -> Optional[List]:
+    def expr(self, step: RangedSpan) -> Optional[List]:
         if (
             step.span is not None
             and isinstance(step.span, dict)
@@ -208,8 +219,7 @@ class CoqFile(object):
             and isinstance(step.span["v"], dict)
             and "expr" in step.span["v"]
         ):
-            # We ignore the tags [VernacSynterp] and [VernacSynPure]
-            return step.span["v"]["expr"][1]
+            return self.__expr(step.span["v"]["expr"])
 
         return [None]
 
@@ -324,7 +334,8 @@ class CoqFile(object):
         # handles when multiple notations are defined
         for span in spans:
             name = FileContext.get_notation_key(
-                span["ntn_decl_string"]["v"], span["ntn_decl_scope"]
+                span[f"{self.__where_notation_key}_string"]["v"],
+                span[f"{self.__where_notation_key}_scope"],
             )
             self.__add_term(name, self.curr_step, TermType.NOTATION)
 
@@ -383,7 +394,7 @@ class CoqFile(object):
             ]:
                 if text.startswith(keyword):
                     return
-            expr = CoqFile.expr(self.curr_step.ast)
+            expr = self.expr(self.curr_step.ast)
             if expr == [None]:
                 return
             if expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve":
@@ -688,9 +699,8 @@ class CoqFile(object):
         uri = f"file://{self.__path}"
         return self.coq_lsp_client.lsp_endpoint.diagnostics[uri]
 
-    @staticmethod
-    def get_term_type(ast: RangedSpan) -> TermType:
-        expr = CoqFile.expr(ast)
+    def get_term_type(self, ast: RangedSpan) -> TermType:
+        expr = self.expr(ast)
         if expr is not None:
             return CoqFile.__get_term_type(expr)
         return TermType.OTHER

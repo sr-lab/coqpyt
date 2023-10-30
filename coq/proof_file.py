@@ -279,7 +279,7 @@ class ProofFile(CoqFile):
                             stack.append(v)
             return res
 
-        return traverse_expr(CoqFile.expr(step.ast))
+        return traverse_expr(self.expr(step.ast))
 
     def __get_last_term(self):
         terms = self.terms
@@ -313,9 +313,9 @@ class ProofFile(CoqFile):
         # 3 - Obligation N
         # 4 - Next Obligation of id
         # 5 - Next Obligation
-        tag = CoqFile.expr(self.prev_step.ast)[1][1]
+        tag = self.expr(self.prev_step.ast)[1][1]
         if tag in [0, 1, 4]:
-            id = traverse_expr(CoqFile.expr(self.prev_step.ast))
+            id = traverse_expr(self.expr(self.prev_step.ast))
             # This works because the obligation must be in the
             # same module as the program
             id = ".".join(self.curr_module + [id])
@@ -359,7 +359,7 @@ class ProofFile(CoqFile):
 
             self.__step()
             # Nested proofs
-            if CoqFile.get_term_type(self.prev_step.ast) != TermType.OTHER:
+            if self.get_term_type(self.prev_step.ast) != TermType.OTHER:
                 self.__get_proof(proofs)
                 # Pass Qed if it exists
                 while not self.in_proof and not self.checked:
@@ -377,7 +377,7 @@ class ProofFile(CoqFile):
             raise e
         if (
             self.steps_taken < len(self.steps)
-            and CoqFile.expr(self.curr_step.ast)[0] == "VernacEndProof"
+            and self.expr(self.curr_step.ast)[0] == "VernacEndProof"
         ):
             steps.append((self.curr_step, goals, []))
 
@@ -385,9 +385,9 @@ class ProofFile(CoqFile):
 
     def __get_proof(self, proofs):
         term, statement_context = None, None
-        if CoqFile.get_term_type(self.prev_step.ast) == TermType.OBLIGATION:
+        if self.get_term_type(self.prev_step.ast) == TermType.OBLIGATION:
             term, statement_context = self.__get_program_context()
-        elif CoqFile.get_term_type(self.prev_step.ast) != TermType.OTHER:
+        elif self.get_term_type(self.prev_step.ast) != TermType.OTHER:
             term = self.__get_last_term()
             statement_context = self.__step_context(self.prev_step)
         # HACK: We ignore proofs inside a Module Type since they can't be used outside

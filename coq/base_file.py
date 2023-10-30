@@ -3,18 +3,18 @@ import shutil
 import uuid
 import tempfile
 import subprocess
-from lsp.lsp_structs import (
+from lsp.structs import (
     TextDocumentItem,
     TextDocumentIdentifier,
     VersionedTextDocumentIdentifier,
     TextDocumentContentChangeEvent,
 )
-from lsp.lsp_structs import ResponseError, ErrorCodes, Diagnostic
-from coq.lsp.coq_lsp_structs import Position, GoalAnswer, RangedSpan
-from coq.coq_structs import Step, FileContext, Term, TermType, SegmentType
-from coq.lsp.coq_lsp_client import CoqLspClient
-from coq.coq_exceptions import *
-from coq.coq_changes import *
+from lsp.structs import ResponseError, ErrorCodes, Diagnostic
+from coq.lsp.structs import Position, GoalAnswer, RangedSpan
+from coq.structs import Step, FileContext, Term, TermType, SegmentType
+from coq.lsp.client import CoqLspClient
+from coq.exceptions import *
+from coq.changes import *
 from typing import List, Optional
 from packaging import version
 

@@ -19,9 +19,9 @@ python -m pip install -e .
 ## Usage
 ```python
 import os
-from coq.coq_file import CoqFile
+from coq.base_file import CoqFile
 from coq.proof_file import ProofFile
-from coq.coq_structs import TermType
+from coq.structs import TermType
 
 # Open Coq file
 with CoqFile(os.path.join(os.getcwd(), "examples/example.v")) as coq_file:

@@ -3,6 +3,6 @@
 __all__ = []
 
 from lsp.json_rpc_endpoint import JsonRpcEndpoint
-from lsp.lsp_client import LspClient
-from lsp.lsp_endpoint import LspEndpoint
-from lsp import lsp_structs
+from lsp.client import LspClient
+from lsp.endpoint import LspEndpoint
+from lsp import structs

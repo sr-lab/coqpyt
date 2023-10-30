@@ -63,7 +63,7 @@ def test_recv_wrong_header():
         )
     )
     pipeout.flush()
-    with pytest.raises(lsp.lsp_structs.ResponseError):
+    with pytest.raises(lsp.structs.ResponseError):
         result = json_rpc_endpoint.recv_response()
         print("should never get here", result)
 
@@ -79,7 +79,7 @@ def test_recv_missing_size():
         )
     )
     pipeout.flush()
-    with pytest.raises(lsp.lsp_structs.ResponseError):
+    with pytest.raises(lsp.structs.ResponseError):
         result = json_rpc_endpoint.recv_response()
         print("should never get here", result)
 

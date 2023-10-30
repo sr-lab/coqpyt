@@ -1,5 +1,5 @@
-from lsp import lsp_structs
-from lsp.lsp_endpoint import LspEndpoint
+from lsp import structs
+from lsp.endpoint import LspEndpoint
 
 
 class LspClient(object):
@@ -83,7 +83,7 @@ class LspClient(object):
         """
         self.lsp_endpoint.send_notification("exit")
 
-    def didClose(self, textDocument: lsp_structs.TextDocumentIdentifier):
+    def didClose(self, textDocument: structs.TextDocumentIdentifier):
         return self.lsp_endpoint.send_notification(
             "textDocument/didClose", textDocument=textDocument
         )
@@ -133,7 +133,7 @@ class LspClient(object):
         result_dict = self.lsp_endpoint.call_method(
             "textDocument/documentSymbol", textDocument=textDocument
         )
-        return [lsp_structs.SymbolInformation(**sym) for sym in result_dict]
+        return [structs.SymbolInformation(**sym) for sym in result_dict]
 
     def definition(self, textDocument, position):
         """
@@ -145,7 +145,7 @@ class LspClient(object):
         result_dict = self.lsp_endpoint.call_method(
             "textDocument/definition", textDocument=textDocument, position=position
         )
-        return [lsp_structs.Location(**l) for l in result_dict]
+        return [structs.Location(**l) for l in result_dict]
 
     def typeDefinition(self, textDocument, position):
         """
@@ -157,7 +157,7 @@ class LspClient(object):
         result_dict = self.lsp_endpoint.call_method(
             "textDocument/definition", textDocument=textDocument, position=position
         )
-        return [lsp_structs.Location(**l) for l in result_dict]
+        return [structs.Location(**l) for l in result_dict]
 
     def signatureHelp(self, textDocument, position):
         """
@@ -169,7 +169,7 @@ class LspClient(object):
         result_dict = self.lsp_endpoint.call_method(
             "textDocument/signatureHelp", textDocument=textDocument, position=position
         )
-        return lsp_structs.SignatureHelp(**result_dict)
+        return structs.SignatureHelp(**result_dict)
 
     def completion(self, textDocument, position, context):
         """
@@ -187,9 +187,9 @@ class LspClient(object):
             context=context,
         )
         if "isIncomplete" in result_dict:
-            return lsp_structs.CompletionList(**result_dict)
+            return structs.CompletionList(**result_dict)
 
-        return [lsp_structs.CompletionItem(**l) for l in result_dict]
+        return [structs.CompletionItem(**l) for l in result_dict]
 
     def declaration(self, textDocument, position):
         """
@@ -206,10 +206,10 @@ class LspClient(object):
             "textDocument/declaration", textDocument=textDocument, position=position
         )
         if "uri" in result_dict:
-            return lsp_structs.Location(**result_dict)
+            return structs.Location(**result_dict)
 
         return [
-            lsp_structs.Location(**l) if "uri" in l else lsp_structs.LinkLocation(**l)
+            structs.Location(**l) if "uri" in l else structs.LinkLocation(**l)
             for l in result_dict
         ]
 
@@ -228,9 +228,9 @@ class LspClient(object):
             "textDocument/definition", textDocument=textDocument, position=position
         )
         if "uri" in result_dict:
-            return lsp_structs.Location(**result_dict)
+            return structs.Location(**result_dict)
 
         return [
-            lsp_structs.Location(**l) if "uri" in l else lsp_structs.LinkLocation(**l)
+            structs.Location(**l) if "uri" in l else structs.LinkLocation(**l)
             for l in result_dict
         ]

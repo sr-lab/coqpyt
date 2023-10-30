@@ -1,7 +1,7 @@
 import os
-from coq.lsp.coq_lsp_client import CoqLspClient
-from lsp.lsp_structs import *
-from coq.lsp.coq_lsp_structs import *
+from coq.lsp.client import CoqLspClient
+from lsp.structs import *
+from coq.lsp.structs import *
 
 
 def test_save_vo():

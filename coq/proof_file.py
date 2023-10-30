@@ -3,14 +3,14 @@ import hashlib
 import shutil
 import uuid
 import tempfile
-from lsp.lsp_structs import (
+from lsp.structs import (
     TextDocumentItem,
     VersionedTextDocumentIdentifier,
     TextDocumentContentChangeEvent,
     ResponseError,
     ErrorCodes,
 )
-from coq.coq_structs import (
+from coq.structs import (
     TermType,
     Step,
     Term,
@@ -18,11 +18,11 @@ from coq.coq_structs import (
     ProofTerm,
     FileContext,
 )
-from coq.lsp.coq_lsp_structs import Result, Query, GoalAnswer, Range
-from coq.coq_file import CoqFile
-from coq.lsp.coq_lsp_client import CoqLspClient
-from coq.coq_changes import *
-from coq.coq_exceptions import *
+from coq.lsp.structs import Result, Query, GoalAnswer, Range
+from coq.base_file import CoqFile
+from coq.lsp.client import CoqLspClient
+from coq.changes import *
+from coq.exceptions import *
 from typing import List, Dict, Optional, Tuple
 
 

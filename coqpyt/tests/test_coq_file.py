@@ -1,9 +1,9 @@
 import os
 import shutil
 import pytest
-from coq.base_file import CoqFile
-from coq.changes import *
-from coq.exceptions import *
+from coqpyt.coq.base_file import CoqFile
+from coqpyt.coq.changes import *
+from coqpyt.coq.exceptions import *
 
 coq_file: CoqFile = None
 

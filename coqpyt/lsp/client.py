@@ -1,5 +1,5 @@
-from lsp import structs
-from lsp.endpoint import LspEndpoint
+from coqpyt.lsp import structs
+from coqpyt.lsp.endpoint import LspEndpoint
 
 
 class LspClient(object):

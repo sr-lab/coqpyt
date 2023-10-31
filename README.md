@@ -2,7 +2,7 @@
 
 Interact with Coq files and navigate through your proofs using our Python client for [coq-lsp](https://github.com/ejgallego/coq-lsp).
 
-Execute Coq files, retrieve the generated context and edit proofs through addition and removal of steps.
+Execute Coq files, retrieve the generated context and edit proofs through insertion and removal of steps.
 
 ## Installation
 
@@ -19,9 +19,9 @@ python -m pip install -e .
 ## Usage
 ```python
 import os
-from coq.base_file import CoqFile
-from coq.proof_file import ProofFile
-from coq.structs import TermType
+from coqpyt.coq.base_file import CoqFile
+from coqpyt.coq.proof_file import ProofFile
+from coqpyt.coq.structs import TermType
 
 # Open Coq file
 with CoqFile(os.path.join(os.getcwd(), "examples/example.v")) as coq_file:
@@ -83,8 +83,9 @@ with ProofFile(os.path.join(os.getcwd(), "examples/example.v")) as proof_file:
     )
 ```
 
-### Run tests
+## Tests
 
+To run the tests for CoqPyt go to the folder ```coqpyt``` and run:
 ```bash
 pytest tests -s
 ```

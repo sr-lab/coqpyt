@@ -37,7 +37,7 @@ jobs:
       run: |
         opam install coq-lsp
 
-    - name: Install coq-lsp-pyclient
+    - name: Install coqpyt
       run: |
         pip install -e .
 

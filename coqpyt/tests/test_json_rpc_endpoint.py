@@ -1,6 +1,6 @@
 import os
-import lsp
 import pytest
+from coqpyt import lsp
 
 JSON_RPC_RESULT_LIST = [
     'Content-Length: 40\r\n\r\n{"key_str": "some_string", "key_num": 1}'.encode(

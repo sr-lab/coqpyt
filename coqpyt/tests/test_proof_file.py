@@ -5,11 +5,11 @@ import subprocess
 import pytest
 import tempfile
 from typing import List, Tuple
-from coq.lsp.structs import *
-from coq.structs import TermType, Term, CoqError, CoqErrorCodes
-from coq.proof_file import ProofFile
-from coq.exceptions import *
-from coq.changes import *
+from coqpyt.coq.lsp.structs import *
+from coqpyt.coq.structs import TermType, Term, CoqError, CoqErrorCodes
+from coqpyt.coq.proof_file import ProofFile
+from coqpyt.coq.exceptions import *
+from coqpyt.coq.changes import *
 
 versionId: VersionedTextDocumentIdentifier = None
 state: ProofFile = None

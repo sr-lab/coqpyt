@@ -1,8 +1,8 @@
 import re
 from enum import Enum
 from typing import Dict, List, Union, Callable
-from coq.lsp.structs import RangedSpan, GoalAnswer
-from lsp.structs import Diagnostic, Position
+from coqpyt.coq.lsp.structs import RangedSpan, GoalAnswer
+from coqpyt.lsp.structs import Diagnostic, Position
 
 
 class SegmentType(Enum):

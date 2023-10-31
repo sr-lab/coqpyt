@@ -1,7 +1,7 @@
 from __future__ import print_function
 import threading
 import logging
-from lsp import structs
+from coqpyt.lsp import structs
 from typing import Dict, List
 
 

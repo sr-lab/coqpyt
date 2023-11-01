@@ -14,11 +14,11 @@ def teardown_aux():
         os.remove(temp_path)
 
 
-def test_if_readme_runs(teardown_aux):
-    with open("../README.md", "r") as f:
-        text, example_path = f.read(), "../examples/example.v"
-        script = text.split("```python")[1].split("```")[0]
-        script = example_path.join(script.split(example_path[3:]))
+def test_readme_example(teardown_aux):
+    readme_path = "../examples/readme"
+    with open(f"{readme_path}.py", "r") as f:
+        script, vfile = f.read(), f"{readme_path}.v"
+        script = vfile.join(script.split(vfile[3:]))
         with open(temp_path, "w") as f2:
             f2.write(script)
         run = subprocess.run(f"python3 {temp_path}", shell=True, capture_output=True)

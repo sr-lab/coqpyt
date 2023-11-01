@@ -38,7 +38,7 @@ with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
     # Get all terms defined until now
     print("Number of terms:", len(coq_file.context.terms))
 
-# Create Proof file
+# Open Proof file
 with ProofFile(os.path.join(os.getcwd(), "examples/readme.v")) as proof_file:
     # Number of proofs in the file
     print("Number of proofs:", len(proof_file.proofs))

@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "examples/readme.py"
+      - "README.md"
 
 jobs:
   embed:

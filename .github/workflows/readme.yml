@@ -1,0 +1,31 @@
+name: Embed code in README
+
+on:
+  pull_request_target:
+    types:
+      - opened
+
+jobs:
+  embed:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3.5.2
+
+    - name: Set up node
+      uses: actions/setup-node@v3
+      with: 
+        node-version: 14
+
+    - name: Install embedme
+      run: npm install -g embedme
+
+    - name: Embed code
+      run: embedme README.md
+    
+    - name: Commit changes
+      uses: EndBug/add-and-commit@v9
+      with:
+        add: "README.md"
+        push: origin ${{ github.head_ref }}

@@ -402,9 +402,10 @@ class CoqFile(object):
             term_type = CoqFile.__get_term_type(expr)
             text = self.curr_step.short_text
 
-            # FIXME Let (and maybe Variable) should be handled. However,
-            # I think we can't handle them as normal Locals since they are
-            # specific to a section.
+            # FIXME: Section-local terms are ignored. We do this to avoid
+            # overwriting global terms with section-local terms after the section
+            # is closed. Regardless, these should be handled given that they might
+            # be used within the section.
             for keyword in [
                 "Variable",
                 "Let",
@@ -413,6 +414,9 @@ class CoqFile(object):
                 "Hypotheses",
             ]:
                 if text.startswith(keyword):
+                    # NOTE: We update the last term so as to obtain proofs even for
+                    # section-local terms. This is safe, because the attribute is
+                    # meant to be overwritten every time a new term is found.
                     self._last_term = Term(
                         self.curr_step, term_type, self.path, self.curr_module[:]
                     )

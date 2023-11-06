@@ -175,9 +175,12 @@ class _AuxFile(object):
                     _AuxFile.__CACHE[(v_file, hash)] = aux_context
                     coq_file.close()
 
-                # FIXME: we ignore the usage of Local from imported files to
+                # FIXME: we ignore the usage of "Local" from imported files to
                 # simplify the implementation. However, they can be used:
                 # https://coq.inria.fr/refman/language/core/modules.html?highlight=local#coq:attr.local
+                # NOTE: We handle "Local" separately from section-local keywords
+                # due to the aforementioned reason. The handling should be different
+                # for both types of keywords.
                 for term in list(aux_context.terms.keys()):
                     if aux_context.terms[term].text.startswith("Local"):
                         aux_context.terms.pop(term)

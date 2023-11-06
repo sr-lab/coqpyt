@@ -405,9 +405,11 @@ class CoqFile(object):
                 if text.startswith(keyword):
                     return
             expr = self.expr(self.curr_step.ast)
-            if expr == [None]:
-                return
-            if expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve":
+            if (
+                expr == [None]
+                or expr[0] == "VernacProof"
+                or (expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve")
+            ):
                 return
             term_type = CoqFile.__get_term_type(expr)
 

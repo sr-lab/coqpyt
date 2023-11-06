@@ -287,16 +287,6 @@ class ProofFile(CoqFile):
 
         return traverse_expr(self.expr(step.ast))
 
-    def __get_last_term(self):
-        terms = self.terms
-        if len(terms) == 0:
-            return None
-        last_term = terms[0]
-        for term in terms[1:]:
-            if last_term.ast.range.end < term.ast.range.end:
-                last_term = term
-        return last_term
-
     def __get_program_context(self):
         def traverse_expr(expr):
             stack = expr[:0:-1]
@@ -332,7 +322,7 @@ class ProofFile(CoqFile):
             # same module as the program
             id = ".".join(self.curr_module + [id])
             return self.__program_context[id]
-        text = self.__get_last_term().text
+        text = self._last_term.text
         raise RuntimeError(f"Unknown obligation command with tag number {tag}: {text}")
 
     def __check_program(self):
@@ -343,7 +333,7 @@ class ProofFile(CoqFile):
         if id in self.__program_context:
             return
         self.__program_context[id] = (
-            self.__get_last_term(),
+            self._last_term,
             self.__step_context(self.prev_step),
         )
 
@@ -394,7 +384,7 @@ class ProofFile(CoqFile):
         if self.get_term_type(self.prev_step.ast) == TermType.OBLIGATION:
             term, statement_context = self.__get_program_context()
         elif self.get_term_type(self.prev_step.ast) != TermType.OTHER:
-            term = self.__get_last_term()
+            term = self._last_term
             statement_context = self.__step_context(self.prev_step)
         # HACK: We ignore proofs inside a Module Type since they can't be used outside
         # and should be overriden.

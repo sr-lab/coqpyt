@@ -88,6 +88,7 @@ class CoqFile(object):
         self.version = 1
         self.__last_end_pos: Optional[Position] = None
         self.__current_goals = None
+        self._last_term: Optional[Term] = None
 
     def __enter__(self):
         return self
@@ -253,6 +254,7 @@ class CoqFile(object):
 
     def __add_term(self, name: str, step: Step, term_type: TermType):
         term = Term(step, term_type, self.path, self.curr_module[:])
+        self._last_term = term
         if term.type == TermType.NOTATION:
             self.context.update(terms={name: term})
             return
@@ -390,6 +392,14 @@ class CoqFile(object):
             #   - names should be removed from the context
             #   - curr_module should change as you leave or re-enter modules
 
+            expr = self.expr(self.curr_step.ast)
+            if (
+                expr == [None]
+                or expr[0] == "VernacProof"
+                or (expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve")
+            ):
+                return
+            term_type = CoqFile.__get_term_type(expr)
             text = self.curr_step.short_text
 
             # FIXME Let (and maybe Variable) should be handled. However,
@@ -403,15 +413,10 @@ class CoqFile(object):
                 "Hypotheses",
             ]:
                 if text.startswith(keyword):
+                    self._last_term = Term(
+                        self.curr_step, term_type, self.path, self.curr_module[:]
+                    )
                     return
-            expr = self.expr(self.curr_step.ast)
-            if (
-                expr == [None]
-                or expr[0] == "VernacProof"
-                or (expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve")
-            ):
-                return
-            term_type = CoqFile.__get_term_type(expr)
 
             if expr[0] == "VernacEndSegment":
                 if len(self.__segment_stack) == 0:

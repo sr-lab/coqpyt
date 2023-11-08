@@ -476,6 +476,10 @@ class CoqFile(object):
                 if expr[1][0] == "Derive":
                     prop = CoqFile.get_ident(expr[2][2])
                     self.__add_term(prop, self.curr_step, term_type)
+            elif term_type == TermType.OBLIGATION:
+                self._last_term = Term(
+                    self.curr_step, term_type, self.path, self.curr_module[:]
+                )
             else:
                 names = traverse_expr(expr)
                 for name in names:

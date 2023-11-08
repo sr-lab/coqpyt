@@ -910,6 +910,19 @@ def test_obligation(setup, teardown):
         ),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
     ]
+    texts = [
+        "Obligation 2 of id1.",
+        "Next Obligation of id1.",
+        "Obligation 2 of id2 : type with reflexivity.",
+        "Next Obligation of id2 with reflexivity.",
+        "Next Obligation.",
+        "Next Obligation with reflexivity.",
+        "Obligation 1.",
+        "Obligation 2 : type with reflexivity.",
+        "Obligation 1 of id with reflexivity.",
+        "Obligation 1 of id : type.",
+        "Obligation 2 : type.",
+    ]
     programs = [
         ("id1", "S (pred n)"),
         ("id1", "S (pred n)"),
@@ -926,8 +939,10 @@ def test_obligation(setup, teardown):
 
     for i, proof in enumerate(proofs):
         compare_context(statement_context, proof.context)
+        assert proof.text == texts[i]
+        assert proof.program is not None
         assert (
-            proof.text
+            proof.program.text
             == "Program Definition "
             + programs[i][0]
             + " (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else "

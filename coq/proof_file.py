@@ -383,17 +383,16 @@ class ProofFile(CoqFile):
         return steps
 
     def __get_proof(self, proofs):
-        term, statement_context = None, None
+        program, statement_context = None, None
         if self.get_term_type(self.prev_step.ast) == TermType.OBLIGATION:
-            term, statement_context = self.__get_program_context()
+            program, statement_context = self.__get_program_context()
         elif self.get_term_type(self.prev_step.ast) != TermType.OTHER:
-            term = self._last_term
             statement_context = self.__step_context(self.prev_step)
         # HACK: We ignore proofs inside a Module Type since they can't be used outside
         # and should be overriden.
         if self.in_proof and len(self.curr_module_type) == 0:
             steps = self.__get_steps(proofs)
-            proofs.append((term, statement_context, steps))
+            proofs.append((self._last_term, statement_context, steps, program))
 
     def __call_context(self, calls: List[Tuple]):
         context, calls = [], [call[0](*call[1:]) for call in calls]
@@ -418,11 +417,15 @@ class ProofFile(CoqFile):
             self.close()
             raise e
 
-        proof_steps = [
-            (term, self.__call_context(calls), list(map(get_proof_step, steps)))
-            for term, calls, steps in proofs
+        return [
+            ProofTerm(
+                term,
+                self.__call_context(calls),
+                list(map(get_proof_step, steps)),
+                program,
+            )
+            for term, calls, steps, program in proofs
         ]
-        return list(map(lambda t: ProofTerm(*t), proof_steps))
 
     def __find_step(self, range: Range) -> Optional[Tuple[ProofTerm, int]]:
         for proof in self.proofs:

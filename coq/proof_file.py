@@ -357,6 +357,18 @@ class ProofFile(CoqFile):
                 raise e
 
             self.__step()
+            if self.get_term_type(self.prev_step.ast) in [
+                TermType.TACTIC,
+                TermType.NOTATION,
+                TermType.INDUCTIVE,
+                TermType.COINDUCTIVE,
+                TermType.RECORD,
+                TermType.CLASS,
+                TermType.SCHEME,
+                TermType.VARIANT,
+            ]:
+                continue
+
             # Nested proofs
             if self.get_term_type(self.prev_step.ast) != TermType.OTHER:
                 self.__get_proof(proofs)

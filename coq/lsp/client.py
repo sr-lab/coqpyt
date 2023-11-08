@@ -1,3 +1,4 @@
+import sys
 import time
 import subprocess
 from lsp.json_rpc_endpoint import JsonRpcEndpoint
@@ -38,7 +39,7 @@ class CoqLspClient(LspClient):
             timeout (int, optional): Timeout used for the coq-lsp operations.
                 Defaults to 2.
             memory_limit (int, optional): RAM limit for the coq-lsp process
-                in kbytes. Defaults to 2097152.
+                in kbytes. It only works for Linux systems. Defaults to 2097152.
             coq_lsp(str, optional): Path to the coq-lsp binary. Defaults to "coq-lsp".
             init_options (Dict, optional): Initialization options for coq-lsp server.
                 Available options are:
@@ -57,8 +58,14 @@ class CoqLspClient(LspClient):
                         Defaults to 1.
         """
         self.file_progress: Dict[str, List[CoqFileProgressParams]] = {}
+
+        if sys.platform.startswith("linux"):
+            command = f"ulimit -v {memory_limit}; {coq_lsp}"
+        else:
+            command = coq_lsp 
+
         proc = subprocess.Popen(
-            f"ulimit -v {memory_limit}; {coq_lsp}",
+            command,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
             shell=True,

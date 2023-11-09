@@ -403,8 +403,9 @@ class ProofFile(CoqFile):
         # HACK: We ignore proofs inside a Module Type since they can't be used outside
         # and should be overriden.
         if self.in_proof and len(self.curr_module_type) == 0:
+            term = self._last_term # Keep the term before rewrite
             steps = self.__get_steps(proofs)
-            proofs.append((self._last_term, statement_context, steps, program))
+            proofs.append((term, statement_context, steps, program))
 
     def __call_context(self, calls: List[Tuple]):
         context, calls = [], [call[0](*call[1:]) for call in calls]

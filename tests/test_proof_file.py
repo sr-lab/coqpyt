@@ -833,6 +833,7 @@ def test_nested_proofs(setup, teardown):
     for i, step in enumerate(proofs[0].steps):
         assert step.text == steps[i]
 
+    theorem = "Theorem mult_0_plus : forall n m : nat, S n * m = 0 + (S n * m)."
     steps = [
         "\nProof.",
         "\nintros n m.",
@@ -840,6 +841,7 @@ def test_nested_proofs(setup, teardown):
         "\nreflexivity.",
         "\nQed.",
     ]
+    assert proofs[1].text == theorem
     assert len(proofs[1].steps) == len(steps)
     for i, step in enumerate(proofs[1].steps):
         assert step.text == steps[i]

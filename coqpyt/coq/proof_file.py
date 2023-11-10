@@ -327,7 +327,7 @@ class ProofFile(CoqFile):
             id = ".".join(self.curr_module + [id])
             return self.__program_context[id]
         elif tag in [2, 3, 5]:
-            id = self.current_goals().program[0][0][1]
+            id = self.current_goals.program[0][0][1]
             # This works because the obligation must be in the
             # same module as the program
             id = ".".join(self.curr_module + [id])
@@ -336,7 +336,7 @@ class ProofFile(CoqFile):
         raise RuntimeError(f"Unknown obligation command with tag number {tag}: {text}")
 
     def __check_program(self):
-        goals = self.current_goals()
+        goals = self.current_goals
         if len(goals.program) == 0:
             return
         id = ".".join(self.curr_module + [goals.program[-1][0][1]])
@@ -358,7 +358,7 @@ class ProofFile(CoqFile):
         steps = []
         while self.in_proof and not self.checked:
             try:
-                goals = self.current_goals()
+                goals = self.current_goals
             except Exception as e:
                 self.__aux_file.close()
                 raise e
@@ -377,7 +377,7 @@ class ProofFile(CoqFile):
             steps.append((self.prev_step, goals, context_calls))
 
         try:
-            goals = self.current_goals()
+            goals = self.current_goals
         except Exception as e:
             self.__aux_file.close()
             raise e

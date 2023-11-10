@@ -680,12 +680,29 @@ class CoqFile(object):
         return self.steps_taken == len(self.steps)
 
     @property
+    def current_goals(self) -> Optional[GoalAnswer]:
+        """Get goals in current position.
+
+        Returns:
+            Optional[GoalAnswer]: Goals in the current position if there are goals
+        """
+        end_pos = (
+            Position(0, 0) if self.steps_taken == 0 else self.prev_step.ast.range.end
+        )
+
+        if end_pos != self.__last_end_pos:
+            self.__current_goals = self._goals(end_pos)
+            self.__last_end_pos = end_pos
+
+        return self.__current_goals
+
+    @property
     def in_proof(self) -> bool:
         """
         Returns:
             bool: True if the current step is inside a proof
         """
-        return self.__in_proof(self.current_goals())
+        return self.__in_proof(self.current_goals)
 
     @property
     def terms(self) -> List[Term]:
@@ -794,22 +811,6 @@ class CoqFile(object):
             List[Step]: List of all the steps in the file.
         """
         return self.exec(len(self.steps))
-
-    def current_goals(self) -> Optional[GoalAnswer]:
-        """Get goals in current position.
-
-        Returns:
-            Optional[GoalAnswer]: Goals in the current position if there are goals
-        """
-        end_pos = (
-            Position(0, 0) if self.steps_taken == 0 else self.prev_step.ast.range.end
-        )
-
-        if end_pos != self.__last_end_pos:
-            self.__current_goals = self._goals(end_pos)
-            self.__last_end_pos = end_pos
-
-        return self.__current_goals
 
     def save_vo(self):
         """Compiles the vo file for this Coq file."""

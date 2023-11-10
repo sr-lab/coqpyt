@@ -1042,3 +1042,28 @@ def test_simple_file_changes(setup, teardown):
     assert state.proofs[0].steps[0].text == steps[1]
     assert state.proofs[1].text == steps[2].strip()
     assert state.proofs[1].steps[0].text == steps[3]
+
+
+@pytest.mark.parametrize("setup", [("test_proof_cmd.v", None)], indirect=True)
+def test_proof_cmd(setup, teardown):
+    assert len(state.proofs) == 3
+    goals = [
+        "Goal ∃ (m : nat), S m = n.",
+        "Goal ∃ (m : nat), S m = n.",
+        "Goal nat.",
+    ]
+    proofs = [
+        "\n  Proof using Hn.",
+        "\n  Proof with auto.",
+        "\n  Proof 0.",
+    ]
+    for i, proof in enumerate(state.proofs):
+        assert proof.text == goals[i]
+        assert proof.steps[0].text == proofs[i]
+
+
+@pytest.mark.parametrize("setup", [("test_section_terms.v", None)], indirect=True)
+def test_section_terms(setup, teardown):
+    assert len(state.proofs) == 1
+    assert state.proofs[0].text == "Let ignored : nat."
+    assert len(state.terms) == 0

@@ -590,8 +590,8 @@ class CoqFile(object):
 
     def _add_step(
         self,
-        step_text: str,
         previous_step_index: int,
+        step_text: str,
         in_proof: bool = False,
         validate_file: bool = True,
     ) -> None:
@@ -648,8 +648,8 @@ class CoqFile(object):
         for i, change in enumerate(changes):
             if isinstance(change, CoqAddStep):
                 self._add_step(
-                    change.step_text,
                     change.previous_step_index,
+                    change.step_text,
                     validate_file=False,
                 )
                 offset_steps += 1
@@ -778,23 +778,23 @@ class CoqFile(object):
 
     def add_step(
         self,
-        step_text: str,
         previous_step_index: int,
+        step_text: str,
     ) -> None:
         """Adds a step to the file. The step must be inside a proof.
         This function will change the original file. If an exception is thrown
         the file will not be changed.
 
         Args:
-            step_text (str): The text of the step to add.
             previous_step_index (int): The index of the previous step of the new step.
+            step_text (str): The text of the step to add.
 
         Raises:
             NotImplementedError: If the step added is not on a proof.
             InvalidFileException: If the file being changed is not valid.
             InvalidStepException: If the step added is not valid
         """
-        self._make_change(self._add_step, step_text, previous_step_index)
+        self._make_change(self._add_step, previous_step_index, step_text)
 
     def change_steps(self, changes: List[CoqChange]):
         """Changes the steps of the Coq file transactionally.

@@ -494,7 +494,7 @@ def test_get_proofs_valid_change(setup, teardown):
         assert step.text == texts[i]
         assert str(proofs[0].steps[i].goals) == str(goals[i])
 
-    state.add_step("\n      intros n.", 5)
+    state.add_step(5, "\n      intros n.")
 
     versionId.version += 1
     proofs = state.proofs
@@ -549,7 +549,7 @@ def test_get_proofs_valid_change(setup, teardown):
         assert str(proofs[0].steps[i].goals) == str(goals[i])
 
     # Check if context is changed correctly
-    state.add_step("\n      Print minus.", 7)
+    state.add_step(7, "\n      Print minus.")
     texts = [
         "\n    Proof.",
         "\n      intros n.",
@@ -580,10 +580,10 @@ def test_get_proofs_valid_change(setup, teardown):
 
     # Add outside of proof
     with pytest.raises(NotImplementedError):
-        state.add_step("\n    Print plus.", 25)
+        state.add_step(25, "\n    Print plus.")
 
     # Add step in beginning of proof
-    state.add_step("\n    Print plus.", 26)
+    state.add_step(26, "\n    Print plus.")
     assert state.steps[27].text == "\n    Print plus."
 
     # Delete outside of proof
@@ -591,7 +591,7 @@ def test_get_proofs_valid_change(setup, teardown):
         state.delete_step(33)
 
     # Add step to end of proof
-    state.add_step("\n    Print plus.", 31)
+    state.add_step(31, "\n    Print plus.")
     assert state.steps[32].text == "\n    Print plus."
 
     # Delete step in beginning of proof
@@ -699,16 +699,16 @@ def test_get_proofs_invalid_change(setup, teardown):
         state.delete_step(16)
         check_rollback()
     with pytest.raises(InvalidStepException):
-        state.add_step("invalid_tactic", 7)
+        state.add_step(7, "invalid_tactic")
         check_rollback()
     with pytest.raises(InvalidStepException):
-        state.add_step("invalid_tactic.", 7)
+        state.add_step(7, "invalid_tactic.")
         check_rollback()
     with pytest.raises(InvalidStepException):
-        state.add_step("\n    invalid_tactic.", 7)
+        state.add_step(7, "\n    invalid_tactic.")
         check_rollback()
     with pytest.raises(InvalidStepException):
-        state.add_step("\n    invalid_tactic x $$$ y.", 7)
+        state.add_step(7, "\n    invalid_tactic x $$$ y.")
         check_rollback()
 
 
@@ -716,20 +716,20 @@ def test_get_proofs_invalid_change(setup, teardown):
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_change_notation(setup, teardown):
     # Just checking if the program does not crash
-    state.add_step(" destruct (a <? n).", len(state.steps) - 3)
+    state.add_step(len(state.steps) - 3, " destruct (a <? n).")
 
 
 @pytest.mark.parametrize("setup", [("test_invalid_1.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_change_invalid(setup, teardown):
     with pytest.raises(InvalidFileException):
-        state.add_step("Print plus.", 7)
+        state.add_step(7, "Print plus.")
 
 
 @pytest.mark.parametrize("setup", [("test_change_empty.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_change_empty(setup, teardown):
-    state.add_step("\nAdmitted.", len(state.steps) - 2)
+    state.add_step(len(state.steps) - 2, "\nAdmitted.")
     assert state.steps[-2].text == "\nAdmitted."
     assert len(state.proofs[0].steps) == 2
     assert state.proofs[0].steps[-1].text == "\nAdmitted."

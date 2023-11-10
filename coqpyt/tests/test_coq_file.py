@@ -74,16 +74,16 @@ def test_add_step():
     try:
         steps = coq_file.exec(nsteps=8)
         assert steps[-1].text == "\n      Print plus."
-        coq_file.add_step("\n      Print minus.", 7)
+        coq_file.add_step(7, "\n      Print minus.")
         steps = coq_file.exec(nsteps=1)
         assert steps[-1].text == "\n      Print minus."
-        coq_file.add_step("\n      Print minus.", 6)
+        coq_file.add_step(6, "\n      Print minus.")
         steps = coq_file.exec(nsteps=1)
         assert steps[-1].text == "\n      Print Nat.add."
         assert steps[-1].ast.range.start.line == 14
 
         with pytest.raises(NotImplementedError):
-            coq_file.add_step("\n      Print minus.", 0)
+            coq_file.add_step(0, "\n      Print minus.")
     finally:
         coq_file.close()
         if os.path.exists(new_file_path):

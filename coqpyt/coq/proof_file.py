@@ -476,12 +476,12 @@ class ProofFile(CoqFile):
         """
         return self.__proofs
 
-    def add_step(self, step_text: str, previous_step_index: int):
+    def add_step(self, previous_step_index: int, step_text: str):
         proof, prev = self.__find_prev(self.steps[previous_step_index].ast.range)
         if prev == -1:
-            self._make_change(self._add_step, step_text, previous_step_index)
+            self._make_change(self._add_step, previous_step_index, step_text)
         else:
-            self._make_change(self._add_step, step_text, previous_step_index, True)
+            self._make_change(self._add_step, previous_step_index, step_text, True)
         proof.steps.insert(prev + 1, self.__get_step(previous_step_index + 1))
         # We should change the goals of all the steps in the same proof
         # after the one that was changed
@@ -515,8 +515,8 @@ class ProofFile(CoqFile):
                     self.steps[change.previous_step_index].ast.range
                 )
                 self._add_step(
-                    change.step_text,
                     change.previous_step_index,
+                    change.step_text,
                     in_proof=True,
                     validate_file=False,
                 )

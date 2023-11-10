@@ -221,12 +221,13 @@ class ProofFile(CoqFile):
         """
         super().__init__(file_path, library, timeout, workspace, coq_lsp, coqtop)
         self.__aux_file = _AuxFile(timeout=self.timeout)
+        self.__aux_file.didOpen()
 
         try:
             # We need to update the context already defined in the CoqFile
             self.context.update(_AuxFile.get_context(self.path, self.timeout).terms)
-            self.__program_context: Dict[str, Tuple[Term, List]] = {}
-            self.__proofs = self.__get_proofs()
+            self.__program_context: Dict[str, Tuple[Term, List[Term]]] = {}
+            self.__proofs: List[ProofTerm] = self.__get_proofs()
         except Exception as e:
             self.close()
             raise e
@@ -251,32 +252,30 @@ class ProofFile(CoqFile):
         fun = lambda x: x.endswith("(default interpretation)")
         return nots[0][:-25] if fun(nots[0]) else nots[0]
 
-    def __step_context(self, step: Step):
+    def __step_context(self, step: Step) -> List[Term]:
         def traverse_expr(expr):
             stack, res = expr[:0:-1], []
             while len(stack) > 0:
                 el = stack.pop()
                 if isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
                     term = self.__get_term(CoqFile.get_id(el))
-                    if term is not None:
-                        res.append((lambda x: x, term))
+                    if term is not None and term not in res:
+                        res.append(term)
                 elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
                     line = len(self.__aux_file.read().split("\n"))
                     self.__aux_file.append(f'\nLocate "{el[2][1]}".')
+                    self.__aux_file.didChange()
 
-                    def __search_notation(call):
-                        notation_name = call[0]
-                        scope = ""
-                        notation = call[1](*call[2:])
-                        if notation == "Unknown notation":
-                            return None
-                        if notation.split(":")[-1].endswith("_scope"):
-                            scope = notation.split(":")[-1].strip()
-                        return self.context.get_notation(notation_name, scope)
+                    notation_name, scope = el[2][1], ""
+                    notation = self.__locate(notation_name, line)
+                    if notation.split(":")[-1].endswith("_scope"):
+                        scope = notation.split(":")[-1].strip()
 
-                    res.append(
-                        (__search_notation, (el[2][1], self.__locate, el[2][1], line))
-                    )
+                    if notation != "Unknown notation":
+                        term = self.context.get_notation(notation_name, scope)
+                        if term not in res:
+                            res.append(term)
+
                     stack.append(el[1:])
                 elif isinstance(el, list):
                     for v in reversed(el):
@@ -290,7 +289,7 @@ class ProofFile(CoqFile):
 
         return traverse_expr(self.expr(step.ast))
 
-    def __get_program_context(self):
+    def __get_program_context(self) -> Tuple[Term, List[Term]]:
         def traverse_expr(expr):
             stack = expr[:0:-1]
             while len(stack) > 0:
@@ -345,9 +344,7 @@ class ProofFile(CoqFile):
         self.__aux_file.append(self.prev_step.text)
         self.__check_program()
 
-    def __get_steps(
-        self, proofs
-    ) -> List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]:
+    def __get_steps(self, proofs: List[ProofTerm]) -> List[ProofStep]:
         steps = []
         while self.in_proof and not self.checked:
             try:
@@ -364,10 +361,10 @@ class ProofFile(CoqFile):
                 while not self.in_proof and not self.checked:
                     self.__step()
                 continue
-            context_calls = self.__step_context(self.prev_step)
+            context = self.__step_context(self.prev_step)
             if self.prev_step.text.strip() == "":
                 continue
-            steps.append((self.prev_step, goals, context_calls))
+            steps.append(ProofStep(self.prev_step, goals, context))
 
         try:
             goals = self.current_goals
@@ -378,11 +375,11 @@ class ProofFile(CoqFile):
             self.steps_taken < len(self.steps)
             and self.expr(self.curr_step.ast)[0] == "VernacEndProof"
         ):
-            steps.append((self.curr_step, goals, []))
+            steps.append(ProofStep(self.curr_step, goals, []))
 
         return steps
 
-    def __get_proof(self, proofs):
+    def __get_proof(self, proofs: List[ProofTerm]):
         term, statement_context = None, None
         if self.get_term_type(self.prev_step.ast) == TermType.OBLIGATION:
             term, statement_context = self.__get_program_context()
@@ -393,36 +390,15 @@ class ProofFile(CoqFile):
         # and should be overriden.
         if self.in_proof and len(self.curr_module_type) == 0:
             steps = self.__get_steps(proofs)
-            proofs.append((term, statement_context, steps))
-
-    def __call_context(self, calls: List[Tuple]):
-        context, calls = [], [call[0](*call[1:]) for call in calls]
-        [context.append(call) for call in calls if call not in context]
-        return list(filter(lambda term: term is not None, context))
+            proofs.append(ProofTerm(term, statement_context, steps))
 
     def __get_proofs(self) -> List[ProofTerm]:
-        def get_proof_step(step: Tuple[Step, Optional[GoalAnswer], List[Tuple]]):
-            return ProofStep(step[0], step[1], self.__call_context(step[2]))
-
-        proofs: List[
-            Tuple[Term, List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]]
-        ] = []
+        proofs: List[ProofTerm] = []
         while not self.checked:
             self.__step()
             # Get context from initial statement
             self.__get_proof(proofs)
-
-        try:
-            self.__aux_file.didOpen()
-        except Exception as e:
-            self.close()
-            raise e
-
-        proof_steps = [
-            (term, self.__call_context(calls), list(map(get_proof_step, steps)))
-            for term, calls, steps in proofs
-        ]
-        return list(map(lambda t: ProofTerm(*t), proof_steps))
+        return proofs
 
     def __find_step(self, range: Range) -> Optional[Tuple[ProofTerm, int]]:
         for proof in self.proofs:
@@ -449,10 +425,9 @@ class ProofFile(CoqFile):
         self.__aux_file.write("")
         for step in self.steps[: step_index + 1]:
             self.__aux_file.append(step.text)
-        call = self.__step_context(self.steps[step_index])
         self.__aux_file.didChange()
+        context = self.__step_context(self.steps[step_index])
 
-        context = self.__call_context(call)
         # The goals will be loaded if used (Lazy Loading)
         goals = self._goals
         return ProofStep(self.steps[step_index], goals, context)

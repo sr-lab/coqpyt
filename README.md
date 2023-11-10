@@ -52,7 +52,7 @@ with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
     coq_file.exec(nsteps=4)
     print("In proof:", coq_file.in_proof)
     # Get current goals
-    print(coq_file.current_goals())
+    print(coq_file.current_goals)
 
     # Save compiled file
     coq_file.save_vo()

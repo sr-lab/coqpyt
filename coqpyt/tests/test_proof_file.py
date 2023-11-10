@@ -209,7 +209,7 @@ def test_get_proofs(setup, teardown):
         ],
         [
             (
-                'Inductive and (A B:Prop) : Prop := conj : A -> B -> A /\ B where "A /\ B" := (and A B) : type_scope.',
+                'Inductive and (A B:Prop) : Prop := conj : A -> B -> A /\\ B where "A /\\ B" := (and A B) : type_scope.',
                 TermType.NOTATION,
                 [],
             ),

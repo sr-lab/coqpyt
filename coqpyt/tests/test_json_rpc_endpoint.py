@@ -1,5 +1,6 @@
 import os
 import pytest
+
 from coqpyt import lsp
 
 JSON_RPC_RESULT_LIST = [

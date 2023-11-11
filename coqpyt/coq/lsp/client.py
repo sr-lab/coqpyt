@@ -1,9 +1,10 @@
 import time
 import subprocess
+
+from coqpyt.lsp.structs import *
 from coqpyt.lsp.json_rpc_endpoint import JsonRpcEndpoint
 from coqpyt.lsp.endpoint import LspEndpoint
 from coqpyt.lsp.client import LspClient
-from coqpyt.lsp.structs import *
 from coqpyt.coq.lsp.structs import *
 
 

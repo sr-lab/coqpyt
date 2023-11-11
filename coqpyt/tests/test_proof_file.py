@@ -4,15 +4,16 @@ import uuid
 import subprocess
 import pytest
 import tempfile
-from typing import List, Tuple
+from typing import Tuple, List
+
 from coqpyt.coq.lsp.structs import *
-from coqpyt.coq.structs import TermType, Term, CoqError, CoqErrorCodes
-from coqpyt.coq.proof_file import ProofFile
 from coqpyt.coq.exceptions import *
 from coqpyt.coq.changes import *
+from coqpyt.coq.structs import TermType, Term, CoqError, CoqErrorCodes
+from coqpyt.coq.proof_file import ProofFile
 
 versionId: VersionedTextDocumentIdentifier = None
-state: ProofFile = None
+proof_file: ProofFile = None
 workspace: str = None
 file_path: str = ""
 
@@ -29,7 +30,7 @@ def compare_context(
 
 @pytest.fixture
 def setup(request):
-    global state, versionId, workspace, file_path
+    global proof_file, versionId, workspace, file_path
     file_path, workspace = request.param[0], request.param[1]
     if len(request.param) == 3 and request.param[2]:
         new_path = os.path.join(
@@ -43,7 +44,7 @@ def setup(request):
         workspace = os.path.join(os.getcwd(), "tests/resources", workspace)
         subprocess.run(f"cd {workspace} && make", shell=True, capture_output=True)
     uri = "file://" + file_path
-    state = ProofFile(file_path, timeout=60, workspace=workspace)
+    proof_file = ProofFile(file_path, timeout=60, workspace=workspace)
     versionId = VersionedTextDocumentIdentifier(uri, 1)
     yield
 
@@ -53,7 +54,7 @@ def teardown(request):
     yield
     if workspace is not None:
         subprocess.run(f"cd {workspace} && make clean", shell=True, capture_output=True)
-    state.close()
+    proof_file.close()
     if (
         hasattr(request, "param")
         and len(request.param) == 1
@@ -65,7 +66,7 @@ def teardown(request):
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None)], indirect=True)
 def test_get_proofs(setup, teardown):
-    proofs = state.proofs
+    proofs = proof_file.proofs
     assert len(proofs) == 4
 
     texts = [
@@ -120,7 +121,7 @@ def test_get_proofs(setup, teardown):
         ],
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
     ]
-    statement_context = [
+    proof_filement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         (
@@ -130,7 +131,7 @@ def test_get_proofs(setup, teardown):
         ),
     ]
 
-    compare_context(statement_context, proofs[0].context)
+    compare_context(proof_filement_context, proofs[0].context)
     assert proofs[0].text == "Theorem plus_O_n : forall n:nat, 0 + n = n."
     for i in range(4):
         assert proofs[0].steps[i].text == texts[i]
@@ -224,7 +225,7 @@ def test_get_proofs(setup, teardown):
         (24, 4, 24, 25),
         (25, 4, 25, 16),
     ]
-    statement_context = [
+    proof_filement_context = [
         (
             "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , "
             + "'/' P ']'\") : type_scope.",
@@ -245,7 +246,7 @@ def test_get_proofs(setup, teardown):
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
     ]
 
-    compare_context(statement_context, proofs[1].context)
+    compare_context(proof_filement_context, proofs[1].context)
     assert (
         proofs[1].text
         == "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
@@ -309,7 +310,7 @@ def test_get_proofs(setup, teardown):
         ],
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
     ]
-    statement_context = [
+    proof_filement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         (
@@ -319,7 +320,7 @@ def test_get_proofs(setup, teardown):
         ),
     ]
 
-    compare_context(statement_context, proofs[2].context)
+    compare_context(proof_filement_context, proofs[2].context)
     assert proofs[2].text == "Theorem plus_O_n : forall n:nat, n = 0 + n."
     for i in range(4):
         assert proofs[2].steps[i].text == texts[i]
@@ -413,7 +414,7 @@ def test_get_proofs(setup, teardown):
         ],
         [],
     ]
-    statement_context = [
+    proof_filement_context = [
         (
             "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , "
             + "'/' P ']'\") : type_scope.",
@@ -434,7 +435,7 @@ def test_get_proofs(setup, teardown):
         ),
     ]
 
-    compare_context(statement_context, proofs[3].context)
+    compare_context(proof_filement_context, proofs[3].context)
     assert (
         proofs[3].text == "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
     )
@@ -447,10 +448,10 @@ def test_get_proofs(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_valid_change(setup, teardown):
-    state.delete_step(6)
+    proof_file.delete_step(6)
 
     versionId.version += 1
-    proofs = state.proofs
+    proofs = proof_file.proofs
     texts = [
         "\n    Proof.",
         "\n      Print plus.",
@@ -494,10 +495,10 @@ def test_get_proofs_valid_change(setup, teardown):
         assert step.text == texts[i]
         assert str(proofs[0].steps[i].goals) == str(goals[i])
 
-    state.add_step(5, "\n      intros n.")
+    proof_file.add_step(5, "\n      intros n.")
 
     versionId.version += 1
-    proofs = state.proofs
+    proofs = proof_file.proofs
     texts = [
         "\n    Proof.",
         "\n      intros n.",
@@ -549,7 +550,7 @@ def test_get_proofs_valid_change(setup, teardown):
         assert str(proofs[0].steps[i].goals) == str(goals[i])
 
     # Check if context is changed correctly
-    state.add_step(7, "\n      Print minus.")
+    proof_file.add_step(7, "\n      Print minus.")
     texts = [
         "\n    Proof.",
         "\n      intros n.",
@@ -580,36 +581,36 @@ def test_get_proofs_valid_change(setup, teardown):
 
     # Add outside of proof
     with pytest.raises(NotImplementedError):
-        state.add_step(25, "\n    Print plus.")
+        proof_file.add_step(25, "\n    Print plus.")
 
     # Add step in beginning of proof
-    state.add_step(26, "\n    Print plus.")
-    assert state.steps[27].text == "\n    Print plus."
+    proof_file.add_step(26, "\n    Print plus.")
+    assert proof_file.steps[27].text == "\n    Print plus."
 
     # Delete outside of proof
     with pytest.raises(NotImplementedError):
-        state.delete_step(33)
+        proof_file.delete_step(33)
 
     # Add step to end of proof
-    state.add_step(31, "\n    Print plus.")
-    assert state.steps[32].text == "\n    Print plus."
+    proof_file.add_step(31, "\n    Print plus.")
+    assert proof_file.steps[32].text == "\n    Print plus."
 
     # Delete step in beginning of proof
-    state.delete_step(27)
-    assert state.steps[27].text == "\n      intros n."
+    proof_file.delete_step(27)
+    assert proof_file.steps[27].text == "\n      intros n."
 
     # Delete step in end of proof
-    state.delete_step(41)
-    assert state.steps[41].text == "\n    Admitted."
+    proof_file.delete_step(41)
+    assert proof_file.steps[41].text == "\n    Admitted."
 
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_change_steps(setup, teardown):
     versionId.version += 1
-    proofs = state.proofs
+    proofs = proof_file.proofs
 
-    state.change_steps(
+    proof_file.change_steps(
         [
             CoqDeleteStep(6),
             CoqAddStep("\n      intros n.", 5),
@@ -647,68 +648,68 @@ def test_get_proofs_change_steps(setup, teardown):
 
     # Add outside of proof
     with pytest.raises(NotImplementedError):
-        state.change_steps([CoqAddStep("\n    Print plus.", 25)])
+        proof_file.change_steps([CoqAddStep("\n    Print plus.", 25)])
 
     # Add step in beginning of proof
-    state.change_steps([CoqAddStep("\n    Print plus.", 26)])
-    assert state.steps[27].text == "\n    Print plus."
+    proof_file.change_steps([CoqAddStep("\n    Print plus.", 26)])
+    assert proof_file.steps[27].text == "\n    Print plus."
 
     # # Delete outside of proof
     with pytest.raises(NotImplementedError):
-        state.change_steps([CoqDeleteStep(33)])
+        proof_file.change_steps([CoqDeleteStep(33)])
 
     # # Add step to end of proof
-    state.change_steps([CoqAddStep("\n    Print plus.", 31)])
-    assert state.steps[32].text == "\n    Print plus."
+    proof_file.change_steps([CoqAddStep("\n    Print plus.", 31)])
+    assert proof_file.steps[32].text == "\n    Print plus."
 
     # # Delete step in beginning of proof
-    state.change_steps([CoqDeleteStep(27)])
-    assert state.steps[27].text == "\n      intros n."
+    proof_file.change_steps([CoqDeleteStep(27)])
+    assert proof_file.steps[27].text == "\n      intros n."
 
     # # Delete step in end of proof
-    state.change_steps([CoqDeleteStep(41)])
-    assert state.steps[41].text == "\n    Admitted."
+    proof_file.change_steps([CoqDeleteStep(41)])
+    assert proof_file.steps[41].text == "\n    Admitted."
 
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_invalid_change(setup, teardown):
-    n_old_steps = len(state.steps)
-    old_diagnostics = state.diagnostics
+    n_old_steps = len(proof_file.steps)
+    old_diagnostics = proof_file.diagnostics
     old_goals = []
-    for proof in state.proofs:
+    for proof in proof_file.proofs:
         for step in proof.steps:
             old_goals.append(step.goals)
 
     def check_rollback():
-        with open(state.path, "r") as f:
-            assert n_old_steps == len(state.steps)
-            assert old_diagnostics == state.diagnostics
-            assert state.is_valid
+        with open(proof_file.path, "r") as f:
+            assert n_old_steps == len(proof_file.steps)
+            assert old_diagnostics == proof_file.diagnostics
+            assert proof_file.is_valid
             assert "invalid_tactic" not in f.read()
             i = 0
-            for proof in state.proofs:
+            for proof in proof_file.proofs:
                 for step in proof.steps:
                     assert step.goals == old_goals[i]
                     i += 1
 
     with pytest.raises(InvalidDeleteException):
-        state.delete_step(9)
+        proof_file.delete_step(9)
         check_rollback()
     with pytest.raises(InvalidDeleteException):
-        state.delete_step(16)
+        proof_file.delete_step(16)
         check_rollback()
     with pytest.raises(InvalidStepException):
-        state.add_step(7, "invalid_tactic")
+        proof_file.add_step(7, "invalid_tactic")
         check_rollback()
     with pytest.raises(InvalidStepException):
-        state.add_step(7, "invalid_tactic.")
+        proof_file.add_step(7, "invalid_tactic.")
         check_rollback()
     with pytest.raises(InvalidStepException):
-        state.add_step(7, "\n    invalid_tactic.")
+        proof_file.add_step(7, "\n    invalid_tactic.")
         check_rollback()
     with pytest.raises(InvalidStepException):
-        state.add_step(7, "\n    invalid_tactic x $$$ y.")
+        proof_file.add_step(7, "\n    invalid_tactic x $$$ y.")
         check_rollback()
 
 
@@ -716,34 +717,34 @@ def test_get_proofs_invalid_change(setup, teardown):
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_change_notation(setup, teardown):
     # Just checking if the program does not crash
-    state.add_step(len(state.steps) - 3, " destruct (a <? n).")
+    proof_file.add_step(len(proof_file.steps) - 3, " destruct (a <? n).")
 
 
 @pytest.mark.parametrize("setup", [("test_invalid_1.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_change_invalid(setup, teardown):
     with pytest.raises(InvalidFileException):
-        state.add_step(7, "Print plus.")
+        proof_file.add_step(7, "Print plus.")
 
 
 @pytest.mark.parametrize("setup", [("test_change_empty.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_change_empty(setup, teardown):
-    state.add_step(len(state.steps) - 2, "\nAdmitted.")
-    assert state.steps[-2].text == "\nAdmitted."
-    assert len(state.proofs[0].steps) == 2
-    assert state.proofs[0].steps[-1].text == "\nAdmitted."
+    proof_file.add_step(len(proof_file.steps) - 2, "\nAdmitted.")
+    assert proof_file.steps[-2].text == "\nAdmitted."
+    assert len(proof_file.proofs[0].steps) == 2
+    assert proof_file.proofs[0].steps[-1].text == "\nAdmitted."
 
-    state.delete_step(len(state.steps) - 2)
-    assert len(state.steps) == 3
-    assert len(state.proofs[0].steps) == 1
+    proof_file.delete_step(len(proof_file.steps) - 2)
+    assert len(proof_file.steps) == 3
+    assert len(proof_file.proofs[0].steps) == 1
 
 
 @pytest.mark.parametrize(
     "setup", [("test_imports/test_import.v", "test_imports/")], indirect=True
 )
 def test_imports(setup, teardown):
-    proofs = state.proofs
+    proofs = proof_file.proofs
     assert len(proofs) == 2
     context = [
         [],
@@ -774,8 +775,8 @@ def test_imports(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_non_ending_proof.v", None)], indirect=True)
 def test_non_ending_proof(setup, teardown):
-    assert len(state.proofs) == 1
-    assert len(state.proofs[0].steps) == 3
+    assert len(proof_file.proofs) == 1
+    assert len(proof_file.proofs[0].steps) == 3
 
 
 @pytest.mark.parametrize("setup", [("test_exists_notation.v", None)], indirect=True)
@@ -784,14 +785,14 @@ def test_exists_notation(setup, teardown):
     with 'exists', but the search can be done without the '.
     """
     assert (
-        state.context.get_notation("exists _ .. _ , _", "type_scope").text
+        proof_file.context.get_notation("exists _ .. _ , _", "type_scope").text
         == "Notation \"'exists' x .. y , p\" := (ex (fun x => .. (ex (fun y => p)) ..)) (at level 200, x binder, right associativity, format \"'[' 'exists' '/ ' x .. y , '/ ' p ']'\") : type_scope."
     )
 
 
 @pytest.mark.parametrize("setup", [("test_list_notation.v", None)], indirect=True)
 def test_list_notation(setup, teardown):
-    assert len(state.proofs) == 1
+    assert len(proof_file.proofs) == 1
     context = [
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         (
@@ -810,7 +811,7 @@ def test_list_notation(setup, teardown):
             ["ListNotations"],
         ),
     ]
-    compare_context(context, state.proofs[0].context)
+    compare_context(context, proof_file.proofs[0].context)
 
 
 @pytest.mark.parametrize("setup", [("test_unknown_notation.v", None)], indirect=True)
@@ -819,13 +820,13 @@ def test_unknown_notation(setup, teardown):
     Locate command because it is a default notation.
     """
     with pytest.raises(CoqError) as e_info:
-        assert state.context.get_notation("{ _ }", "")
+        assert proof_file.context.get_notation("{ _ }", "")
     assert e_info.value.code == CoqErrorCodes.NotationNotFound
 
 
 @pytest.mark.parametrize("setup", [("test_nested_proofs.v", None)], indirect=True)
 def test_nested_proofs(setup, teardown):
-    proofs = state.proofs
+    proofs = proof_file.proofs
     assert len(proofs) == 4
 
     steps = ["\n    intros n.", "\n    simpl; reflexivity.", "\n    Qed."]
@@ -863,7 +864,7 @@ def test_nested_proofs(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_theorem_tokens.v", None)], indirect=True)
 def test_theorem_tokens(setup, teardown):
-    proofs = state.proofs
+    proofs = proof_file.proofs
     assert len(proofs) == 7
     assert proofs[0].type == TermType.REMARK
     assert proofs[1].type == TermType.FACT
@@ -876,7 +877,7 @@ def test_theorem_tokens(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_bullets.v", None)], indirect=True)
 def test_bullets(setup, teardown):
-    proofs = state.proofs
+    proofs = proof_file.proofs
     assert len(proofs) == 1
     steps = [
         "\nProof.",
@@ -895,10 +896,10 @@ def test_bullets(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_obligation.v", None)], indirect=True)
 def test_obligation(setup, teardown):
-    proofs = state.proofs
+    proofs = proof_file.proofs
     assert len(proofs) == 11
 
-    statement_context = [
+    proof_filement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ("Notation dec := sumbool_of_bool.", TermType.NOTATION, []),
         ("Notation leb := Nat.leb (only parsing).", TermType.NOTATION, []),
@@ -925,7 +926,7 @@ def test_obligation(setup, teardown):
     ]
 
     for i, proof in enumerate(proofs):
-        compare_context(statement_context, proof.context)
+        compare_context(proof_filement_context, proof.context)
         assert (
             proof.text
             == "Program Definition "
@@ -942,15 +943,15 @@ def test_obligation(setup, teardown):
 def test_module_type(setup, teardown):
     # We ignore proofs inside a Module Type since they can't be used outside
     # and should be overriden.
-    assert len(state.proofs) == 1
+    assert len(proof_file.proofs) == 1
 
 
 @pytest.mark.parametrize("setup", [("test_type_class.v", None)], indirect=True)
 def test_type_class(setup, teardown):
-    assert len(state.proofs) == 2
-    assert len(state.proofs[0].steps) == 4
+    assert len(proof_file.proofs) == 2
+    assert len(proof_file.proofs[0].steps) == 4
     assert (
-        state.proofs[0].text
+        proof_file.proofs[0].text
         == "#[refine] Global Instance unit_EqDec : TypeClass.EqDecNew unit := { eqb_new x y := true }."
     )
 
@@ -967,10 +968,10 @@ def test_type_class(setup, teardown):
             [],
         ),
     ]
-    compare_context(context, state.proofs[0].context)
+    compare_context(context, proof_file.proofs[0].context)
 
     assert (
-        state.proofs[1].text
+        proof_file.proofs[1].text
         == "Instance test : TypeClass.EqDecNew unit -> TypeClass.EqDecNew unit."
     )
 
@@ -987,18 +988,18 @@ def test_type_class(setup, teardown):
         ),
         ("Inductive unit : Set := tt : unit.", TermType.INDUCTIVE, []),
     ]
-    compare_context(context, state.proofs[1].context)
+    compare_context(context, proof_file.proofs[1].context)
 
 
 @pytest.mark.parametrize("setup", [("test_goal.v", None)], indirect=True)
 def test_goal(setup, teardown):
-    assert len(state.proofs) == 3
+    assert len(proof_file.proofs) == 3
     goals = [
         "Definition ignored : forall P Q: Prop, (P -> Q) -> P -> Q.",
         "Goal forall P Q: Prop, (P -> Q) -> P -> Q.",
         "Goal forall P Q: Prop, (P -> Q) -> P -> Q.",
     ]
-    for i, proof in enumerate(state.proofs):
+    for i, proof in enumerate(proof_file.proofs):
         assert proof.text == goals[i]
         compare_context(
             [
@@ -1015,7 +1016,7 @@ def test_goal(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_simple_file.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_simple_file_changes(setup, teardown):
-    state.change_steps(
+    proof_file.change_steps(
         [
             CoqDeleteStep(1),
             CoqDeleteStep(1),
@@ -1026,8 +1027,8 @@ def test_simple_file_changes(setup, teardown):
             CoqAddStep("\nAdmitted.", 2),
         ]
     )
-    assert len(state.steps) == 5
-    assert len(state.proofs) == 2
+    assert len(proof_file.steps) == 5
+    assert len(proof_file.proofs) == 2
 
     steps = [
         "Example test1: 1 + 1 = 2.",
@@ -1036,17 +1037,17 @@ def test_simple_file_changes(setup, teardown):
         "\nAdmitted.",
     ]
     for i, step in enumerate(steps):
-        assert step == state.steps[i].text
+        assert step == proof_file.steps[i].text
 
-    assert state.proofs[0].text == steps[0]
-    assert state.proofs[0].steps[0].text == steps[1]
-    assert state.proofs[1].text == steps[2].strip()
-    assert state.proofs[1].steps[0].text == steps[3]
+    assert proof_file.proofs[0].text == steps[0]
+    assert proof_file.proofs[0].steps[0].text == steps[1]
+    assert proof_file.proofs[1].text == steps[2].strip()
+    assert proof_file.proofs[1].steps[0].text == steps[3]
 
 
 @pytest.mark.parametrize("setup", [("test_proof_cmd.v", None)], indirect=True)
 def test_proof_cmd(setup, teardown):
-    assert len(state.proofs) == 3
+    assert len(proof_file.proofs) == 3
     goals = [
         "Goal ∃ (m : nat), S m = n.",
         "Goal ∃ (m : nat), S m = n.",
@@ -1057,13 +1058,13 @@ def test_proof_cmd(setup, teardown):
         "\n  Proof with auto.",
         "\n  Proof 0.",
     ]
-    for i, proof in enumerate(state.proofs):
+    for i, proof in enumerate(proof_file.proofs):
         assert proof.text == goals[i]
         assert proof.steps[0].text == proofs[i]
 
 
 @pytest.mark.parametrize("setup", [("test_section_terms.v", None)], indirect=True)
 def test_section_terms(setup, teardown):
-    assert len(state.proofs) == 1
-    assert state.proofs[0].text == "Let ignored : nat."
-    assert len(state.terms) == 0
+    assert len(proof_file.proofs) == 1
+    assert proof_file.proofs[0].text == "Let ignored : nat."
+    assert len(proof_file.context.local_terms) == 0

@@ -3,6 +3,8 @@ import hashlib
 import shutil
 import uuid
 import tempfile
+from typing import Optional, Tuple, List, Dict
+
 from coqpyt.lsp.structs import (
     TextDocumentItem,
     VersionedTextDocumentIdentifier,
@@ -10,20 +12,13 @@ from coqpyt.lsp.structs import (
     ResponseError,
     ErrorCodes,
 )
-from coqpyt.coq.structs import (
-    TermType,
-    Step,
-    Term,
-    ProofStep,
-    ProofTerm,
-    FileContext,
-)
-from coqpyt.coq.lsp.structs import Result, Query, GoalAnswer, Range
-from coqpyt.coq.base_file import CoqFile
+from coqpyt.coq.lsp.structs import Result, Query, Range
 from coqpyt.coq.lsp.client import CoqLspClient
-from coqpyt.coq.changes import *
+from coqpyt.coq.structs import TermType, Step, Term, ProofStep, ProofTerm
 from coqpyt.coq.exceptions import *
-from typing import List, Dict, Optional, Tuple
+from coqpyt.coq.changes import *
+from coqpyt.coq.context import FileContext
+from coqpyt.coq.base_file import CoqFile
 
 
 class _AuxFile(object):
@@ -158,7 +153,7 @@ class _AuxFile(object):
                 aux_file.append(f"\nLocate Library {library}.")
             aux_file.didChange()
 
-            context = FileContext()
+            context = FileContext(file_path)
             for i, library in enumerate(libraries):
                 v_file = aux_file.get_diagnostics(
                     "Locate Library", library, last_line + i + 1
@@ -184,7 +179,7 @@ class _AuxFile(object):
                 for term in list(aux_context.terms.keys()):
                     if aux_context.terms[term].text.startswith("Local"):
                         aux_context.terms.pop(term)
-                context.update(**vars(aux_context))
+                context.update(aux_context.terms)
 
         return context
 

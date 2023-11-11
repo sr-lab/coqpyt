@@ -1,8 +1,9 @@
 from __future__ import print_function
 import threading
 import logging
+from typing import List, Dict
+
 from coqpyt.lsp import structs
-from typing import Dict, List
 
 
 class LspEndpoint(threading.Thread):

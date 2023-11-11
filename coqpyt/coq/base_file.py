@@ -3,20 +3,24 @@ import shutil
 import uuid
 import tempfile
 import subprocess
+from typing import Optional, List
+from packaging import version
+
 from coqpyt.lsp.structs import (
     TextDocumentItem,
     TextDocumentIdentifier,
     VersionedTextDocumentIdentifier,
     TextDocumentContentChangeEvent,
+    ResponseError,
+    ErrorCodes,
+    Diagnostic,
 )
-from coqpyt.lsp.structs import ResponseError, ErrorCodes, Diagnostic
 from coqpyt.coq.lsp.structs import Position, GoalAnswer, RangedSpan
-from coqpyt.coq.structs import Step, FileContext, Term, TermType, SegmentType
 from coqpyt.coq.lsp.client import CoqLspClient
 from coqpyt.coq.exceptions import *
 from coqpyt.coq.changes import *
-from typing import List, Optional
-from packaging import version
+from coqpyt.coq.structs import Step, Term, TermType, SegmentType
+from coqpyt.coq.context import FileContext
 
 
 class CoqFile(object):
@@ -83,7 +87,7 @@ class CoqFile(object):
         self.curr_module_type: List[str] = []
         self.curr_section: List[str] = []
         self.__segment_stack: List[SegmentType] = []
-        self.context = FileContext()
+        self.context = FileContext(self.path)
         self.__anonymous_id: Optional[int] = None
         self.version = 1
         self.__last_end_pos: Optional[Position] = None
@@ -183,44 +187,6 @@ class CoqFile(object):
 
         self.__expr = lambda e: e if outdated else e[1]
         self.__where_notation_key = "decl_ntn" if outdated else "ntn_decl"
-
-    @property
-    def curr_step(self):
-        return self.steps[self.steps_taken]
-
-    @property
-    def prev_step(self):
-        return self.steps[self.steps_taken - 1]
-
-    @staticmethod
-    def get_id(id: List) -> str:
-        if id[0] == "Ser_Qualid":
-            return ".".join([l[1] for l in reversed(id[1][1])] + [id[2][1]])
-        elif id[0] == "Id":
-            return id[1]
-        return None
-
-    @staticmethod
-    def get_ident(el: List) -> Optional[str]:
-        if (
-            len(el) == 3
-            and el[0] == "GenArg"
-            and el[1][0] == "Rawwit"
-            and el[1][1][0] == "ExtraArg"
-        ):
-            if el[1][1][1] == "identref":
-                return el[2][0][1][1]
-            elif el[1][1][1] == "ident":
-                return el[2][1]
-        return None
-
-    @staticmethod
-    def get_v(el):
-        if isinstance(el, dict) and "v" in el:
-            return el["v"]
-        elif isinstance(el, list) and len(el) == 2 and el[0] == "v":
-            return el[1]
-        return None
 
     def expr(self, step: RangedSpan) -> Optional[List]:
         if (
@@ -674,6 +640,14 @@ class CoqFile(object):
             raise InvalidChangeException()
 
     @property
+    def curr_step(self):
+        return self.steps[self.steps_taken]
+
+    @property
+    def prev_step(self):
+        return self.steps[self.steps_taken - 1]
+
+    @property
     def timeout(self) -> int:
         """The timeout of the coq-lsp client.
 
@@ -714,18 +688,6 @@ class CoqFile(object):
             bool: True if the current step is inside a proof
         """
         return self.__in_proof(self.current_goals)
-
-    @property
-    def terms(self) -> List[Term]:
-        """
-        Returns:
-            List[Term]: The terms of the file already executed
-        """
-        return list(
-            filter(
-                lambda term: term.file_path == self.path, self.context.terms.values()
-            )
-        )
 
     @property
     def diagnostics(self) -> List[Diagnostic]:
@@ -838,3 +800,33 @@ class CoqFile(object):
         self.coq_lsp_client.exit()
         if self.__from_lib:
             os.remove(self.__path)
+
+    @staticmethod
+    def get_id(id: List) -> str:
+        if id[0] == "Ser_Qualid":
+            return ".".join([l[1] for l in reversed(id[1][1])] + [id[2][1]])
+        elif id[0] == "Id":
+            return id[1]
+        return None
+
+    @staticmethod
+    def get_ident(el: List) -> Optional[str]:
+        if (
+            len(el) == 3
+            and el[0] == "GenArg"
+            and el[1][0] == "Rawwit"
+            and el[1][1][0] == "ExtraArg"
+        ):
+            if el[1][1][1] == "identref":
+                return el[2][0][1][1]
+            elif el[1][1][1] == "ident":
+                return el[2][1]
+        return None
+
+    @staticmethod
+    def get_v(el):
+        if isinstance(el, dict) and "v" in el:
+            return el["v"]
+        elif isinstance(el, list) and len(el) == 2 and el[0] == "v":
+            return el[1]
+        return None

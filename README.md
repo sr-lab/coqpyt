@@ -20,7 +20,7 @@ python -m pip install -e .
 
 Import classes from the ``coqpyt`` package.
 
-<!-- embedme examples/readme.py#L2-L4 -->
+<!-- embedme examples/readme.py#L3-L5 -->
 ```py
 from coqpyt.coq.base_file import CoqFile
 from coqpyt.coq.proof_file import ProofFile

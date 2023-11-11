@@ -1,7 +1,8 @@
 import os
+
+from coqpyt.coq.structs import TermType
 from coqpyt.coq.base_file import CoqFile
 from coqpyt.coq.proof_file import ProofFile
-from coqpyt.coq.structs import TermType
 
 # Open Coq file
 with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:

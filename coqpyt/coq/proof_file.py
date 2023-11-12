@@ -50,18 +50,6 @@ class _AuxFile(object):
         self.path = new_path
         self.version = 1
 
-    def read(self):
-        with open(self.path, "r") as f:
-            return f.read()
-
-    def write(self, text):
-        with open(self.path, "w") as f:
-            f.write(text)
-
-    def append(self, text):
-        with open(self.path, "a") as f:
-            f.write(text)
-
     def __handle_exception(self, e):
         if not isinstance(e, ResponseError) or e.code not in [
             ErrorCodes.ServerQuit.value,
@@ -70,26 +58,6 @@ class _AuxFile(object):
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
         os.remove(self.path)
-
-    def didOpen(self):
-        uri = f"file://{self.path}"
-        try:
-            self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, self.read()))
-        except Exception as e:
-            self.__handle_exception(e)
-            raise e
-
-    def didChange(self):
-        uri = f"file://{self.path}"
-        self.version += 1
-        try:
-            self.coq_lsp_client.didChange(
-                VersionedTextDocumentIdentifier(uri, self.version),
-                [TextDocumentContentChangeEvent(None, None, self.read())],
-            )
-        except Exception as e:
-            self.__handle_exception(e)
-            raise e
 
     def __get_queries(self, keyword):
         uri = f"file://{self.path}"
@@ -132,6 +100,38 @@ class _AuxFile(object):
                         return result.message
                 break
         return None
+
+    def read(self):
+        with open(self.path, "r") as f:
+            return f.read()
+
+    def write(self, text):
+        with open(self.path, "w") as f:
+            f.write(text)
+
+    def append(self, text):
+        with open(self.path, "a") as f:
+            f.write(text)
+
+    def didOpen(self):
+        uri = f"file://{self.path}"
+        try:
+            self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, self.read()))
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+
+    def didChange(self):
+        uri = f"file://{self.path}"
+        self.version += 1
+        try:
+            self.coq_lsp_client.didChange(
+                VersionedTextDocumentIdentifier(uri, self.version),
+                [TextDocumentContentChangeEvent(None, None, self.read())],
+            )
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
 
     def close(self):
         self.coq_lsp_client.shutdown()
@@ -233,13 +233,6 @@ class ProofFile(CoqFile):
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
 
-    def __get_term(self, name):
-        for i in range(len(self.curr_module), -1, -1):
-            curr_name = ".".join(self.curr_module[:i] + [name])
-            if curr_name in self.context.terms:
-                return self.context.terms[curr_name]
-        return None
-
     def __locate(self, search, line):
         nots = self.__aux_file.get_diagnostics("Locate", f'"{search}"', line).split(
             "\n"
@@ -248,57 +241,41 @@ class ProofFile(CoqFile):
         return nots[0][:-25] if fun(nots[0]) else nots[0]
 
     def __step_context(self, step: Step) -> List[Term]:
-        def traverse_expr(expr):
-            stack, res = expr[:0:-1], []
-            while len(stack) > 0:
-                el = stack.pop()
-                if isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
-                    term = self.__get_term(CoqFile.get_id(el))
-                    if term is not None and term not in res:
+        stack, res = self.context.expr(step)[:0:-1], []
+        while len(stack) > 0:
+            el = stack.pop()
+            if isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
+                term = self.context.get_term(FileContext.get_id(el))
+                if term is not None and term not in res:
+                    res.append(term)
+            elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
+                line = len(self.__aux_file.read().split("\n"))
+                self.__aux_file.append(f'\nLocate "{el[2][1]}".')
+                self.__aux_file.didChange()
+
+                notation_name, scope = el[2][1], ""
+                notation = self.__locate(notation_name, line)
+                if notation.split(":")[-1].endswith("_scope"):
+                    scope = notation.split(":")[-1].strip()
+
+                if notation != "Unknown notation":
+                    term = self.context.get_notation(notation_name, scope)
+                    if term not in res:
                         res.append(term)
-                elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
-                    line = len(self.__aux_file.read().split("\n"))
-                    self.__aux_file.append(f'\nLocate "{el[2][1]}".')
-                    self.__aux_file.didChange()
 
-                    notation_name, scope = el[2][1], ""
-                    notation = self.__locate(notation_name, line)
-                    if notation.split(":")[-1].endswith("_scope"):
-                        scope = notation.split(":")[-1].strip()
-
-                    if notation != "Unknown notation":
-                        term = self.context.get_notation(notation_name, scope)
-                        if term not in res:
-                            res.append(term)
-
-                    stack.append(el[1:])
-                elif isinstance(el, list):
-                    for v in reversed(el):
-                        if isinstance(v, (dict, list)):
-                            stack.append(v)
-                elif isinstance(el, dict):
-                    for v in reversed(el.values()):
-                        if isinstance(v, (dict, list)):
-                            stack.append(v)
-            return res
-
-        return traverse_expr(self.expr(step.ast))
+                stack.append(el[1:])
+            elif isinstance(el, list):
+                for v in reversed(el):
+                    if isinstance(v, (dict, list)):
+                        stack.append(v)
+            elif isinstance(el, dict):
+                for v in reversed(el.values()):
+                    if isinstance(v, (dict, list)):
+                        stack.append(v)
+        return res
 
     def __get_program_context(self) -> Tuple[Term, List[Term]]:
-        def traverse_expr(expr):
-            stack = expr[:0:-1]
-            while len(stack) > 0:
-                el = stack.pop()
-                if isinstance(el, list):
-                    ident = CoqFile.get_ident(el)
-                    if ident is not None:
-                        return ident
-
-                    for v in reversed(el):
-                        if isinstance(v, list):
-                            stack.append(v)
-            return None
-
+        expr = self.context.expr(self.prev_step)
         # Tags:
         # 0 - Obligation N of id : type
         # 1 - Obligation N of id
@@ -306,31 +283,42 @@ class ProofFile(CoqFile):
         # 3 - Obligation N
         # 4 - Next Obligation of id
         # 5 - Next Obligation
-        tag = self.expr(self.prev_step.ast)[1][1]
+        tag = expr[1][1]
         if tag in [0, 1, 4]:
-            id = traverse_expr(self.expr(self.prev_step.ast))
-            # This works because the obligation must be in the
-            # same module as the program
-            id = ".".join(self.curr_module + [id])
-            return self.__program_context[id]
+            stack = expr[:0:-1]
+            while len(stack) > 0:
+                el = stack.pop()
+                if not isinstance(el, list):
+                    continue
+
+                ident = FileContext.get_ident(el)
+                if ident is not None:
+                    # This works because the obligation must be in the
+                    # same module as the program
+                    id = self.context.append_module_prefix(ident)
+                    return self.__program_context[id]
+
+                for v in reversed(el):
+                    if isinstance(v, list):
+                        stack.append(v)
         elif tag in [2, 3, 5]:
             id = self.current_goals.program[0][0][1]
             # This works because the obligation must be in the
             # same module as the program
-            id = ".".join(self.curr_module + [id])
+            id = self.context.append_module_prefix(id)
             return self.__program_context[id]
-        text = self._last_term.text
+        text = self.context.last_term.text
         raise RuntimeError(f"Unknown obligation command with tag number {tag}: {text}")
 
     def __check_program(self):
         goals = self.current_goals
         if len(goals.program) == 0:
             return
-        id = ".".join(self.curr_module + [goals.program[-1][0][1]])
+        id = self.context.append_module_prefix(goals.program[-1][0][1])
         if id in self.__program_context:
             return
         self.__program_context[id] = (
-            self._last_term,
+            self.context.last_term,
             self.__step_context(self.prev_step),
         )
 
@@ -350,7 +338,7 @@ class ProofFile(CoqFile):
 
             self.__step()
             # Nested proofs
-            if self.get_term_type(self.prev_step.ast) != TermType.OTHER:
+            if self.context.term_type(self.prev_step) != TermType.OTHER:
                 self.__get_proof(proofs)
                 # Pass Qed if it exists
                 while not self.in_proof and not self.checked:
@@ -368,7 +356,7 @@ class ProofFile(CoqFile):
             raise e
         if (
             self.steps_taken < len(self.steps)
-            and self.expr(self.curr_step.ast)[0] == "VernacEndProof"
+            and self.context.expr(self.curr_step)[0] == "VernacEndProof"
         ):
             steps.append(ProofStep(self.curr_step, goals, []))
 
@@ -376,14 +364,14 @@ class ProofFile(CoqFile):
 
     def __get_proof(self, proofs: List[ProofTerm]):
         term, statement_context = None, None
-        if self.get_term_type(self.prev_step.ast) == TermType.OBLIGATION:
+        if self.context.term_type(self.prev_step) == TermType.OBLIGATION:
             term, statement_context = self.__get_program_context()
-        elif self.get_term_type(self.prev_step.ast) != TermType.OTHER:
-            term = self._last_term
+        elif self.context.term_type(self.prev_step) != TermType.OTHER:
+            term = self.context.last_term
             statement_context = self.__step_context(self.prev_step)
         # HACK: We ignore proofs inside a Module Type since they can't be used outside
         # and should be overriden.
-        if self.in_proof and len(self.curr_module_type) == 0:
+        if self.in_proof and not self.context.in_module_type:
             steps = self.__get_steps(proofs)
             proofs.append(ProofTerm(term, statement_context, steps))
 

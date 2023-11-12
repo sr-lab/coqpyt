@@ -9,7 +9,7 @@ from typing import Tuple, List
 from coqpyt.coq.lsp.structs import *
 from coqpyt.coq.exceptions import *
 from coqpyt.coq.changes import *
-from coqpyt.coq.structs import TermType, Term, CoqError, CoqErrorCodes
+from coqpyt.coq.structs import TermType, Term
 from coqpyt.coq.proof_file import ProofFile
 
 versionId: VersionedTextDocumentIdentifier = None
@@ -819,9 +819,8 @@ def test_unknown_notation(setup, teardown):
     """Checks if it is able to handle the notation { _ } that is unknown for the
     Locate command because it is a default notation.
     """
-    with pytest.raises(CoqError) as e_info:
+    with pytest.raises(NotationNotFoundException):
         assert proof_file.context.get_notation("{ _ }", "")
-    assert e_info.value.code == CoqErrorCodes.NotationNotFound
 
 
 @pytest.mark.parametrize("setup", [("test_nested_proofs.v", None)], indirect=True)

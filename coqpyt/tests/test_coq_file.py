@@ -207,6 +207,7 @@ def test_module_type(setup, teardown):
     # We ignore terms inside a Module Type since they can't be used outside
     # and should be overriden.
     assert len(coq_file.context.terms) == 1
+    assert "plus_O_n" in coq_file.context.terms
 
 
 @pytest.mark.parametrize("setup", ["test_derive.v"], indirect=True)

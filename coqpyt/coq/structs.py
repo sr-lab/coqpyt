@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Union, Callable
+from typing import Any, List, Union, Callable
 
 from coqpyt.lsp.structs import Diagnostic, Position
 from coqpyt.coq.lsp.structs import RangedSpan, GoalAnswer
@@ -39,15 +39,29 @@ class TermType(Enum):
     OTHER = 100
 
 
-class CoqErrorCodes(Enum):
-    InvalidFile = 0
-    NotationNotFound = 1
+class SegmentStack:
+    def __init__(self):
+        self.modules: List[str] = []
+        self.module_types: List[str] = []
+        self.sections: List[str] = []
+        self.stack: List[SegmentType] = []
 
+    def __match_apply(self, type: SegmentType, operation: Callable, *args: Any):
+        match type:
+            case SegmentType.MODULE:
+                operation(self.modules, *args)
+            case SegmentType.MODULE_TYPE:
+                operation(self.module_types, *args)
+            case SegmentType.SECTION:
+                operation(self.sections, *args)
 
-class CoqError(Exception):
-    def __init__(self, code: CoqErrorCodes, message: str):
-        self.code = code
-        self.message = message
+    def push(self, name: str, type: SegmentType):
+        self.stack.append(type)
+        self.__match_apply(type, list.append, name)
+
+    def pop(self):
+        if len(self.stack) > 0:
+            self.__match_apply(self.stack.pop(), list.pop)
 
 
 class Step(object):

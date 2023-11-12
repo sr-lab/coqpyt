@@ -2,9 +2,7 @@ import os
 import shutil
 import uuid
 import tempfile
-import subprocess
 from typing import Optional, List
-from packaging import version
 
 from coqpyt.lsp.structs import (
     TextDocumentItem,
@@ -19,7 +17,7 @@ from coqpyt.coq.lsp.structs import Position, GoalAnswer, RangedSpan
 from coqpyt.coq.lsp.client import CoqLspClient
 from coqpyt.coq.exceptions import *
 from coqpyt.coq.changes import *
-from coqpyt.coq.structs import Step, Term, TermType, SegmentType
+from coqpyt.coq.structs import Step
 from coqpyt.coq.context import FileContext
 
 
@@ -31,9 +29,6 @@ class CoqFile(object):
         ast (List[RangedSpan]): AST of the Coq file. Each element is a step
             of execution in the Coq file.
         steps_taken (int): The number of steps already executed
-        curr_module (List[str]): A list correspondent to the module path in the
-            current step. For instance, if the current module is `Ex.Test`, the
-            list will be ['Ex', 'Test'].
         context (FileContext): The context defined in the file.
         path (str): Path of the file. If the file is from the Coq library, a
             temporary file will be used.
@@ -64,6 +59,7 @@ class CoqFile(object):
                 simply used to check the Coq version in use. Defaults to "coqtop".
         """
         self.__init_path(file_path, library)
+
         if workspace is not None:
             uri = f"file://{workspace}"
         else:
@@ -82,17 +78,10 @@ class CoqFile(object):
         self.steps_taken: int = 0
         self.__init_steps(text, ast)
         self.__validate()
-        self.__init_coq_version(coqtop)
-        self.curr_module: List[str] = []
-        self.curr_module_type: List[str] = []
-        self.curr_section: List[str] = []
-        self.__segment_stack: List[SegmentType] = []
-        self.context = FileContext(self.path)
-        self.__anonymous_id: Optional[int] = None
+        self.context = FileContext(self.path, module=self.file_module, coqtop=coqtop)
         self.version = 1
         self.__last_end_pos: Optional[Position] = None
         self.__current_goals = None
-        self._last_term: Optional[Term] = None
 
     def __enter__(self):
         return self
@@ -175,31 +164,6 @@ class CoqFile(object):
                     step.diagnostics.append(diagnostic)
                     break
 
-    def __init_coq_version(self, coqtop):
-        output = subprocess.check_output(f"{coqtop} -v", shell=True)
-        coq_version = output.decode("utf-8").split("\n")[0].split()[-1]
-        outdated = version.parse(coq_version) < version.parse("8.18")
-
-        # For version 8.18, we ignore the tags [VernacSynterp] and [VernacSynPure]
-        # and use the "ntn_decl" prefix when handling where notations
-        # For older versions, we only tested 8.17, so we provide no claims about
-        # versions prior to that.
-
-        self.__expr = lambda e: e if outdated else e[1]
-        self.__where_notation_key = "decl_ntn" if outdated else "ntn_decl"
-
-    def expr(self, step: RangedSpan) -> Optional[List]:
-        if (
-            step.span is not None
-            and isinstance(step.span, dict)
-            and "v" in step.span
-            and isinstance(step.span["v"], dict)
-            and "expr" in step.span["v"]
-        ):
-            return self.__expr(step.span["v"]["expr"])
-
-        return [None]
-
     def __short_text(
         self, text: str, curr_step: RangedSpan, prev_step: Optional[RangedSpan] = None
     ):
@@ -207,249 +171,14 @@ class CoqFile(object):
         nlines = curr_range.end.line - curr_range.start.line + 1
         lines = text.split("\n")[-nlines:]
 
-        prev_range = None if prev_step is None else prev_step.range
-        if prev_range is None or prev_range.end.line < curr_range.start.line:
-            start = curr_range.start.character
-        else:
-            start = curr_range.start.character - prev_range.end.character
+        start = curr_range.start.character
+        if prev_step is not None and prev_step.range.end.line >= curr_range.start.line:
+            start -= prev_step.range.end.character
 
         lines[-1] = lines[-1][: curr_range.end.character]
         lines[0] = lines[0][start:]
 
         return " ".join(" ".join(lines).split())
-
-    def __add_term(self, name: str, step: Step, term_type: TermType):
-        term = Term(step, term_type, self.path, self.curr_module[:])
-        self._last_term = term
-        if term.type == TermType.NOTATION:
-            self.context.update(terms={name: term})
-            return
-
-        full_name = lambda name: ".".join(self.curr_module + [name])
-        self.context.update(terms={full_name(name): term})
-
-        curr_file_module = ""
-        for module in reversed(self.file_module):
-            curr_file_module = module + "." + curr_file_module
-            self.context.update(terms={curr_file_module + name: term})
-
-    @staticmethod
-    def __get_term_type(expr: List) -> TermType:
-        if expr[0] == "VernacStartTheoremProof":
-            return getattr(TermType, expr[1][0].upper())
-        elif expr[0] == "VernacDefinition":
-            return TermType.DEFINITION
-        elif expr[0] in ["VernacNotation", "VernacSyntacticDefinition"]:
-            return TermType.NOTATION
-        elif expr[0] == "VernacExtend" and expr[1][0] == "Obligations":
-            return TermType.OBLIGATION
-        elif expr[0] == "VernacInductive" and expr[1][0] == "Class":
-            return TermType.CLASS
-        elif expr[0] == "VernacInductive" and expr[1][0] in ["Record", "Structure"]:
-            return TermType.RECORD
-        elif expr[0] == "VernacInductive" and expr[1][0] == "Variant":
-            return TermType.VARIANT
-        elif expr[0] == "VernacInductive" and expr[1][0] == "CoInductive":
-            return TermType.COINDUCTIVE
-        elif expr[0] == "VernacInductive":
-            return TermType.INDUCTIVE
-        elif expr[0] == "VernacInstance":
-            return TermType.INSTANCE
-        elif expr[0] == "VernacCoFixpoint":
-            return TermType.COFIXPOINT
-        elif expr[0] == "VernacFixpoint":
-            return TermType.FIXPOINT
-        elif expr[0] == "VernacScheme":
-            return TermType.SCHEME
-        elif expr[0] == "VernacExtend" and expr[1][0].startswith("Derive"):
-            return TermType.DERIVE
-        elif expr[0] == "VernacExtend" and expr[1][0].startswith("AddSetoid"):
-            return TermType.SETOID
-        elif expr[0] == "VernacExtend" and expr[1][0].startswith(
-            ("AddRelation", "AddParametricRelation")
-        ):
-            return TermType.RELATION
-        elif (
-            expr[0] == "VernacExtend" and expr[1][0] == "VernacDeclareTacticDefinition"
-        ):
-            return TermType.TACTIC
-        elif expr[0] == "VernacExtend" and expr[1][0] == "Function":
-            return TermType.FUNCTION
-        else:
-            return TermType.OTHER
-
-    # Simultaneous definition of terms and notations (where clause)
-    # https://coq.inria.fr/refman/user-extensions/syntax-extensions.html#simultaneous-definition-of-terms-and-notations
-    def __handle_where_notations(self, expr: List, term_type: TermType):
-        spans = []
-        if (
-            term_type
-            in [
-                TermType.VARIANT,
-                TermType.INDUCTIVE,
-            ]
-            and len(expr) > 2
-            and isinstance(expr[2], list)
-            and len(expr[2]) > 0
-            and isinstance(expr[2][0], list)
-            and len(expr[2][0]) > 1
-            and isinstance(expr[2][0][1], list)
-            and len(expr[2][0][1]) > 0
-        ):
-            spans = expr[2][0][1]
-        elif (
-            term_type == TermType.FIXPOINT
-            and len(expr) > 2
-            and isinstance(expr[2], list)
-            and len(expr[2]) > 0
-            and isinstance(expr[2][0], dict)
-            and "notations" in expr[2][0]
-            and isinstance(expr[2][0]["notations"], list)
-            and len(expr[2][0]["notations"]) > 0
-        ):
-            spans = expr[2][0]["notations"]
-
-        # handles when multiple notations are defined
-        for span in spans:
-            name = FileContext.get_notation_key(
-                span[f"{self.__where_notation_key}_string"]["v"],
-                span[f"{self.__where_notation_key}_scope"],
-            )
-            self.__add_term(name, self.curr_step, TermType.NOTATION)
-
-    def __process_step(self, sign):
-        def traverse_expr(expr):
-            inductive = expr[0] == "VernacInductive"
-            extend = expr[0] == "VernacExtend"
-            stack, res = expr[:0:-1], []
-            while len(stack) > 0:
-                el = stack.pop()
-                v = CoqFile.get_v(el)
-                if v is not None and isinstance(v, list) and len(v) == 2:
-                    id = CoqFile.get_id(v)
-                    if id is not None:
-                        if not inductive:
-                            return [id]
-                        res.append(id)
-                    elif v[0] == "Name":
-                        if not inductive:
-                            return [v[1][1]]
-                        res.append(v[1][1])
-
-                elif isinstance(el, dict):
-                    for v in reversed(el.values()):
-                        if isinstance(v, (dict, list)):
-                            stack.append(v)
-                elif isinstance(el, list):
-                    if len(el) > 0 and el[0] == "CLocalAssum":
-                        continue
-
-                    ident = CoqFile.get_ident(el)
-                    if ident is not None and extend:
-                        return [ident]
-
-                    for v in reversed(el):
-                        if isinstance(v, (dict, list)):
-                            stack.append(v)
-            return res
-
-        try:
-            # TODO: A negative sign should handle things differently. For example:
-            #   - names should be removed from the context
-            #   - curr_module should change as you leave or re-enter modules
-
-            expr = self.expr(self.curr_step.ast)
-            if (
-                expr == [None]
-                or expr[0] == "VernacProof"
-                or (expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve")
-            ):
-                return
-            term_type = CoqFile.__get_term_type(expr)
-            text = self.curr_step.short_text
-
-            # FIXME: Section-local terms are ignored. We do this to avoid
-            # overwriting global terms with section-local terms after the section
-            # is closed. Regardless, these should be handled given that they might
-            # be used within the section.
-            for keyword in [
-                "Variable",
-                "Let",
-                "Context",
-                "Hypothesis",
-                "Hypotheses",
-            ]:
-                if text.startswith(keyword):
-                    # NOTE: We update the last term so as to obtain proofs even for
-                    # section-local terms. This is safe, because the attribute is
-                    # meant to be overwritten every time a new term is found.
-                    self._last_term = Term(
-                        self.curr_step, term_type, self.path, self.curr_module[:]
-                    )
-                    return
-
-            if expr[0] == "VernacEndSegment":
-                if len(self.__segment_stack) == 0:
-                    return
-                match self.__segment_stack.pop():
-                    case SegmentType.MODULE:
-                        self.curr_module.pop()
-                    case SegmentType.MODULE_TYPE:
-                        self.curr_module_type.pop()
-                    case SegmentType.SECTION:
-                        self.curr_section.pop()
-            elif expr[0] == "VernacDefineModule":
-                self.curr_module.append(expr[2]["v"][1])
-                self.__segment_stack.append(SegmentType.MODULE)
-            elif expr[0] == "VernacDeclareModuleType":
-                self.curr_module_type.append(expr[1]["v"][1])
-                self.__segment_stack.append(SegmentType.MODULE_TYPE)
-            elif expr[0] == "VernacBeginSection":
-                self.curr_section.append(expr[1]["v"][1])
-                self.__segment_stack.append(SegmentType.SECTION)
-
-            # HACK: We ignore terms inside a Module Type since they can't be used outside
-            # and should be overriden.
-            elif len(self.curr_module_type) > 0:
-                return
-            elif expr[0] == "VernacExtend" and expr[1][0] == "VernacTacticNotation":
-                # FIXME: Handle this case
-                return
-            elif expr[0] == "VernacNotation":
-                name = text.split('"')[1].strip()
-                if text[:-1].split(":")[-1].endswith("_scope"):
-                    name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(name, self.curr_step, TermType.NOTATION)
-            elif expr[0] == "VernacSyntacticDefinition":
-                name = text.split(" ")[1]
-                if text[:-1].split(":")[-1].endswith("_scope"):
-                    name += " : " + text[:-1].split(":")[-1].strip()
-                self.__add_term(name, self.curr_step, TermType.NOTATION)
-            elif expr[0] == "VernacInstance" and expr[1][0]["v"][0] == "Anonymous":
-                # FIXME: The name should be "<Class>_instance_N"
-                self.__add_term("_anonymous", self.curr_step, term_type)
-            elif expr[0] == "VernacDefinition" and expr[2][0]["v"][0] == "Anonymous":
-                # We associate the anonymous term to the same name used internally by Coq
-                if self.__anonymous_id is None:
-                    name, self.__anonymous_id = "Unnamed_thm", 0
-                else:
-                    name = f"Unnamed_thm{self.__anonymous_id}"
-                    self.__anonymous_id += 1
-                self.__add_term(name, self.curr_step, term_type)
-            elif term_type == TermType.DERIVE:
-                name = CoqFile.get_ident(expr[2][0])
-                self.__add_term(name, self.curr_step, term_type)
-                if expr[1][0] == "Derive":
-                    prop = CoqFile.get_ident(expr[2][2])
-                    self.__add_term(prop, self.curr_step, term_type)
-            else:
-                names = traverse_expr(expr)
-                for name in names:
-                    self.__add_term(name, self.curr_step, term_type)
-
-            self.__handle_where_notations(expr, term_type)
-        finally:
-            self.steps_taken += sign
 
     def __read(self):
         with open(self.path, "r") as f:
@@ -699,12 +428,6 @@ class CoqFile(object):
         uri = f"file://{self.__path}"
         return self.coq_lsp_client.lsp_endpoint.diagnostics[uri]
 
-    def get_term_type(self, ast: RangedSpan) -> TermType:
-        expr = self.expr(ast)
-        if expr is not None:
-            return CoqFile.__get_term_type(expr)
-        return TermType.OTHER
-
     def exec(self, nsteps=1) -> List[Step]:
         """Execute steps in the file.
 
@@ -721,21 +444,22 @@ class CoqFile(object):
             len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
 
-        # FIXME: for now we ignore the terms in the context when going backwards
-        # on the file
         if sign == 1:
             for _ in range(nsteps):
-                self.__process_step(sign)
+                self.context.process_step(self.curr_step)
+                self.steps_taken += 1
             return self.steps[initial_steps_taken : self.steps_taken]
-        else:
-            for _ in range(nsteps):
-                self.steps_taken -= 1
-                if not self.in_proof:
-                    self.steps_taken = initial_steps_taken
-                    raise NotImplementedError(
-                        "Going backwards outside of a proof is not implemented yet"
-                    )
-            return self.steps[self.steps_taken - 1 : initial_steps_taken]
+
+        # FIXME: for now we ignore the terms in the context when going backwards
+        # on the file
+        for _ in range(nsteps):
+            self.steps_taken -= 1
+            if not self.in_proof:
+                self.steps_taken = initial_steps_taken
+                raise NotImplementedError(
+                    "Going backwards outside of a proof is not implemented yet"
+                )
+        return self.steps[self.steps_taken - 1 : initial_steps_taken]
 
     def delete_step(self, step_index: int) -> None:
         """Deletes a step from the file. The step must be inside a proof.
@@ -800,33 +524,3 @@ class CoqFile(object):
         self.coq_lsp_client.exit()
         if self.__from_lib:
             os.remove(self.__path)
-
-    @staticmethod
-    def get_id(id: List) -> str:
-        if id[0] == "Ser_Qualid":
-            return ".".join([l[1] for l in reversed(id[1][1])] + [id[2][1]])
-        elif id[0] == "Id":
-            return id[1]
-        return None
-
-    @staticmethod
-    def get_ident(el: List) -> Optional[str]:
-        if (
-            len(el) == 3
-            and el[0] == "GenArg"
-            and el[1][0] == "Rawwit"
-            and el[1][1][0] == "ExtraArg"
-        ):
-            if el[1][1][1] == "identref":
-                return el[2][0][1][1]
-            elif el[1][1][1] == "ident":
-                return el[2][1]
-        return None
-
-    @staticmethod
-    def get_v(el):
-        if isinstance(el, dict) and "v" in el:
-            return el["v"]
-        elif isinstance(el, list) and len(el) == 2 and el[0] == "v":
-            return el[1]
-        return None

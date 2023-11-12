@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, List, Union, Callable
+from typing import Any, Optional, List, Union, Callable
 
 from coqpyt.lsp.structs import Diagnostic, Position
 from coqpyt.coq.lsp.structs import RangedSpan, GoalAnswer
@@ -146,7 +146,14 @@ class ProofStep:
 
 
 class ProofTerm(Term):
-    def __init__(self, term: Term, context: List[Term], steps: List[ProofStep]):
+    def __init__(
+        self,
+        term: Term,
+        context: List[Term],
+        steps: List[ProofStep],
+        program: Optional[Term] = None,
+    ):
         super().__init__(term.step, term.type, term.file_path, term.module)
         self.steps = steps
         self.context = context
+        self.program = program

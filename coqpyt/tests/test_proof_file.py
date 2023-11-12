@@ -121,7 +121,7 @@ def test_get_proofs(setup, teardown):
         ],
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
     ]
-    proof_filement_context = [
+    statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         (
@@ -131,7 +131,7 @@ def test_get_proofs(setup, teardown):
         ),
     ]
 
-    compare_context(proof_filement_context, proofs[0].context)
+    compare_context(statement_context, proofs[0].context)
     assert proofs[0].text == "Theorem plus_O_n : forall n:nat, 0 + n = n."
     for i in range(4):
         assert proofs[0].steps[i].text == texts[i]
@@ -225,7 +225,7 @@ def test_get_proofs(setup, teardown):
         (24, 4, 24, 25),
         (25, 4, 25, 16),
     ]
-    proof_filement_context = [
+    statement_context = [
         (
             "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , "
             + "'/' P ']'\") : type_scope.",
@@ -246,7 +246,7 @@ def test_get_proofs(setup, teardown):
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
     ]
 
-    compare_context(proof_filement_context, proofs[1].context)
+    compare_context(statement_context, proofs[1].context)
     assert (
         proofs[1].text
         == "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
@@ -310,7 +310,7 @@ def test_get_proofs(setup, teardown):
         ],
         [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
     ]
-    proof_filement_context = [
+    statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         (
@@ -320,7 +320,7 @@ def test_get_proofs(setup, teardown):
         ),
     ]
 
-    compare_context(proof_filement_context, proofs[2].context)
+    compare_context(statement_context, proofs[2].context)
     assert proofs[2].text == "Theorem plus_O_n : forall n:nat, n = 0 + n."
     for i in range(4):
         assert proofs[2].steps[i].text == texts[i]
@@ -414,7 +414,7 @@ def test_get_proofs(setup, teardown):
         ],
         [],
     ]
-    proof_filement_context = [
+    statement_context = [
         (
             "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , "
             + "'/' P ']'\") : type_scope.",
@@ -435,7 +435,7 @@ def test_get_proofs(setup, teardown):
         ),
     ]
 
-    compare_context(proof_filement_context, proofs[3].context)
+    compare_context(statement_context, proofs[3].context)
     assert (
         proofs[3].text == "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
     )
@@ -833,6 +833,7 @@ def test_nested_proofs(setup, teardown):
     for i, step in enumerate(proofs[0].steps):
         assert step.text == steps[i]
 
+    theorem = "Theorem mult_0_plus : forall n m : nat, S n * m = 0 + (S n * m)."
     steps = [
         "\nProof.",
         "\nintros n m.",
@@ -840,6 +841,7 @@ def test_nested_proofs(setup, teardown):
         "\nreflexivity.",
         "\nQed.",
     ]
+    assert proofs[1].text == theorem
     assert len(proofs[1].steps) == len(steps)
     for i, step in enumerate(proofs[1].steps):
         assert step.text == steps[i]
@@ -898,7 +900,7 @@ def test_obligation(setup, teardown):
     proofs = proof_file.proofs
     assert len(proofs) == 11
 
-    proof_filement_context = [
+    statement_context = [
         ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
         ("Notation dec := sumbool_of_bool.", TermType.NOTATION, []),
         ("Notation leb := Nat.leb (only parsing).", TermType.NOTATION, []),
@@ -909,6 +911,19 @@ def test_obligation(setup, teardown):
             [],
         ),
         ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
+    ]
+    texts = [
+        "Obligation 2 of id1.",
+        "Next Obligation of id1.",
+        "Obligation 2 of id2 : type with reflexivity.",
+        "Next Obligation of id2 with reflexivity.",
+        "Next Obligation.",
+        "Next Obligation with reflexivity.",
+        "Obligation 1.",
+        "Obligation 2 : type with reflexivity.",
+        "Obligation 1 of id with reflexivity.",
+        "Obligation 1 of id : type.",
+        "Obligation 2 : type.",
     ]
     programs = [
         ("id1", "S (pred n)"),
@@ -925,9 +940,11 @@ def test_obligation(setup, teardown):
     ]
 
     for i, proof in enumerate(proofs):
-        compare_context(proof_filement_context, proof.context)
+        compare_context(statement_context, proof.context)
+        assert proof.text == texts[i]
+        assert proof.program is not None
         assert (
-            proof.text
+            proof.program.text
             == "Program Definition "
             + programs[i][0]
             + " (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else "

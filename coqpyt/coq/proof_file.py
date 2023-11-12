@@ -337,6 +337,18 @@ class ProofFile(CoqFile):
                 raise e
 
             self.__step()
+            if self.context.term_type(self.prev_step) in [
+                TermType.TACTIC,
+                TermType.NOTATION,
+                TermType.INDUCTIVE,
+                TermType.COINDUCTIVE,
+                TermType.RECORD,
+                TermType.CLASS,
+                TermType.SCHEME,
+                TermType.VARIANT,
+            ]:
+                continue
+
             # Nested proofs
             if self.context.term_type(self.prev_step) != TermType.OTHER:
                 self.__get_proof(proofs)
@@ -362,18 +374,18 @@ class ProofFile(CoqFile):
 
         return steps
 
-    def __get_proof(self, proofs: List[ProofTerm]):
-        term, statement_context = None, None
+    def __get_proof(self, proofs):
+        program, statement_context = None, None
         if self.context.term_type(self.prev_step) == TermType.OBLIGATION:
-            term, statement_context = self.__get_program_context()
+            program, statement_context = self.__get_program_context()
         elif self.context.term_type(self.prev_step) != TermType.OTHER:
-            term = self.context.last_term
             statement_context = self.__step_context(self.prev_step)
         # HACK: We ignore proofs inside a Module Type since they can't be used outside
         # and should be overriden.
         if self.in_proof and not self.context.in_module_type:
+            term = self.context.last_term # Keep the term before rewrite
             steps = self.__get_steps(proofs)
-            proofs.append(ProofTerm(term, statement_context, steps))
+            proofs.append(ProofTerm(term, statement_context, steps, program))
 
     def __get_proofs(self) -> List[ProofTerm]:
         proofs: List[ProofTerm] = []

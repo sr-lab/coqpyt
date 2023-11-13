@@ -91,7 +91,9 @@ class FileContext:
                 prop = FileContext.get_ident(expr[2][2])
                 self.__add_term(prop, step, term_type)
         elif term_type == TermType.OBLIGATION:
-            self.last_term = Term(step, term_type, self.path, self.__segments.modules[:])
+            self.last_term = Term(
+                step, term_type, self.path, self.__segments.modules[:]
+            )
         else:
             names = FileContext.__get_names(expr)
             for name in names:

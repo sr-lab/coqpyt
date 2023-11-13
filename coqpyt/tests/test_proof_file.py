@@ -827,7 +827,7 @@ def test_unknown_notation(setup, teardown):
         assert proof_file.context.get_notation("{ _ }", "")
 
 
-@pytest.mark.parametrize("setup", [("test_nested_proofs.v", None)], indirect=True)
+@pytest.mark.parametrize("setup", [("test_nested_proofs.v", None, True)], indirect=True)
 def test_nested_proofs(setup, teardown):
     proofs = proof_file.proofs
     assert len(proofs) == 2
@@ -868,6 +868,30 @@ def test_nested_proofs(setup, teardown):
     assert len(proofs[1].steps) == 2
     for i, step in enumerate(proofs[1].steps):
         assert step.text == steps[i]
+
+    # Close proofs
+    proof_file.exec(-1)
+    proof_file.add_step(proof_file.steps_taken - 1, "\nQed.")
+    proof_file.add_step(proof_file.steps_taken - 1, "\nQed.")
+    proof_file.exec(2)
+    assert len(proof_file.proofs) == 4
+    assert len(proof_file.open_proofs) == 0
+
+    # Re-open proofs
+    proof_file.exec(-2)
+    assert len(proof_file.proofs) == 2
+    assert len(proof_file.open_proofs) == 2
+
+    # Attempt to leave proof
+    with pytest.raises(NotImplementedError):
+        proof_file.exec(-3)
+
+    # Check rollback
+    assert len(proof_file.proofs) == 2
+    assert len(proof_file.open_proofs) == 2
+    proof_file.exec(2)
+    assert len(proof_file.proofs) == 4
+    assert len(proof_file.open_proofs) == 0
 
 
 @pytest.mark.parametrize("setup", [("test_theorem_tokens.v", None)], indirect=True)

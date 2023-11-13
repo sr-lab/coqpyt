@@ -230,6 +230,17 @@ class CoqFile(object):
         self.__init_steps(text, ast)
         self.__validate()
 
+    def _step(self, sign):
+        self.steps_taken += sign
+        # FIXME: for now we ignore the terms in the context when going backwards
+        # on the file
+        if sign == 1:
+            self.context.process_step(self.prev_step)
+        elif not self.in_proof:
+            raise NotImplementedError(
+                "Going backwards outside of a proof is not implemented yet"
+            )
+
     def _make_change(self, change_function, *args):
         previous_steps = self.steps
         old_steps_taken = self.steps_taken
@@ -423,7 +434,7 @@ class CoqFile(object):
             bool: True if the current step is inside a proof
         """
         return self.__in_proof(self.current_goals)
-    
+
     @property
     def can_close_proof(self):
         return self._can_close_proof(self.current_goals)
@@ -437,17 +448,6 @@ class CoqFile(object):
         """
         uri = f"file://{self.__path}"
         return self.coq_lsp_client.lsp_endpoint.diagnostics[uri]
-
-    def _step(self, sign):
-        self.steps_taken += sign
-        if sign == 1:
-            self.context.process_step(self.prev_step)
-        # FIXME: for now we ignore the terms in the context when going backwards
-        # on the file
-        elif not self.in_proof:
-            raise NotImplementedError(
-                "Going backwards outside of a proof is not implemented yet"
-            )
 
     def exec(self, nsteps=1) -> List[Step]:
         """Execute steps in the file.
@@ -465,11 +465,12 @@ class CoqFile(object):
             len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
 
-        for _ in range(nsteps):
+        for i in range(nsteps):
             try:
                 self._step(sign)
             except NotImplementedError as e:
-                self.steps_taken = initial_steps_taken
+                self.steps_taken -= sign  # Take back the faulty step
+                self.exec(nsteps=-sign * i)  # Re-take the steps in inverse order
                 raise e
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)

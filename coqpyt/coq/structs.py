@@ -76,7 +76,7 @@ class Term:
     def __init__(
         self,
         step: Step,
-        term_type: TermType,
+        type: TermType,
         file_path: str,
         module: List[str],
     ):
@@ -90,7 +90,7 @@ class Term:
             module (str): The module where the term is.
         """
         self.step = step
-        self.type = term_type
+        self.type = type
         self.file_path = file_path
         self.module = module
 

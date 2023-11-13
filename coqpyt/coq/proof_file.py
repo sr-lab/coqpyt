@@ -113,6 +113,12 @@ class _AuxFile(object):
         with open(self.path, "a") as f:
             f.write(text)
 
+    def truncate(self, text):
+        text = text.encode("utf-8")
+        with open(self.path, "rb+") as f:
+            f.seek(-len(text), os.SEEK_END)
+            f.truncate()
+
     def didOpen(self):
         uri = f"file://{self.path}"
         try:
@@ -227,7 +233,9 @@ class ProofFile(CoqFile):
 
         self.__program_context: Dict[str, Tuple[Term, List[Term]]] = {}
         self.__proofs: List[ProofTerm] = []
-        self.__open_proofs: List[Tuple[Term, List[Term], List[ProofStep], Optional[Term]]] = []
+        self.__open_proofs: List[
+            Tuple[Term, List[Term], List[ProofStep], Optional[Term]]
+        ] = []
 
     def __enter__(self):
         return self
@@ -324,40 +332,85 @@ class ProofFile(CoqFile):
             self.__step_context(self.prev_step),
         )
 
-    def __check_proof_step(self, goals: GoalAnswer):
-        # HACK: We ignore proofs inside a Module Type since they can't be used outside
-        # and should be overriden.
-        if self.context.in_module_type:
-            return
-        if self.prev_step.text.strip() == "":
-            return
-        # Steps outside of proofs are ignored
-        if not self.in_proof and goals.goals is None:
-            return
-        # Create proof term when Qed is found
-        if self.context.expr(self.prev_step)[0] in ["VernacEndProof", "VernacExactProof"]:
-            open_proof = self.__open_proofs.pop()
-            open_proof[2].append(ProofStep(self.prev_step, goals, []))
-            self.__proofs.append(ProofTerm(*open_proof))
-            return
-
-        term_type = self.context.term_type(self.prev_step)
-        # Regular proof steps are added to the last open proof
-        if term_type == TermType.OTHER:
-            context = self.__step_context(self.prev_step)
-            self.__open_proofs[-1][2].append(ProofStep(self.prev_step, goals, context))
-            return
-        # Assume that terms of the following types do not introduce new proofs
-        if term_type in [TermType.TACTIC, TermType.NOTATION, TermType.INDUCTIVE, TermType.COINDUCTIVE, TermType.RECORD, TermType.CLASS, TermType.SCHEME, TermType.VARIANT]:
-            return
-
-        # New proof terms can be either obligations or regular proofs
-        proof_term, program = self.context.last_term, None
-        if term_type == TermType.OBLIGATION:
-            program, statement_context = self.__get_program_context()
+    def __handle_end_proof(self, step: Step, goals: Optional[GoalAnswer]):
+        if goals is None:
+            proof = self.__proofs.pop()
+            term = Term(proof.step, proof.type, proof.file_path, proof.module)
+            self.__open_proofs.append(
+                (term, proof.context, proof.steps[:-1], proof.program)
+            )
         else:
-            statement_context = self.__step_context(self.prev_step)
-        self.__open_proofs.append((proof_term, statement_context, [], program))
+            open_proof = self.__open_proofs.pop()
+            open_proof[2].append(ProofStep(step, goals, []))
+            self.__proofs.append(ProofTerm(*open_proof))
+
+    def __handle_proof_step(self, step: Step, goals: Optional[GoalAnswer]):
+        if goals is None:
+            self.__open_proofs[-1][2].pop()
+        else:
+            context = self.__step_context(step)
+            self.__open_proofs[-1][2].append(ProofStep(step, goals, context))
+
+    def __handle_proof_term(self, step: Step, goals: Optional[GoalAnswer]):
+        if goals is None:
+            self.__open_proofs.pop()
+        else:
+            # New proof terms can be either obligations or regular proofs
+            proof_term, program = self.context.last_term, None
+            if self.context.term_type(step) == TermType.OBLIGATION:
+                program, statement_context = self.__get_program_context()
+            else:
+                statement_context = self.__step_context(step)
+            self.__open_proofs.append((proof_term, statement_context, [], program))
+
+    def __is_proof_term(self, step: Step):
+        term_type = self.context.term_type(step)
+        # Assume that terms of the following types do not introduce new proofs
+        # FIXME: Should probably check if [type != OTHER] and if goals were changed
+        return term_type not in [
+            TermType.TACTIC,
+            TermType.NOTATION,
+            TermType.INDUCTIVE,
+            TermType.COINDUCTIVE,
+            TermType.RECORD,
+            TermType.CLASS,
+            TermType.SCHEME,
+            TermType.VARIANT,
+        ]
+
+    def __check_proof_step(self, step: Step, goals: Optional[GoalAnswer] = None):
+        # Last step of the file
+        if step.text.strip() == "":
+            return
+        # FIXME: Forward steps outside of proofs are ignored
+        # NOTE: CoqFile raises an exception for backward steps
+        if not self.in_proof and (goals is None or goals.goals is None):
+            return
+
+        # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
+        if self.context.expr(step)[0] in ["VernacEndProof", "VernacExactProof"]:
+            self.__handle_end_proof(step, goals)
+        # Regular proof steps for the last open proof
+        elif self.context.term_type(step) == TermType.OTHER:
+            self.__handle_proof_step(step, goals)
+        # FIXME: An exception is raised because we found a term definition
+        # and CoqFile does not remove the term when stepping backwards
+        elif goals is None:
+            raise NotImplementedError(
+                "Found term definition while going backwards in proof"
+            )
+        # Ignore term definitions that do not generate new proof goals
+        elif self.__is_proof_term(step):
+            self.__handle_proof_term(step, goals)
+
+    def __forward_step(self, goals: GoalAnswer):
+        self.__aux_file.append(self.prev_step.text)
+        self.__check_program()
+        self.__check_proof_step(self.prev_step, goals)
+
+    def __backward_step(self):
+        self.__aux_file.truncate(self.curr_step.text)
+        self.__check_proof_step(self.curr_step)
 
     def __find_step(self, range: Range) -> Optional[Tuple[ProofTerm, int]]:
         for proof in self.__proofs:
@@ -421,7 +474,7 @@ class ProofFile(CoqFile):
                 used for each step and the goals in that step.
         """
         return [ProofTerm(*proof) for proof in self.__open_proofs]
-    
+
     def exec(self, nsteps=1) -> List[Step]:
         """Execute steps in the file.
 
@@ -437,8 +490,9 @@ class ProofFile(CoqFile):
             nsteps * sign,
             len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
+        step = self.__forward_step if sign == 1 else lambda _: self.__backward_step()
 
-        for _ in range(nsteps):
+        for i in range(nsteps):
             try:
                 goals = self.current_goals
             except Exception as e:
@@ -446,16 +500,17 @@ class ProofFile(CoqFile):
                 raise e
 
             try:
+                # HACK: We ignore steps inside a Module Type since they can't
+                # be used outside and should be overriden.
+                in_module_type = self.context.in_module_type
                 self._step(sign)
+                if in_module_type or self.context.in_module_type:
+                    continue
+                step(goals)
             except NotImplementedError as e:
-                self.steps_taken = initial_steps_taken
+                self.steps_taken -= sign  # Take back the faulty step
+                self.exec(nsteps=-sign * i)  # Re-take the steps in inverse order
                 raise e
-
-            # FIXME: Handle proof terms and aux_file for negative steps
-            if sign == 1:
-                self.__aux_file.append(self.prev_step.text)
-                self.__check_program()
-                self.__check_proof_step(goals)
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
         return self.steps[slice[1 - last] : slice[last]]

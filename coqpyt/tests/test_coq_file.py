@@ -33,7 +33,7 @@ def test_negative_step(setup, teardown):
     steps = coq_file.exec(nsteps=8)
     assert steps[-1].text == "\n      Print plus."
     steps = coq_file.exec(nsteps=-1)
-    assert steps[0].text == "\n      intros n."
+    assert steps[0].text == "\n      Print plus."
     steps = coq_file.exec(nsteps=-2)
     with pytest.raises(NotImplementedError):
         coq_file.exec(nsteps=-1)

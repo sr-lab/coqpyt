@@ -45,6 +45,7 @@ def setup(request):
         subprocess.run(f"cd {workspace} && make", shell=True, capture_output=True)
     uri = "file://" + file_path
     proof_file = ProofFile(file_path, timeout=60, workspace=workspace)
+    proof_file.run()
     versionId = VersionedTextDocumentIdentifier(uri, 1)
     yield
 
@@ -730,14 +731,17 @@ def test_get_proofs_change_invalid(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_change_empty.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
 def test_get_proofs_change_empty(setup, teardown):
+    assert len(proof_file.proofs) == 0
+    assert len(proof_file.open_proofs) == 1
+
     proof_file.add_step(len(proof_file.steps) - 2, "\nAdmitted.")
     assert proof_file.steps[-2].text == "\nAdmitted."
-    assert len(proof_file.proofs[0].steps) == 2
-    assert proof_file.proofs[0].steps[-1].text == "\nAdmitted."
+    assert len(proof_file.open_proofs[0].steps) == 2
+    assert proof_file.open_proofs[0].steps[-1].text == "\nAdmitted."
 
     proof_file.delete_step(len(proof_file.steps) - 2)
     assert len(proof_file.steps) == 3
-    assert len(proof_file.proofs[0].steps) == 1
+    assert len(proof_file.open_proofs[0].steps) == 1
 
 
 @pytest.mark.parametrize(
@@ -775,8 +779,8 @@ def test_imports(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_non_ending_proof.v", None)], indirect=True)
 def test_non_ending_proof(setup, teardown):
-    assert len(proof_file.proofs) == 1
-    assert len(proof_file.proofs[0].steps) == 3
+    assert len(proof_file.open_proofs) == 1
+    assert len(proof_file.open_proofs[0].steps) == 3
 
 
 @pytest.mark.parametrize("setup", [("test_exists_notation.v", None)], indirect=True)
@@ -826,7 +830,7 @@ def test_unknown_notation(setup, teardown):
 @pytest.mark.parametrize("setup", [("test_nested_proofs.v", None)], indirect=True)
 def test_nested_proofs(setup, teardown):
     proofs = proof_file.proofs
-    assert len(proofs) == 4
+    assert len(proofs) == 2
 
     steps = ["\n    intros n.", "\n    simpl; reflexivity.", "\n    Qed."]
     assert len(proofs[0].steps) == len(steps)
@@ -846,20 +850,23 @@ def test_nested_proofs(setup, teardown):
     for i, step in enumerate(proofs[1].steps):
         assert step.text == steps[i]
 
+    proofs = proof_file.open_proofs
+    assert len(proofs) == 2
+
     steps = [
         "\n    intros n.",
         "\n    simpl; reflexivity.",
     ]
-    assert len(proofs[2].steps) == 2
-    for i, step in enumerate(proofs[2].steps):
+    assert len(proofs[0].steps) == 2
+    for i, step in enumerate(proofs[0].steps):
         assert step.text == steps[i]
 
     steps = [
         "\n    intros n.",
         "\n    simpl; reflexivity.",
     ]
-    assert len(proofs[3].steps) == 2
-    for i, step in enumerate(proofs[3].steps):
+    assert len(proofs[1].steps) == 2
+    for i, step in enumerate(proofs[1].steps):
         assert step.text == steps[i]
 
 

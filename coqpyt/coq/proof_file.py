@@ -12,7 +12,7 @@ from coqpyt.lsp.structs import (
     ResponseError,
     ErrorCodes,
 )
-from coqpyt.coq.lsp.structs import Result, Query, Range
+from coqpyt.coq.lsp.structs import Result, Query, Range, GoalAnswer
 from coqpyt.coq.lsp.client import CoqLspClient
 from coqpyt.coq.structs import TermType, Step, Term, ProofStep, ProofTerm
 from coqpyt.coq.exceptions import *
@@ -221,11 +221,13 @@ class ProofFile(CoqFile):
         try:
             # We need to update the context already defined in the CoqFile
             self.context.update(_AuxFile.get_context(self.path, self.timeout).terms)
-            self.__program_context: Dict[str, Tuple[Term, List[Term]]] = {}
-            self.__proofs: List[ProofTerm] = self.__get_proofs()
         except Exception as e:
             self.close()
             raise e
+
+        self.__program_context: Dict[str, Tuple[Term, List[Term]]] = {}
+        self.__proofs: List[ProofTerm] = []
+        self.__open_proofs: List[Tuple[Term, List[Term], List[ProofStep], Optional[Term]]] = []
 
     def __enter__(self):
         return self
@@ -322,84 +324,50 @@ class ProofFile(CoqFile):
             self.__step_context(self.prev_step),
         )
 
-    def __step(self):
-        self.exec()
-        self.__aux_file.append(self.prev_step.text)
-        self.__check_program()
-
-    def __get_steps(self, proofs: List[ProofTerm]) -> List[ProofStep]:
-        steps = []
-        while self.in_proof and not self.checked:
-            try:
-                goals = self.current_goals
-            except Exception as e:
-                self.__aux_file.close()
-                raise e
-
-            self.__step()
-            if self.context.term_type(self.prev_step) in [
-                TermType.TACTIC,
-                TermType.NOTATION,
-                TermType.INDUCTIVE,
-                TermType.COINDUCTIVE,
-                TermType.RECORD,
-                TermType.CLASS,
-                TermType.SCHEME,
-                TermType.VARIANT,
-            ]:
-                continue
-
-            # Nested proofs
-            if self.context.term_type(self.prev_step) != TermType.OTHER:
-                self.__get_proof(proofs)
-                # Pass Qed if it exists
-                while not self.in_proof and not self.checked:
-                    self.__step()
-                continue
-            context = self.__step_context(self.prev_step)
-            if self.prev_step.text.strip() == "":
-                continue
-            steps.append(ProofStep(self.prev_step, goals, context))
-
-        try:
-            goals = self.current_goals
-        except Exception as e:
-            self.__aux_file.close()
-            raise e
-        if (
-            self.steps_taken < len(self.steps)
-            and self.context.expr(self.curr_step)[0] == "VernacEndProof"
-        ):
-            steps.append(ProofStep(self.curr_step, goals, []))
-
-        return steps
-
-    def __get_proof(self, proofs):
-        program, statement_context = None, None
-        if self.context.term_type(self.prev_step) == TermType.OBLIGATION:
-            program, statement_context = self.__get_program_context()
-        elif self.context.term_type(self.prev_step) != TermType.OTHER:
-            statement_context = self.__step_context(self.prev_step)
+    def __check_proof_step(self, goals: GoalAnswer):
         # HACK: We ignore proofs inside a Module Type since they can't be used outside
         # and should be overriden.
-        if self.in_proof and not self.context.in_module_type:
-            term = self.context.last_term # Keep the term before rewrite
-            steps = self.__get_steps(proofs)
-            proofs.append(ProofTerm(term, statement_context, steps, program))
+        if self.context.in_module_type:
+            return
+        if self.prev_step.text.strip() == "":
+            return
+        # Steps outside of proofs are ignored
+        if not self.in_proof and goals.goals is None:
+            return
+        # Create proof term when Qed is found
+        if self.context.expr(self.prev_step)[0] in ["VernacEndProof", "VernacExactProof"]:
+            open_proof = self.__open_proofs.pop()
+            open_proof[2].append(ProofStep(self.prev_step, goals, []))
+            self.__proofs.append(ProofTerm(*open_proof))
+            return
 
-    def __get_proofs(self) -> List[ProofTerm]:
-        proofs: List[ProofTerm] = []
-        while not self.checked:
-            self.__step()
-            # Get context from initial statement
-            self.__get_proof(proofs)
-        return proofs
+        term_type = self.context.term_type(self.prev_step)
+        # Regular proof steps are added to the last open proof
+        if term_type == TermType.OTHER:
+            context = self.__step_context(self.prev_step)
+            self.__open_proofs[-1][2].append(ProofStep(self.prev_step, goals, context))
+            return
+        # Assume that terms of the following types do not introduce new proofs
+        if term_type in [TermType.TACTIC, TermType.NOTATION, TermType.INDUCTIVE, TermType.COINDUCTIVE, TermType.RECORD, TermType.CLASS, TermType.SCHEME, TermType.VARIANT]:
+            return
+
+        # New proof terms can be either obligations or regular proofs
+        proof_term, program = self.context.last_term, None
+        if term_type == TermType.OBLIGATION:
+            program, statement_context = self.__get_program_context()
+        else:
+            statement_context = self.__step_context(self.prev_step)
+        self.__open_proofs.append((proof_term, statement_context, [], program))
 
     def __find_step(self, range: Range) -> Optional[Tuple[ProofTerm, int]]:
-        for proof in self.proofs:
+        for proof in self.__proofs:
             for i, proof_step in enumerate(proof.steps):
                 if proof_step.ast.range == range:
                     return (proof, i)
+        for proof in self.__open_proofs:
+            for i, proof_step in enumerate(proof[2]):
+                if proof_step.ast.range == range:
+                    return (ProofTerm(*proof), i)
         return None
 
     def __find_prev(self, range: Range) -> Tuple[ProofTerm, Optional[int]]:
@@ -408,9 +376,12 @@ class ProofFile(CoqFile):
             return optional
 
         # Previous step may be the definition of the proof
-        for proof in self.proofs:
+        for proof in self.__proofs:
             if proof.ast.range == range:
                 return (proof, -1)
+        for proof in self.__open_proofs:
+            if proof[0].ast.range == range:
+                return (ProofTerm(*proof), -1)
 
         raise NotImplementedError(
             "Adding steps outside of a proof is not implemented yet"
@@ -438,6 +409,56 @@ class ProofFile(CoqFile):
                 used for each step and the goals in that step.
         """
         return self.__proofs
+
+    @property
+    def open_proofs(self) -> List[ProofTerm]:
+        """Gets all the proofs in the file and their corresponding steps.
+
+        Returns:
+            List[ProofStep]: Each element has the list of steps for a single
+                proof of the Coq file. The proofs are ordered by the order
+                they are written on the file. The steps include the context
+                used for each step and the goals in that step.
+        """
+        return [ProofTerm(*proof) for proof in self.__open_proofs]
+    
+    def exec(self, nsteps=1) -> List[Step]:
+        """Execute steps in the file.
+
+        Args:
+            nsteps (int, optional): Number of steps to execute. Defaults to 1.
+
+        Returns:
+            List[Step]: List of steps executed.
+        """
+        sign = 1 if nsteps > 0 else -1
+        initial_steps_taken = self.steps_taken
+        nsteps = min(
+            nsteps * sign,
+            len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
+        )
+
+        for _ in range(nsteps):
+            try:
+                goals = self.current_goals
+            except Exception as e:
+                self.__aux_file.close()
+                raise e
+
+            try:
+                self._step(sign)
+            except NotImplementedError as e:
+                self.steps_taken = initial_steps_taken
+                raise e
+
+            # FIXME: Handle proof terms and aux_file for negative steps
+            if sign == 1:
+                self.__aux_file.append(self.prev_step.text)
+                self.__check_program()
+                self.__check_proof_step(goals)
+
+        last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
+        return self.steps[slice[1 - last] : slice[last]]
 
     def add_step(self, previous_step_index: int, step_text: str):
         proof, prev = self.__find_prev(self.steps[previous_step_index].ast.range)

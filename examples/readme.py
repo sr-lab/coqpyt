@@ -41,6 +41,7 @@ with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
 
 # Open Proof file
 with ProofFile(os.path.join(os.getcwd(), "examples/readme.v")) as proof_file:
+    proof_file.run()
     # Number of proofs in the file
     print("Number of proofs:", len(proof_file.proofs))
     print("Proof:", proof_file.proofs[0].text)

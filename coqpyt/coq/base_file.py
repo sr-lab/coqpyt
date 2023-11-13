@@ -192,7 +192,7 @@ class CoqFile(object):
             self.__handle_exception(e)
             raise e
 
-    def __in_proof(self, goals: Optional[GoalAnswer]):
+    def _can_close_proof(self, goals: Optional[GoalAnswer]):
         def empty_stack(stack):
             # e.g. [([], [])]
             for tuple in stack:
@@ -201,12 +201,18 @@ class CoqFile(object):
             return True
 
         goals = goals.goals
-        return goals is not None and (
-            len(goals.goals) > 0
-            or not empty_stack(goals.stack)
-            or len(goals.shelf) > 0
-            or goals.bullet is not None
+        if goals is None:
+            return False
+
+        return (
+            len(goals.goals) == 0
+            and empty_stack(goals.stack)
+            and len(goals.shelf) == 0
+            and goals.bullet is None
         )
+
+    def __in_proof(self, goals: Optional[GoalAnswer]):
+        return goals is not None and goals.goals is not None
 
     def __update_steps(self):
         uri = f"file://{self.path}"
@@ -417,6 +423,10 @@ class CoqFile(object):
             bool: True if the current step is inside a proof
         """
         return self.__in_proof(self.current_goals)
+    
+    @property
+    def can_close_proof(self):
+        return self._can_close_proof(self.current_goals)
 
     @property
     def diagnostics(self) -> List[Diagnostic]:
@@ -427,6 +437,17 @@ class CoqFile(object):
         """
         uri = f"file://{self.__path}"
         return self.coq_lsp_client.lsp_endpoint.diagnostics[uri]
+
+    def _step(self, sign):
+        self.steps_taken += sign
+        if sign == 1:
+            self.context.process_step(self.prev_step)
+        # FIXME: for now we ignore the terms in the context when going backwards
+        # on the file
+        elif not self.in_proof:
+            raise NotImplementedError(
+                "Going backwards outside of a proof is not implemented yet"
+            )
 
     def exec(self, nsteps=1) -> List[Step]:
         """Execute steps in the file.
@@ -444,22 +465,23 @@ class CoqFile(object):
             len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
 
-        if sign == 1:
-            for _ in range(nsteps):
-                self.context.process_step(self.curr_step)
-                self.steps_taken += 1
-            return self.steps[initial_steps_taken : self.steps_taken]
-
-        # FIXME: for now we ignore the terms in the context when going backwards
-        # on the file
         for _ in range(nsteps):
-            self.steps_taken -= 1
-            if not self.in_proof:
+            try:
+                self._step(sign)
+            except NotImplementedError as e:
                 self.steps_taken = initial_steps_taken
-                raise NotImplementedError(
-                    "Going backwards outside of a proof is not implemented yet"
-                )
-        return self.steps[self.steps_taken - 1 : initial_steps_taken]
+                raise e
+
+        last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
+        return self.steps[slice[1 - last] : slice[last]]
+
+    def run(self) -> List[Step]:
+        """Executes the remaining steps in the file.
+
+        Returns:
+            List[Step]: List of the remaining steps in the file.
+        """
+        return self.exec(len(self.steps) - self.steps_taken)
 
     def delete_step(self, step_index: int) -> None:
         """Deletes a step from the file. The step must be inside a proof.
@@ -500,14 +522,6 @@ class CoqFile(object):
             changes (List[CoqChange]): The changes to be applied to the Coq file.
         """
         self._make_change(self._change_steps, changes)
-
-    def run(self) -> List[Step]:
-        """Executes all the steps in the file.
-
-        Returns:
-            List[Step]: List of all the steps in the file.
-        """
-        return self.exec(len(self.steps))
 
     def save_vo(self):
         """Compiles the vo file for this Coq file."""

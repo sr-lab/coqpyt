@@ -29,7 +29,7 @@ from coqpyt.coq.structs import TermType
 
 Create a CoqFile object, execute the file and extract the generated context.
 
-<!-- embedme examples/readme.py#L7-L39 -->
+<!-- embedme examples/readme.py#L7-L40 -->
 ```py
 with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
     coq_file.exec(nsteps=2)
@@ -68,7 +68,7 @@ with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
 
 Create a ProofFile object (a CoqFile instance) and interact with the proofs.
 
-<!-- embedme examples/readme.py#L42-L70 -->
+<!-- embedme examples/readme.py#L42-L72 -->
 ```py
 with ProofFile(os.path.join(os.getcwd(), "examples/readme.v")) as proof_file:
     # Number of proofs in the file

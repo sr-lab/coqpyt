@@ -22,15 +22,16 @@ Import classes from the ``coqpyt`` package.
 
 <!-- embedme examples/readme.py#L3-L5 -->
 ```py
+from coqpyt.coq.structs import TermType
 from coqpyt.coq.base_file import CoqFile
 from coqpyt.coq.proof_file import ProofFile
-from coqpyt.coq.structs import TermType
 ```
 
 Create a CoqFile object, execute the file and extract the generated context.
 
 <!-- embedme examples/readme.py#L7-L40 -->
 ```py
+# Open Coq file
 with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
     coq_file.exec(nsteps=2)
     # Get all terms defined until now
@@ -70,7 +71,9 @@ Create a ProofFile object (a CoqFile instance) and interact with the proofs.
 
 <!-- embedme examples/readme.py#L42-L72 -->
 ```py
+# Open Proof file
 with ProofFile(os.path.join(os.getcwd(), "examples/readme.v")) as proof_file:
+    proof_file.run()
     # Number of proofs in the file
     print("Number of proofs:", len(proof_file.proofs))
     print("Proof:", proof_file.proofs[0].text)

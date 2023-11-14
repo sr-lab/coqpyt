@@ -2,6 +2,15 @@ name: Embed code in README
 
 on:
   push:
+    branches:
+      - master
+    paths:
+      - "examples/readme.py"
+      - "README.md"
+  pull_request_target:
+    types:
+      - opened
+      - edited
     paths:
       - "examples/readme.py"
       - "README.md"

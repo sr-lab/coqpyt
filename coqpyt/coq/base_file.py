@@ -387,10 +387,18 @@ class CoqFile(object):
 
     @property
     def curr_step(self):
+        """
+        Returns:
+            Step: The next step to be executed.
+        """
         return self.steps[self.steps_taken]
 
     @property
     def prev_step(self):
+        """
+        Returns:
+            Step: The previously executed step.
+        """
         return self.steps[self.steps_taken - 1]
 
     @property
@@ -415,7 +423,7 @@ class CoqFile(object):
         """Get goals in current position.
 
         Returns:
-            Optional[GoalAnswer]: Goals in the current position if there are goals
+            Optional[GoalAnswer]: Goals in the current position if there are goals.
         """
         end_pos = (
             Position(0, 0) if self.steps_taken == 0 else self.prev_step.ast.range.end
@@ -431,12 +439,16 @@ class CoqFile(object):
     def in_proof(self) -> bool:
         """
         Returns:
-            bool: True if the current step is inside a proof
+            bool: True if the current step is inside a proof.
         """
         return self.__in_proof(self.current_goals)
 
     @property
     def can_close_proof(self):
+        """
+        Returns:
+            bool: True if the next step can be a [Qed].
+        """
         return self._can_close_proof(self.current_goals)
 
     @property
@@ -512,7 +524,7 @@ class CoqFile(object):
         Raises:
             NotImplementedError: If the step added is not on a proof.
             InvalidFileException: If the file being changed is not valid.
-            InvalidStepException: If the step added is not valid
+            InvalidStepException: If the step added is not valid.
         """
         self._make_change(self._add_step, previous_step_index, step_text)
 

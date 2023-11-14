@@ -453,37 +453,29 @@ class ProofFile(CoqFile):
 
     @property
     def proofs(self) -> List[ProofTerm]:
-        """Gets all the proofs in the file and their corresponding steps.
+        """Gets all the closed proofs in the file and their corresponding steps.
 
         Returns:
-            List[ProofStep]: Each element has the list of steps for a single
-                proof of the Coq file. The proofs are ordered by the order
-                they are written on the file. The steps include the context
-                used for each step and the goals in that step.
+            List[ProofTerm]: Each element has the list of steps for a single
+                closed proof of the Coq file. The proofs are ordered by the
+                order they are closed on the file. The steps include the
+                context used for each step and the goals in that step.
         """
         return self.__proofs
 
     @property
     def open_proofs(self) -> List[ProofTerm]:
-        """Gets all the proofs in the file and their corresponding steps.
+        """Gets all the open proofs in the file and their corresponding steps.
 
         Returns:
-            List[ProofStep]: Each element has the list of steps for a single
-                proof of the Coq file. The proofs are ordered by the order
-                they are written on the file. The steps include the context
-                used for each step and the goals in that step.
+            List[ProofTerm]: Each element has the list of steps for a single
+                open proof of the Coq file. The proofs are ordered by the
+                order they are opened on the file. The steps include the
+                context used for each step and the goals in that step.
         """
         return [ProofTerm(*proof) for proof in self.__open_proofs]
 
     def exec(self, nsteps=1) -> List[Step]:
-        """Execute steps in the file.
-
-        Args:
-            nsteps (int, optional): Number of steps to execute. Defaults to 1.
-
-        Returns:
-            List[Step]: List of steps executed.
-        """
         sign = 1 if nsteps > 0 else -1
         initial_steps_taken = self.steps_taken
         nsteps = min(
@@ -586,6 +578,5 @@ class ProofFile(CoqFile):
             raise InvalidChangeException()
 
     def close(self):
-        """Closes all resources used by this object."""
         super().close()
         self.__aux_file.close()

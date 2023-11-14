@@ -149,7 +149,7 @@ class FileContext:
 
         # handles when multiple notations are defined
         for span in spans:
-            name = FileContext.get_notation_key(
+            name = FileContext.__get_notation_key(
                 span[f"{self.__where_notation_key}_string"]["v"],
                 span[f"{self.__where_notation_key}_scope"],
             )
@@ -162,7 +162,7 @@ class FileContext:
         stack, res = expr[:0:-1], []
         while len(stack) > 0:
             el = stack.pop()
-            v = FileContext.get_v(el)
+            v = FileContext.__get_v(el)
             if v is not None and isinstance(v, list) and len(v) == 2:
                 id = FileContext.get_id(v)
                 if id is not None:
@@ -190,6 +190,40 @@ class FileContext:
                     if isinstance(v, (dict, list)):
                         stack.append(v)
         return res
+
+    @staticmethod
+    def get_id(id: List) -> Optional[str]:
+        # FIXME: This should be made private once [__step_context] is extracted
+        # from ProofFile to here.
+        if id[0] == "Ser_Qualid":
+            return ".".join([l[1] for l in reversed(id[1][1])] + [id[2][1]])
+        elif id[0] == "Id":
+            return id[1]
+        return None
+
+    @staticmethod
+    def get_ident(el: List) -> Optional[str]:
+        # FIXME: This should be made private once [__get_program_context] is extracted
+        # from ProofFile to here.
+        if (
+            len(el) == 3
+            and el[0] == "GenArg"
+            and el[1][0] == "Rawwit"
+            and el[1][1][0] == "ExtraArg"
+        ):
+            if el[1][1][1] == "identref":
+                return el[2][0][1][1]
+            elif el[1][1][1] == "ident":
+                return el[2][1]
+        return None
+
+    @staticmethod
+    def __get_v(el: List) -> Optional[str]:
+        if isinstance(el, dict) and "v" in el:
+            return el["v"]
+        elif isinstance(el, list) and len(el) == 2 and el[0] == "v":
+            return el[1]
+        return None
 
     @staticmethod
     def __term_type(expr: List) -> TermType:
@@ -233,6 +267,12 @@ class FileContext:
             return TermType.FUNCTION
         return TermType.OTHER
 
+    @staticmethod
+    def __get_notation_key(notation: str, scope: str) -> str:
+        if scope != "" and scope is not None:
+            notation += " : " + scope
+        return notation
+
     @property
     def local_terms(self) -> List[Term]:
         """
@@ -245,9 +285,19 @@ class FileContext:
 
     @property
     def in_module_type(self) -> bool:
+        """
+        Returns:
+            bool: True if currently inside a module type.
+        """
         return len(self.__segments.module_types) > 0
 
     def process_step(self, step: Step):
+        """Extracts the identifiers from a step and updates the context with
+        new terms defined by the step.
+
+        Args:
+            step (Step): The step to be processed.
+        """
         expr = self.expr(step)
         if (
             expr == [None]
@@ -270,7 +320,14 @@ class FileContext:
         elif not self.in_module_type:
             self.__add_terms(step, expr)
 
-    def expr(self, step: Step) -> Optional[List]:
+    def expr(self, step: Step) -> List:
+        """
+        Args:
+            step (Step): The step to be processed.
+
+        Returns:
+            List: 'expr' field from the AST of a step.
+        """
         if (
             step.ast.span is not None
             and isinstance(step.ast.span, dict)
@@ -282,15 +339,43 @@ class FileContext:
         return [None]
 
     def term_type(self, step: Step) -> TermType:
+        """
+        Args:
+            step (Step): The step to be processed.
+
+        Returns:
+            List: The term type of the step.
+        """
         return FileContext.__term_type(self.expr(step))
 
     def update(self, terms: Dict[str, Term] = {}):
+        """Updates the context with new terms.
+
+        Args:
+            terms (Dict[str, Term]): The new terms to be added.
+        """
         self.terms.update(terms)
 
     def append_module_prefix(self, name: str) -> str:
+        """Attaches the current module path to the start of a name.
+
+        Args:
+            name (str): The name.
+
+        Returns:
+            str: The full name with the module path.
+        """
         return ".".join(self.__segments.modules + [name])
 
     def get_term(self, name: str) -> Optional[Term]:
+        """Get a notation from the context.
+
+        Args:
+            name (str): The term name.
+
+        Returns:
+            Optional[Term]: The term mapped to the name, if it exists.
+        """
         for i in range(len(self.__segments.modules), -1, -1):
             curr_name = ".".join(self.__segments.modules[:i] + [name])
             if curr_name in self.terms:
@@ -301,8 +386,8 @@ class FileContext:
         """Get a notation from the context.
 
         Args:
-            notation (str): Id of the notation. E.g. "_ + _"
-            scope (str): Scope of the notation. E.g. "nat_scope"
+            notation (str): Id of the notation. E.g. "_ + _".
+            scope (str): Scope of the notation. E.g. "nat_scope".
 
         Raises:
             RuntimeError: If the notation is not found in the context.
@@ -310,7 +395,7 @@ class FileContext:
         Returns:
             Term: Term that corresponds to the notation.
         """
-        notation_id = FileContext.get_notation_key(notation, scope)
+        notation_id = FileContext.__get_notation_key(notation, scope)
         regex = f"{re.escape(notation_id)}".split("\\ ")
         for i, sub in enumerate(regex):
             if sub == "_":
@@ -338,44 +423,8 @@ class FileContext:
         # Search Infix
         if re.match("^_ ([^ ]*) _$", notation):
             op = notation[2:-2]
-            key = FileContext.get_notation_key(op, scope)
+            key = FileContext.__get_notation_key(op, scope)
             if key in self.terms:
                 return self.terms[key]
 
         raise NotationNotFoundException(notation_id)
-
-    @staticmethod
-    def get_notation_key(notation: str, scope: str) -> str:
-        if scope != "" and scope is not None:
-            notation += " : " + scope
-        return notation
-
-    @staticmethod
-    def get_id(id: List) -> Optional[str]:
-        if id[0] == "Ser_Qualid":
-            return ".".join([l[1] for l in reversed(id[1][1])] + [id[2][1]])
-        elif id[0] == "Id":
-            return id[1]
-        return None
-
-    @staticmethod
-    def get_ident(el: List) -> Optional[str]:
-        if (
-            len(el) == 3
-            and el[0] == "GenArg"
-            and el[1][0] == "Rawwit"
-            and el[1][1][0] == "ExtraArg"
-        ):
-            if el[1][1][1] == "identref":
-                return el[2][0][1][1]
-            elif el[1][1][1] == "ident":
-                return el[2][1]
-        return None
-
-    @staticmethod
-    def get_v(el: List) -> Optional[str]:
-        if isinstance(el, dict) and "v" in el:
-            return el["v"]
-        elif isinstance(el, list) and len(el) == 2 and el[0] == "v":
-            return el[1]
-        return None

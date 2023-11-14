@@ -43,4 +43,6 @@ jobs:
 
     - name: Run tests
       run: |
-        eval $(opam env) && pytest -s
+        eval $(opam env)
+        cd coqpyt
+        pytest tests -s

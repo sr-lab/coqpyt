@@ -62,7 +62,7 @@ class CoqLspClient(LspClient):
         if sys.platform.startswith("linux"):
             command = f"ulimit -v {memory_limit}; {coq_lsp}"
         else:
-            command = coq_lsp 
+            command = coq_lsp
 
         proc = subprocess.Popen(
             command,

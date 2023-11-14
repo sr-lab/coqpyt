@@ -21,6 +21,9 @@ from coqpyt.coq.context import FileContext
 from coqpyt.coq.base_file import CoqFile
 
 
+_ProofTerm: Tuple[Term, List[Term], List[ProofStep], Optional[Term]]
+
+
 class _AuxFile(object):
     __CACHE: Dict[Tuple[str, str], FileContext] = {}
 
@@ -233,9 +236,7 @@ class ProofFile(CoqFile):
 
         self.__program_context: Dict[str, Tuple[Term, List[Term]]] = {}
         self.__proofs: List[ProofTerm] = []
-        self.__open_proofs: List[
-            Tuple[Term, List[Term], List[ProofStep], Optional[Term]]
-        ] = []
+        self.__open_proofs: List[_ProofTerm] = []
 
     def __enter__(self):
         return self
@@ -335,9 +336,8 @@ class ProofFile(CoqFile):
     def __handle_end_proof(self, step: Step, goals: Optional[GoalAnswer]):
         if goals is None:
             proof = self.__proofs.pop()
-            term = Term(proof.step, proof.type, proof.file_path, proof.module)
             self.__open_proofs.append(
-                (term, proof.context, proof.steps[:-1], proof.program)
+                (proof, proof.context, proof.steps[:-1], proof.program)
             )
         else:
             open_proof = self.__open_proofs.pop()
@@ -382,7 +382,7 @@ class ProofFile(CoqFile):
         # Last step of the file
         if step.text.strip() == "":
             return
-        # FIXME: Forward steps outside of proofs are ignored
+        # Forward steps outside of proofs are ignored
         # NOTE: CoqFile raises an exception for backward steps
         if not self.in_proof and (goals is None or goals.goals is None):
             return

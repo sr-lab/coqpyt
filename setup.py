@@ -31,7 +31,7 @@ setup(
     description="CoqPyt: a Python client for coq-lsp",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/sr-lab/CoqPyt",
+    url="https://github.com/sr-lab/coqpyt",
     packages=find_packages(),
     tests_require=["pytest", "pytest_mock"],
     cmdclass={"test": PyTest},

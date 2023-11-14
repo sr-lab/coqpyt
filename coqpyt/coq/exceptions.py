@@ -24,3 +24,11 @@ class InvalidFileException(Exception):
 
     def __str__(self):
         return "The file {} is not valid.".format(self.file)
+
+
+class NotationNotFoundException(Exception):
+    def __init__(self, notation: str):
+        self.notation: str = notation
+
+    def __str__(self):
+        return 'Notation "{}" not found in context.'.format(self.notation)

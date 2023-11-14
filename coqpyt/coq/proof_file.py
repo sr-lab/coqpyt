@@ -3,27 +3,25 @@ import hashlib
 import shutil
 import uuid
 import tempfile
-from lsp.structs import (
+from typing import Optional, Tuple, List, Dict
+
+from coqpyt.lsp.structs import (
     TextDocumentItem,
     VersionedTextDocumentIdentifier,
     TextDocumentContentChangeEvent,
     ResponseError,
     ErrorCodes,
 )
-from coq.structs import (
-    TermType,
-    Step,
-    Term,
-    ProofStep,
-    ProofTerm,
-    FileContext,
-)
-from coq.lsp.structs import Result, Query, GoalAnswer, Range
-from coq.base_file import CoqFile
-from coq.lsp.client import CoqLspClient
-from coq.changes import *
-from coq.exceptions import *
-from typing import List, Dict, Optional, Tuple
+from coqpyt.coq.lsp.structs import Result, Query, Range, GoalAnswer
+from coqpyt.coq.lsp.client import CoqLspClient
+from coqpyt.coq.structs import TermType, Step, Term, ProofStep, ProofTerm
+from coqpyt.coq.exceptions import *
+from coqpyt.coq.changes import *
+from coqpyt.coq.context import FileContext
+from coqpyt.coq.base_file import CoqFile
+
+
+_ProofTerm: Tuple[Term, List[Term], List[ProofStep], Optional[Term]]
 
 
 class _AuxFile(object):
@@ -55,18 +53,6 @@ class _AuxFile(object):
         self.path = new_path
         self.version = 1
 
-    def read(self):
-        with open(self.path, "r") as f:
-            return f.read()
-
-    def write(self, text):
-        with open(self.path, "w") as f:
-            f.write(text)
-
-    def append(self, text):
-        with open(self.path, "a") as f:
-            f.write(text)
-
     def __handle_exception(self, e):
         if not isinstance(e, ResponseError) or e.code not in [
             ErrorCodes.ServerQuit.value,
@@ -75,26 +61,6 @@ class _AuxFile(object):
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
         os.remove(self.path)
-
-    def didOpen(self):
-        uri = f"file://{self.path}"
-        try:
-            self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, self.read()))
-        except Exception as e:
-            self.__handle_exception(e)
-            raise e
-
-    def didChange(self):
-        uri = f"file://{self.path}"
-        self.version += 1
-        try:
-            self.coq_lsp_client.didChange(
-                VersionedTextDocumentIdentifier(uri, self.version),
-                [TextDocumentContentChangeEvent(None, None, self.read())],
-            )
-        except Exception as e:
-            self.__handle_exception(e)
-            raise e
 
     def __get_queries(self, keyword):
         uri = f"file://{self.path}"
@@ -138,6 +104,44 @@ class _AuxFile(object):
                 break
         return None
 
+    def read(self):
+        with open(self.path, "r") as f:
+            return f.read()
+
+    def write(self, text):
+        with open(self.path, "w") as f:
+            f.write(text)
+
+    def append(self, text):
+        with open(self.path, "a") as f:
+            f.write(text)
+
+    def truncate(self, text):
+        text = text.encode("utf-8")
+        with open(self.path, "rb+") as f:
+            f.seek(-len(text), os.SEEK_END)
+            f.truncate()
+
+    def didOpen(self):
+        uri = f"file://{self.path}"
+        try:
+            self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, self.read()))
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+
+    def didChange(self):
+        uri = f"file://{self.path}"
+        self.version += 1
+        try:
+            self.coq_lsp_client.didChange(
+                VersionedTextDocumentIdentifier(uri, self.version),
+                [TextDocumentContentChangeEvent(None, None, self.read())],
+            )
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+
     def close(self):
         self.coq_lsp_client.shutdown()
         self.coq_lsp_client.exit()
@@ -158,7 +162,7 @@ class _AuxFile(object):
                 aux_file.append(f"\nLocate Library {library}.")
             aux_file.didChange()
 
-            context = FileContext()
+            context = FileContext(file_path)
             for i, library in enumerate(libraries):
                 v_file = aux_file.get_diagnostics(
                     "Locate Library", library, last_line + i + 1
@@ -184,7 +188,7 @@ class _AuxFile(object):
                 for term in list(aux_context.terms.keys()):
                     if aux_context.terms[term].text.startswith("Local"):
                         aux_context.terms.pop(term)
-                context.update(**vars(aux_context))
+                context.update(aux_context.terms)
 
         return context
 
@@ -221,28 +225,24 @@ class ProofFile(CoqFile):
         """
         super().__init__(file_path, library, timeout, workspace, coq_lsp, coqtop)
         self.__aux_file = _AuxFile(timeout=self.timeout)
+        self.__aux_file.didOpen()
 
         try:
             # We need to update the context already defined in the CoqFile
             self.context.update(_AuxFile.get_context(self.path, self.timeout).terms)
-            self.__program_context: Dict[str, Tuple[Term, List]] = {}
-            self.__proofs = self.__get_proofs()
         except Exception as e:
             self.close()
             raise e
+
+        self.__program_context: Dict[str, Tuple[Term, List[Term]]] = {}
+        self.__proofs: List[ProofTerm] = []
+        self.__open_proofs: List[_ProofTerm] = []
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
-
-    def __get_term(self, name):
-        for i in range(len(self.curr_module), -1, -1):
-            curr_name = ".".join(self.curr_module[:i] + [name])
-            if curr_name in self.context.terms:
-                return self.context.terms[curr_name]
-        return None
 
     def __locate(self, search, line):
         nots = self.__aux_file.get_diagnostics("Locate", f'"{search}"', line).split(
@@ -251,60 +251,42 @@ class ProofFile(CoqFile):
         fun = lambda x: x.endswith("(default interpretation)")
         return nots[0][:-25] if fun(nots[0]) else nots[0]
 
-    def __step_context(self, step: Step):
-        def traverse_expr(expr):
-            stack, res = expr[:0:-1], []
-            while len(stack) > 0:
-                el = stack.pop()
-                if isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
-                    term = self.__get_term(CoqFile.get_id(el))
-                    if term is not None:
-                        res.append((lambda x: x, term))
-                elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
-                    line = len(self.__aux_file.read().split("\n"))
-                    self.__aux_file.append(f'\nLocate "{el[2][1]}".')
+    def __step_context(self, step: Step) -> List[Term]:
+        stack, res = self.context.expr(step)[:0:-1], []
+        while len(stack) > 0:
+            el = stack.pop()
+            if isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
+                term = self.context.get_term(FileContext.get_id(el))
+                if term is not None and term not in res:
+                    res.append(term)
+            elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
+                line = len(self.__aux_file.read().split("\n"))
+                self.__aux_file.append(f'\nLocate "{el[2][1]}".')
+                self.__aux_file.didChange()
 
-                    def __search_notation(call):
-                        notation_name = call[0]
-                        scope = ""
-                        notation = call[1](*call[2:])
-                        if notation == "Unknown notation":
-                            return None
-                        if notation.split(":")[-1].endswith("_scope"):
-                            scope = notation.split(":")[-1].strip()
-                        return self.context.get_notation(notation_name, scope)
+                notation_name, scope = el[2][1], ""
+                notation = self.__locate(notation_name, line)
+                if notation.split(":")[-1].endswith("_scope"):
+                    scope = notation.split(":")[-1].strip()
 
-                    res.append(
-                        (__search_notation, (el[2][1], self.__locate, el[2][1], line))
-                    )
-                    stack.append(el[1:])
-                elif isinstance(el, list):
-                    for v in reversed(el):
-                        if isinstance(v, (dict, list)):
-                            stack.append(v)
-                elif isinstance(el, dict):
-                    for v in reversed(el.values()):
-                        if isinstance(v, (dict, list)):
-                            stack.append(v)
-            return res
+                if notation != "Unknown notation":
+                    term = self.context.get_notation(notation_name, scope)
+                    if term not in res:
+                        res.append(term)
 
-        return traverse_expr(self.expr(step.ast))
+                stack.append(el[1:])
+            elif isinstance(el, list):
+                for v in reversed(el):
+                    if isinstance(v, (dict, list)):
+                        stack.append(v)
+            elif isinstance(el, dict):
+                for v in reversed(el.values()):
+                    if isinstance(v, (dict, list)):
+                        stack.append(v)
+        return res
 
-    def __get_program_context(self):
-        def traverse_expr(expr):
-            stack = expr[:0:-1]
-            while len(stack) > 0:
-                el = stack.pop()
-                if isinstance(el, list):
-                    ident = CoqFile.get_ident(el)
-                    if ident is not None:
-                        return ident
-
-                    for v in reversed(el):
-                        if isinstance(v, list):
-                            stack.append(v)
-            return None
-
+    def __get_program_context(self) -> Tuple[Term, List[Term]]:
+        expr = self.context.expr(self.prev_step)
         # Tags:
         # 0 - Obligation N of id : type
         # 1 - Obligation N of id
@@ -312,123 +294,133 @@ class ProofFile(CoqFile):
         # 3 - Obligation N
         # 4 - Next Obligation of id
         # 5 - Next Obligation
-        tag = self.expr(self.prev_step.ast)[1][1]
+        tag = expr[1][1]
         if tag in [0, 1, 4]:
-            id = traverse_expr(self.expr(self.prev_step.ast))
-            # This works because the obligation must be in the
-            # same module as the program
-            id = ".".join(self.curr_module + [id])
-            return self.__program_context[id]
+            stack = expr[:0:-1]
+            while len(stack) > 0:
+                el = stack.pop()
+                if not isinstance(el, list):
+                    continue
+
+                ident = FileContext.get_ident(el)
+                if ident is not None:
+                    # This works because the obligation must be in the
+                    # same module as the program
+                    id = self.context.append_module_prefix(ident)
+                    return self.__program_context[id]
+
+                for v in reversed(el):
+                    if isinstance(v, list):
+                        stack.append(v)
         elif tag in [2, 3, 5]:
-            id = self.current_goals().program[0][0][1]
+            id = self.current_goals.program[0][0][1]
             # This works because the obligation must be in the
             # same module as the program
-            id = ".".join(self.curr_module + [id])
+            id = self.context.append_module_prefix(id)
             return self.__program_context[id]
-        text = self._last_term.text
+        text = self.context.last_term.text
         raise RuntimeError(f"Unknown obligation command with tag number {tag}: {text}")
 
     def __check_program(self):
-        goals = self.current_goals()
+        goals = self.current_goals
         if len(goals.program) == 0:
             return
-        id = ".".join(self.curr_module + [goals.program[-1][0][1]])
+        id = self.context.append_module_prefix(goals.program[-1][0][1])
         if id in self.__program_context:
             return
         self.__program_context[id] = (
-            self._last_term,
+            self.context.last_term,
             self.__step_context(self.prev_step),
         )
 
-    def __step(self):
-        self.exec()
+    def __handle_end_proof(self, step: Step, goals: Optional[GoalAnswer]):
+        if goals is None:
+            proof = self.__proofs.pop()
+            self.__open_proofs.append(
+                (proof, proof.context, proof.steps[:-1], proof.program)
+            )
+        else:
+            open_proof = self.__open_proofs.pop()
+            open_proof[2].append(ProofStep(step, goals, []))
+            self.__proofs.append(ProofTerm(*open_proof))
+
+    def __handle_proof_step(self, step: Step, goals: Optional[GoalAnswer]):
+        if goals is None:
+            self.__open_proofs[-1][2].pop()
+        else:
+            context = self.__step_context(step)
+            self.__open_proofs[-1][2].append(ProofStep(step, goals, context))
+
+    def __handle_proof_term(self, step: Step, goals: Optional[GoalAnswer]):
+        if goals is None:
+            self.__open_proofs.pop()
+        else:
+            # New proof terms can be either obligations or regular proofs
+            proof_term, program = self.context.last_term, None
+            if self.context.term_type(step) == TermType.OBLIGATION:
+                program, statement_context = self.__get_program_context()
+            else:
+                statement_context = self.__step_context(step)
+            self.__open_proofs.append((proof_term, statement_context, [], program))
+
+    def __is_proof_term(self, step: Step):
+        term_type = self.context.term_type(step)
+        # Assume that terms of the following types do not introduce new proofs
+        # FIXME: Should probably check if [type != OTHER] and if goals were changed
+        return term_type not in [
+            TermType.TACTIC,
+            TermType.NOTATION,
+            TermType.INDUCTIVE,
+            TermType.COINDUCTIVE,
+            TermType.RECORD,
+            TermType.CLASS,
+            TermType.SCHEME,
+            TermType.VARIANT,
+        ]
+
+    def __check_proof_step(self, step: Step, goals: Optional[GoalAnswer] = None):
+        # Last step of the file
+        if step.text.strip() == "":
+            return
+        # Forward steps outside of proofs are ignored
+        # NOTE: CoqFile raises an exception for backward steps
+        if not self.in_proof and (goals is None or goals.goals is None):
+            return
+
+        # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
+        if self.context.expr(step)[0] in ["VernacEndProof", "VernacExactProof"]:
+            self.__handle_end_proof(step, goals)
+        # Regular proof steps for the last open proof
+        elif self.context.term_type(step) == TermType.OTHER:
+            self.__handle_proof_step(step, goals)
+        # FIXME: An exception is raised because we found a term definition
+        # and CoqFile does not remove the term when stepping backwards
+        elif goals is None:
+            raise NotImplementedError(
+                "Found term definition while going backwards in proof"
+            )
+        # Ignore term definitions that do not generate new proof goals
+        elif self.__is_proof_term(step):
+            self.__handle_proof_term(step, goals)
+
+    def __forward_step(self, goals: GoalAnswer):
         self.__aux_file.append(self.prev_step.text)
         self.__check_program()
+        self.__check_proof_step(self.prev_step, goals)
 
-    def __get_steps(
-        self, proofs
-    ) -> List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]:
-        steps = []
-        while self.in_proof and not self.checked:
-            try:
-                goals = self.current_goals()
-            except Exception as e:
-                self.__aux_file.close()
-                raise e
-
-            self.__step()
-            # Nested proofs
-            if self.get_term_type(self.prev_step.ast) != TermType.OTHER:
-                self.__get_proof(proofs)
-                # Pass Qed if it exists
-                while not self.in_proof and not self.checked:
-                    self.__step()
-                continue
-            context_calls = self.__step_context(self.prev_step)
-            if self.prev_step.text.strip() == "":
-                continue
-            steps.append((self.prev_step, goals, context_calls))
-
-        try:
-            goals = self.current_goals()
-        except Exception as e:
-            self.__aux_file.close()
-            raise e
-        if (
-            self.steps_taken < len(self.steps)
-            and self.expr(self.curr_step.ast)[0] == "VernacEndProof"
-        ):
-            steps.append((self.curr_step, goals, []))
-
-        return steps
-
-    def __get_proof(self, proofs):
-        term, statement_context = None, None
-        if self.get_term_type(self.prev_step.ast) == TermType.OBLIGATION:
-            term, statement_context = self.__get_program_context()
-        elif self.get_term_type(self.prev_step.ast) != TermType.OTHER:
-            term = self._last_term
-            statement_context = self.__step_context(self.prev_step)
-        # HACK: We ignore proofs inside a Module Type since they can't be used outside
-        # and should be overriden.
-        if self.in_proof and len(self.curr_module_type) == 0:
-            steps = self.__get_steps(proofs)
-            proofs.append((term, statement_context, steps))
-
-    def __call_context(self, calls: List[Tuple]):
-        context, calls = [], [call[0](*call[1:]) for call in calls]
-        [context.append(call) for call in calls if call not in context]
-        return list(filter(lambda term: term is not None, context))
-
-    def __get_proofs(self) -> List[ProofTerm]:
-        def get_proof_step(step: Tuple[Step, Optional[GoalAnswer], List[Tuple]]):
-            return ProofStep(step[0], step[1], self.__call_context(step[2]))
-
-        proofs: List[
-            Tuple[Term, List[Tuple[Step, Optional[GoalAnswer], List[Tuple]]]]
-        ] = []
-        while not self.checked:
-            self.__step()
-            # Get context from initial statement
-            self.__get_proof(proofs)
-
-        try:
-            self.__aux_file.didOpen()
-        except Exception as e:
-            self.close()
-            raise e
-
-        proof_steps = [
-            (term, self.__call_context(calls), list(map(get_proof_step, steps)))
-            for term, calls, steps in proofs
-        ]
-        return list(map(lambda t: ProofTerm(*t), proof_steps))
+    def __backward_step(self):
+        self.__aux_file.truncate(self.curr_step.text)
+        self.__check_proof_step(self.curr_step)
 
     def __find_step(self, range: Range) -> Optional[Tuple[ProofTerm, int]]:
-        for proof in self.proofs:
+        for proof in self.__proofs:
             for i, proof_step in enumerate(proof.steps):
                 if proof_step.ast.range == range:
                     return (proof, i)
+        for proof in self.__open_proofs:
+            for i, proof_step in enumerate(proof[2]):
+                if proof_step.ast.range == range:
+                    return (ProofTerm(*proof), i)
         return None
 
     def __find_prev(self, range: Range) -> Tuple[ProofTerm, Optional[int]]:
@@ -437,9 +429,12 @@ class ProofFile(CoqFile):
             return optional
 
         # Previous step may be the definition of the proof
-        for proof in self.proofs:
+        for proof in self.__proofs:
             if proof.ast.range == range:
                 return (proof, -1)
+        for proof in self.__open_proofs:
+            if proof[0].ast.range == range:
+                return (ProofTerm(*proof), -1)
 
         raise NotImplementedError(
             "Adding steps outside of a proof is not implemented yet"
@@ -449,32 +444,75 @@ class ProofFile(CoqFile):
         self.__aux_file.write("")
         for step in self.steps[: step_index + 1]:
             self.__aux_file.append(step.text)
-        call = self.__step_context(self.steps[step_index])
         self.__aux_file.didChange()
+        context = self.__step_context(self.steps[step_index])
 
-        context = self.__call_context(call)
         # The goals will be loaded if used (Lazy Loading)
         goals = self._goals
         return ProofStep(self.steps[step_index], goals, context)
 
     @property
     def proofs(self) -> List[ProofTerm]:
-        """Gets all the proofs in the file and their corresponding steps.
+        """Gets all the closed proofs in the file and their corresponding steps.
 
         Returns:
-            List[ProofStep]: Each element has the list of steps for a single
-                proof of the Coq file. The proofs are ordered by the order
-                they are written on the file. The steps include the context
-                used for each step and the goals in that step.
+            List[ProofTerm]: Each element has the list of steps for a single
+                closed proof of the Coq file. The proofs are ordered by the
+                order they are closed on the file. The steps include the
+                context used for each step and the goals in that step.
         """
         return self.__proofs
 
-    def add_step(self, step_text: str, previous_step_index: int):
+    @property
+    def open_proofs(self) -> List[ProofTerm]:
+        """Gets all the open proofs in the file and their corresponding steps.
+
+        Returns:
+            List[ProofTerm]: Each element has the list of steps for a single
+                open proof of the Coq file. The proofs are ordered by the
+                order they are opened on the file. The steps include the
+                context used for each step and the goals in that step.
+        """
+        return [ProofTerm(*proof) for proof in self.__open_proofs]
+
+    def exec(self, nsteps=1) -> List[Step]:
+        sign = 1 if nsteps > 0 else -1
+        initial_steps_taken = self.steps_taken
+        nsteps = min(
+            nsteps * sign,
+            len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
+        )
+        step = self.__forward_step if sign == 1 else lambda _: self.__backward_step()
+
+        for i in range(nsteps):
+            try:
+                goals = self.current_goals
+            except Exception as e:
+                self.__aux_file.close()
+                raise e
+
+            try:
+                # HACK: We ignore steps inside a Module Type since they can't
+                # be used outside and should be overriden.
+                in_module_type = self.context.in_module_type
+                self._step(sign)
+                if in_module_type or self.context.in_module_type:
+                    continue
+                step(goals)
+            except NotImplementedError as e:
+                self.steps_taken -= sign  # Take back the faulty step
+                self.exec(nsteps=-sign * i)  # Re-take the steps in inverse order
+                raise e
+
+        last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
+        return self.steps[slice[1 - last] : slice[last]]
+
+    def add_step(self, previous_step_index: int, step_text: str):
         proof, prev = self.__find_prev(self.steps[previous_step_index].ast.range)
         if prev == -1:
-            self._make_change(self._add_step, step_text, previous_step_index)
+            self._make_change(self._add_step, previous_step_index, step_text)
         else:
-            self._make_change(self._add_step, step_text, previous_step_index, True)
+            self._make_change(self._add_step, previous_step_index, step_text, True)
         proof.steps.insert(prev + 1, self.__get_step(previous_step_index + 1))
         # We should change the goals of all the steps in the same proof
         # after the one that was changed
@@ -508,8 +546,8 @@ class ProofFile(CoqFile):
                     self.steps[change.previous_step_index].ast.range
                 )
                 self._add_step(
-                    change.step_text,
                     change.previous_step_index,
+                    change.step_text,
                     in_proof=True,
                     validate_file=False,
                 )
@@ -540,6 +578,5 @@ class ProofFile(CoqFile):
             raise InvalidChangeException()
 
     def close(self):
-        """Closes all resources used by this object."""
         super().close()
         self.__aux_file.close()

@@ -5,6 +5,8 @@ S n * m = 0 + (S n * m).
 Proof.
 intros n m.
 
+    Ltac reduce_eq := simpl; reflexivity.
+
     Theorem plus_O_n : forall n:nat, n = 0 + n.
     intros n.
     simpl; reflexivity.

@@ -1,6 +1,7 @@
 from enum import Enum
-from typing import Dict, Optional, Any, List, Tuple
-from lsp.structs import Range, VersionedTextDocumentIdentifier, Position
+from typing import Any, Optional, Tuple, List, Dict
+
+from coqpyt.lsp.structs import Range, VersionedTextDocumentIdentifier, Position
 
 
 class Hyp(object):

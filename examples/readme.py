@@ -1,36 +1,9 @@
-# CoqPyt
+import os
 
-Interact with Coq files and navigate through your proofs using our Python client for [coq-lsp](https://github.com/ejgallego/coq-lsp).
-
-Execute Coq files, retrieve the generated context and edit proofs through insertion and removal of steps.
-
-## Installation
-
-[coq-lsp](https://github.com/ejgallego/coq-lsp) must be installed on version >= 0.1.7. Follow the installation instructions provided [here](https://github.com/ejgallego/coq-lsp#%EF%B8%8F-installation).
-
-```bash
-pip install -r requirements.txt
-```
-
-```bash
-python -m pip install -e .
-```
-
-## Usage
-
-Import classes from the ``coqpyt`` package.
-
-<!-- embedme examples/readme.py#L3-L5 -->
-```py
 from coqpyt.coq.structs import TermType
 from coqpyt.coq.base_file import CoqFile
 from coqpyt.coq.proof_file import ProofFile
-```
 
-Create a CoqFile object, execute the file and extract the generated context.
-
-<!-- embedme examples/readme.py#L7-L40 -->
-```py
 # Open Coq file
 with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
     coq_file.exec(nsteps=2)
@@ -65,12 +38,7 @@ with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
     print("Checked:", coq_file.checked)
     # Get all terms defined until now
     print("Number of terms:", len(coq_file.context.terms))
-```
 
-Create a ProofFile object (a CoqFile instance) and interact with the proofs.
-
-<!-- embedme examples/readme.py#L42-L72 -->
-```py
 # Open Proof file
 with ProofFile(os.path.join(os.getcwd(), "examples/readme.v")) as proof_file:
     proof_file.run()
@@ -102,23 +70,3 @@ with ProofFile(os.path.join(os.getcwd(), "examples/readme.v")) as proof_file:
             )
         ),
     )
-```
-
-## Tests
-
-To run the tests for CoqPyt go to the folder ``coqpyt`` and run:
-```bash
-pytest tests -s
-```
-
-## Contributing
-
-Pull requests are welcome. 
-
-For major changes, please open an issue first to discuss what you would like to change.
-
-Please make sure to update tests as appropriate.
-
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)

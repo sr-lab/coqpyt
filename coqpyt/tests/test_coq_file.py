@@ -1,9 +1,10 @@
 import os
 import shutil
 import pytest
-from coq.base_file import CoqFile
-from coq.changes import *
-from coq.exceptions import *
+
+from coqpyt.coq.exceptions import *
+from coqpyt.coq.changes import *
+from coqpyt.coq.base_file import CoqFile
 
 coq_file: CoqFile = None
 
@@ -32,7 +33,7 @@ def test_negative_step(setup, teardown):
     steps = coq_file.exec(nsteps=8)
     assert steps[-1].text == "\n      Print plus."
     steps = coq_file.exec(nsteps=-1)
-    assert steps[0].text == "\n      intros n."
+    assert steps[0].text == "\n      Print plus."
     steps = coq_file.exec(nsteps=-2)
     with pytest.raises(NotImplementedError):
         coq_file.exec(nsteps=-1)
@@ -74,16 +75,16 @@ def test_add_step():
     try:
         steps = coq_file.exec(nsteps=8)
         assert steps[-1].text == "\n      Print plus."
-        coq_file.add_step("\n      Print minus.", 7)
+        coq_file.add_step(7, "\n      Print minus.")
         steps = coq_file.exec(nsteps=1)
         assert steps[-1].text == "\n      Print minus."
-        coq_file.add_step("\n      Print minus.", 6)
+        coq_file.add_step(6, "\n      Print minus.")
         steps = coq_file.exec(nsteps=1)
         assert steps[-1].text == "\n      Print Nat.add."
         assert steps[-1].ast.range.start.line == 14
 
         with pytest.raises(NotImplementedError):
-            coq_file.add_step("\n      Print minus.", 0)
+            coq_file.add_step(0, "\n      Print minus.")
     finally:
         coq_file.close()
         if os.path.exists(new_file_path):
@@ -206,6 +207,7 @@ def test_module_type(setup, teardown):
     # We ignore terms inside a Module Type since they can't be used outside
     # and should be overriden.
     assert len(coq_file.context.terms) == 1
+    assert "plus_O_n" in coq_file.context.terms
 
 
 @pytest.mark.parametrize("setup", ["test_derive.v"], indirect=True)

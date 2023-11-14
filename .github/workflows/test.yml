@@ -37,10 +37,12 @@ jobs:
       run: |
         opam install coq-lsp
 
-    - name: Install coq-lsp-pyclient
+    - name: Install coqpyt
       run: |
         pip install -e .
 
     - name: Run tests
       run: |
-        eval $(opam env) && pytest -s
+        eval $(opam env)
+        cd coqpyt
+        pytest tests -s

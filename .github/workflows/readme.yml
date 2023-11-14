@@ -1,0 +1,41 @@
+name: Embed code in README
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "examples/readme.py"
+      - "README.md"
+  pull_request_target:
+    types:
+      - opened
+      - edited
+    paths:
+      - "examples/readme.py"
+      - "README.md"
+
+jobs:
+  embed:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3.5.2
+
+    - name: Set up node
+      uses: actions/setup-node@v4
+      with: 
+        node-version: 20
+
+    - name: Install embedme
+      run: npm install -g embedme
+
+    - name: Embed code
+      run: embedme README.md
+    
+    - name: Commit changes
+      uses: EndBug/add-and-commit@v9
+      with:
+        add: "README.md"
+        push: origin ${{ github.head_ref }}

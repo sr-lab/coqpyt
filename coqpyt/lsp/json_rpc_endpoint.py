@@ -1,8 +1,9 @@
 from __future__ import print_function
 import json
 import logging
-from lsp import structs
 import threading
+
+from coqpyt.lsp import structs
 
 JSON_RPC_REQ_FORMAT = "Content-Length: {json_string_len}\r\n\r\n{json_string}"
 LEN_HEADER = "Content-Length: "

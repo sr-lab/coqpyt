@@ -425,9 +425,10 @@ class CoqFile(object):
         Returns:
             Optional[GoalAnswer]: Goals in the current position if there are goals.
         """
-        end_pos = (
-            Position(0, 0) if self.steps_taken == 0 else self.prev_step.ast.range.end
-        )
+        if self.steps_taken == len(self.steps):
+            end_pos = self.prev_step.ast.range.end
+        else:
+            end_pos = self.curr_step.ast.range.start
 
         if end_pos != self.__last_end_pos:
             self.__current_goals = self._goals(end_pos)

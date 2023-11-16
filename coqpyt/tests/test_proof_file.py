@@ -98,44 +98,50 @@ def compare_context(
         assert test_context[i][2] == context[i].module
 
 
+def check_proof(test_proof: Dict, proof: ProofTerm):
+    check_context(test_proof["context"], proof.context)
+    assert len(test_proof["steps"]) == len(proof.steps)
+    for j, step in enumerate(test_proof["steps"]):
+        check_step(step, proof.steps[j])
+
+
 def check_proofs(yaml_file: str, proofs: List[ProofTerm]):
-    with open(yaml_file, "r") as f:
-        test_proofs = yaml.safe_load(f)
+    test_proofs = get_test_proofs(yaml_file, proofs)
     assert len(proofs) == len(test_proofs["proofs"])
     for i, test_proof in enumerate(test_proofs["proofs"]):
-        assert test_proof["text"] == proofs[i].text
+        check_proof(test_proof, proofs[i])
+
+
+def add_step_defaults(step, default_version=1):
+    if "goals" not in step:
+        step["goals"] = {}
+    if "messages" not in step["goals"]:
+        step["goals"]["messages"] = []
+    if "goals" not in step["goals"]:
+        step["goals"]["goals"] = {}
+    if "goals" not in step["goals"]["goals"]:
+        step["goals"]["goals"]["goals"] = []
+    if "stack" not in step["goals"]["goals"]:
+        step["goals"]["goals"]["stack"] = []
+    if "shelf" not in step["goals"]["goals"]:
+        step["goals"]["goals"]["shelf"] = []
+    if "given_up" not in step["goals"]["goals"]:
+        step["goals"]["goals"]["given_up"] = []
+    if "version" not in step["goals"]:
+        step["goals"]["version"] = default_version
+    if "context" not in step:
+        step["context"] = []
+
+
+def get_test_proofs(yaml_file: str, proofs: List[ProofTerm], default_version=1):
+    with open(yaml_file, "r") as f:
+        test_proofs = yaml.safe_load(f)
+    for test_proof in test_proofs["proofs"]:
         if "context" not in test_proof:
             test_proof["context"] = []
-
-        check_context(test_proof["context"], proofs[i].context)
-        assert len(test_proof["steps"]) == len(proofs[i].steps)
-        for j, step in enumerate(test_proof["steps"]):
-            if "goals" not in step:
-                step["goals"] = {}
-            
-            if j != 0 and "position" not in step["goals"]:
-                step["goals"]["position"] = {}
-                step["goals"]["position"]["line"] = proofs[i].steps[j - 1].ast.range.end.line
-                step["goals"]["position"]["character"] = proofs[i].steps[j - 1].ast.range.end.character
-            
-            if "messages" not in step["goals"]:
-                step["goals"]["messages"] = []
-            if "goals" not in step["goals"]:
-                step["goals"]["goals"] = {}
-            if "goals" not in step["goals"]["goals"]:
-                step["goals"]["goals"]["goals"] = []
-            if "stack" not in step["goals"]["goals"]:
-                step["goals"]["goals"]["stack"] = []
-            if "shelf" not in step["goals"]["goals"]:
-                step["goals"]["goals"]["shelf"] = []
-            if "given_up" not in step["goals"]["goals"]:
-                step["goals"]["goals"]["given_up"] = []
-            if "version" not in step["goals"]:
-                step["goals"]["version"] = 1
-
-            if "context" not in step:
-                step["context"] = []
-            check_step(test_proof["steps"][j], proofs[i].steps[j])
+        for step in test_proof["steps"]:
+            add_step_defaults(step, default_version)
+    return test_proofs
 
 
 @pytest.fixture
@@ -178,142 +184,68 @@ def teardown(request):
 @pytest.mark.parametrize("setup", [("test_valid.v", None)], indirect=True)
 def test_valid_file(setup, teardown):
     proofs = proof_file.proofs
-    check_proofs("tests/proof_file/test_valid_file.yml", proofs)
+    check_proofs("tests/proof_file/valid_file.yml", proofs)
 
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
-def test_get_proofs_valid_change(setup, teardown):
+def test_delete_and_add(setup, teardown):
     proof_file.delete_step(6)
 
-    versionId.version += 1
-    proofs = proof_file.proofs
-    texts = [
-        "\n    Proof.",
-        "\n      Print plus.",
-        "\n      Print Nat.add.",
-        "\n      reduce_eq.",
-        "\n    Qed.",
-    ]
-    goals = [
-        GoalAnswer(
-            VersionedTextDocumentIdentifier(versionId.uri, 1),
-            Position(8, 47),
-            [],
-            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(10, 6),
-            [],
-            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(11, 6),
-            [],
-            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(12, 6),
-            [],
-            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(13, 4),
-            [],
-            GoalConfig([], [], [], []),
-        ),
-    ]
-    for i, step in enumerate(proofs[0].steps):
-        assert step.text == texts[i]
-        assert str(proofs[0].steps[i].goals) == str(goals[i])
+    test_proofs = get_test_proofs(
+        "tests/proof_file/valid_file.yml", 
+        proof_file.proofs, 
+        2
+    )
+    test_proofs["proofs"][0]["steps"].pop(1)
+    test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
+    for i, step in enumerate(test_proofs["proofs"][0]["steps"]):
+        if i != 0:
+            step["goals"]["position"]["line"] -= 1
+        if i != len(test_proofs["proofs"][0]["steps"]) - 1:
+            step["goals"]["goals"]["goals"][0]["hyps"] = []
+            step["goals"]["goals"]["goals"][0]["ty"] = "∀ n : nat, 0 + n = n"
+    check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
 
     proof_file.add_step(5, "\n      intros n.")
 
-    versionId.version += 1
-    proofs = proof_file.proofs
-    texts = [
-        "\n    Proof.",
-        "\n      intros n.",
-        "\n      Print plus.",
-        "\n      Print Nat.add.",
-        "\n      reduce_eq.",
-        "\n    Qed.",
-    ]
-    goals = [
-        GoalAnswer(
-            VersionedTextDocumentIdentifier(versionId.uri, 1),
-            Position(8, 47),
-            [],
-            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(10, 6),
-            [],
-            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(11, 6),
-            [],
-            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(12, 6),
-            [],
-            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(13, 6),
-            [],
-            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(14, 4),
-            [],
-            GoalConfig([], [], [], []),
-        ),
-    ]
-    for i, step in enumerate(proofs[0].steps):
-        assert step.text == texts[i]
-        assert str(proofs[0].steps[i].goals) == str(goals[i])
+    test_proofs = get_test_proofs(
+        "tests/proof_file/valid_file.yml", 
+        proof_file.proofs, 
+        3
+    )
+    test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
+    check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
 
     # Check if context is changed correctly
     proof_file.add_step(7, "\n      Print minus.")
-    texts = [
-        "\n    Proof.",
-        "\n      intros n.",
-        "\n      Print plus.",
-        "\n      Print minus.",
-        "\n      Print Nat.add.",
-        "\n      reduce_eq.",
-        "\n    Qed.",
-    ]
-    contexts = [
-        [],
-        [],
-        [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
-        [("Notation minus := Nat.sub (only parsing).", TermType.NOTATION, [])],
-        [
-            (
-                'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
-                TermType.FIXPOINT,
-                [],
-            )
-        ],
-        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
-        [],
-    ]
-    for i, step in enumerate(proofs[0].steps):
-        assert step.text == texts[i]
-        compare_context(contexts[i], proofs[0].steps[i].context)
+    step = {
+            "text": "\n      Print minus.",
+            "goals": {
+                "goals": {
+                    "goals": [{
+                        "hyps": [{"names": ["n"], "ty": "nat"}],
+                        "ty": "0 + n = n"
+                    }]
+                },
+                "position": {
+                    "line": 12,
+                    "character": 6
+                },
+            },
+            "context": [
+                {
+                    "text": "Notation minus := Nat.sub (only parsing).",
+                    "type": "NOTATION"
+                }
+            ]
+        }
+    add_step_defaults(step, 4)
+    test_proofs["proofs"][0]["steps"].insert(3, step)
+    for i, step in enumerate(test_proofs["proofs"][0]["steps"][4:]):
+        step["goals"]["version"] = 4
+        step["goals"]["position"]["line"] += 1
+    check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
 
     # Add outside of proof
     with pytest.raises(NotImplementedError):

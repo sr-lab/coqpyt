@@ -1,21 +1,91 @@
 import os
+import yaml
 import shutil
 import uuid
 import subprocess
 import pytest
 import tempfile
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Union, Any
 
 from coqpyt.coq.lsp.structs import *
 from coqpyt.coq.exceptions import *
 from coqpyt.coq.changes import *
 from coqpyt.coq.structs import TermType, Term
-from coqpyt.coq.proof_file import ProofFile
+from coqpyt.coq.proof_file import ProofFile, ProofTerm, ProofStep
 
 versionId: VersionedTextDocumentIdentifier = None
 proof_file: ProofFile = None
 workspace: str = None
 file_path: str = ""
+
+
+def check_context(
+    test_context: List[Dict[str, Union[str, List]]], context: List[Term]
+):
+    assert len(test_context) == len(context)
+    for i in range(len(context)):
+        assert test_context[i]["text"] == context[i].text
+        assert TermType[test_context[i]["type"]] == context[i].type
+        if "module" not in test_context[i]:
+            test_context[i]["module"] = []
+        assert test_context[i]["module"] == context[i].module
+
+
+def check_goal(test_goal: Dict, goal: Goal):
+    assert test_goal["ty"] == goal.ty
+    assert len(test_goal["hyps"]) == len(goal.hyps)
+    for j in range(len(goal.hyps)):
+        assert test_goal["hyps"][j]["ty"] == goal.hyps[j].ty
+        assert len(test_goal["hyps"][j]["names"]) == len(goal.hyps[j].names)
+        for k in range(len(goal.hyps[j].names)):
+            assert test_goal["hyps"][j]["names"][k] == goal.hyps[j].names[k]
+
+
+def check_step(test_step: Dict[str, Any], step: ProofStep):
+    assert test_step["text"] == step.text
+    goals = test_step["goals"]
+
+    assert goals["version"] == step.goals.textDocument.version
+    assert goals["position"]["line"] == step.goals.position.line
+    assert goals["position"]["character"] == step.goals.position.character
+    assert len(goals["messages"]) == len(step.goals.messages)
+    for i in range(len(step.goals.messages)):
+        assert goals["messages"][i] == step.goals.messages[i].text
+    
+    assert len(goals["goals"]["goals"]) == len(step.goals.goals.goals)
+    for i in range(len(step.goals.goals.goals)):
+        check_goal(goals["goals"]["goals"][i], step.goals.goals.goals[i])
+    
+    # Check stack
+    assert len(goals["goals"]["stack"]) == len(step.goals.goals.stack)
+    for i in range(len(step.goals.goals.stack)):
+        assert len(goals["goals"]["stack"][i][0]) == len(step.goals.goals.stack[i][0])
+        for j in range(len(step.goals.goals.stack[i][0])):
+            check_goal(goals["goals"]["stack"][i][0][j], step.goals.goals.stack[i][0][j])
+
+        assert len(goals["goals"]["stack"][i][1]) == len(step.goals.goals.stack[i][1])
+        for j in range(len(step.goals.goals.stack[i][1])):
+            check_goal(goals["goals"]["stack"][i][1][j], step.goals.goals.stack[i][1][j])
+
+    # Check shelf
+    assert len(goals["goals"]["shelf"]) == len(step.goals.goals.shelf)
+    for i in range(len(step.goals.goals.shelf)):
+        check_goal(goals["goals"]["shelf"][i], step.goals.goals.shelf[i])
+
+    # Check given_up
+    assert len(goals["goals"]["given_up"]) == len(step.goals.goals.given_up)
+    for i in range(len(step.goals.goals.given_up)):
+        check_goal(goals["goals"]["given_up"][i], step.goals.goals.given_up[i])
+
+    check_context(test_step["context"], step.context)
+
+    if "range" in test_step:
+        test_range = test_step["range"]
+        step_range = step.ast.range
+        assert test_range["start"]["line"] == step_range.start.line
+        assert test_range["start"]["character"] == step_range.start.character
+        assert test_range["end"]["line"] == step_range.end.line
+        assert test_range["end"]["character"] == step_range.end.character
 
 
 def compare_context(
@@ -26,6 +96,46 @@ def compare_context(
         assert test_context[i][0] == context[i].text
         assert test_context[i][1] == context[i].type
         assert test_context[i][2] == context[i].module
+
+
+def check_proofs(yaml_file: str, proofs: List[ProofTerm]):
+    with open(yaml_file, "r") as f:
+        test_proofs = yaml.safe_load(f)
+    assert len(proofs) == len(test_proofs["proofs"])
+    for i, test_proof in enumerate(test_proofs["proofs"]):
+        assert test_proof["text"] == proofs[i].text
+        if "context" not in test_proof:
+            test_proof["context"] = []
+
+        check_context(test_proof["context"], proofs[i].context)
+        assert len(test_proof["steps"]) == len(proofs[i].steps)
+        for j, step in enumerate(test_proof["steps"]):
+            if "goals" not in step:
+                step["goals"] = {}
+            
+            if j != 0 and "position" not in step["goals"]:
+                step["goals"]["position"] = {}
+                step["goals"]["position"]["line"] = proofs[i].steps[j - 1].ast.range.end.line
+                step["goals"]["position"]["character"] = proofs[i].steps[j - 1].ast.range.end.character
+            
+            if "messages" not in step["goals"]:
+                step["goals"]["messages"] = []
+            if "goals" not in step["goals"]:
+                step["goals"]["goals"] = {}
+            if "goals" not in step["goals"]["goals"]:
+                step["goals"]["goals"]["goals"] = []
+            if "stack" not in step["goals"]["goals"]:
+                step["goals"]["goals"]["stack"] = []
+            if "shelf" not in step["goals"]["goals"]:
+                step["goals"]["goals"]["shelf"] = []
+            if "given_up" not in step["goals"]["goals"]:
+                step["goals"]["goals"]["given_up"] = []
+            if "version" not in step["goals"]:
+                step["goals"]["version"] = 1
+
+            if "context" not in step:
+                step["context"] = []
+            check_step(test_proof["steps"][j], proofs[i].steps[j])
 
 
 @pytest.fixture
@@ -66,384 +176,9 @@ def teardown(request):
 
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None)], indirect=True)
-def test_get_proofs(setup, teardown):
+def test_valid_file(setup, teardown):
     proofs = proof_file.proofs
-    assert len(proofs) == 4
-
-    texts = [
-        "\n    Proof.",
-        "\n      intros n.",
-        "\n      Print plus.",
-        "\n      Print Nat.add.",
-        "\n      reduce_eq.",
-    ]
-    goals = [
-        GoalAnswer(
-            versionId,
-            Position(8, 47),
-            [],
-            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(9, 10),
-            [],
-            GoalConfig([Goal([], "∀ n : nat, 0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(10, 15),
-            [],
-            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(11, 17),
-            [],
-            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(12, 20),
-            [],
-            GoalConfig([Goal([Hyp(["n"], "nat", None)], "0 + n = n")], [], [], []),
-        ),
-    ]
-    contexts = [
-        [],
-        [],
-        [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
-        [
-            (
-                'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
-                TermType.FIXPOINT,
-                [],
-            )
-        ],
-        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
-    ]
-    statement_context = [
-        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
-        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        (
-            'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
-            TermType.NOTATION,
-            [],
-        ),
-    ]
-
-    compare_context(statement_context, proofs[0].context)
-    assert proofs[0].text == "Theorem plus_O_n : forall n:nat, 0 + n = n."
-    for i in range(4):
-        assert proofs[0].steps[i].text == texts[i]
-        assert str(proofs[0].steps[i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[0].steps[i].context)
-
-    texts = [
-        "\n  Proof.",
-        "\n    intros n m.",
-        "\n    rewrite -> (plus_O_n (S n * m)).",
-        "\n    Compute True /\\ True.",
-        "\n    reflexivity.",
-    ]
-    goals = [
-        GoalAnswer(
-            versionId,
-            Position(20, 28),
-            [],
-            GoalConfig([Goal([], "∀ n m : nat, 0 + S n * m = S n * m")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(21, 8),
-            [],
-            GoalConfig([Goal([], "∀ n m : nat, 0 + S n * m = S n * m")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(22, 15),
-            [],
-            GoalConfig(
-                [Goal([Hyp(["n", "m"], "nat", None)], "0 + S n * m = S n * m")],
-                [],
-                [],
-                [],
-            ),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(23, 36),
-            [],
-            GoalConfig(
-                [Goal([Hyp(["n", "m"], "nat", None)], "S n * m = S n * m")],
-                [],
-                [],
-                [],
-            ),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(24, 25),
-            [],
-            GoalConfig(
-                [Goal([Hyp(["n", "m"], "nat", None)], "S n * m = S n * m")],
-                [],
-                [],
-                [],
-            ),
-        ),
-    ]
-    contexts = [
-        [],
-        [],
-        [
-            ("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, []),
-            (
-                'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.',
-                TermType.NOTATION,
-                [],
-            ),
-            (
-                "Inductive nat : Set := | O : nat | S : nat -> nat.",
-                TermType.INDUCTIVE,
-                [],
-            ),
-        ],
-        [
-            (
-                'Inductive and (A B:Prop) : Prop := conj : A -> B -> A /\\ B where "A /\\ B" := (and A B) : type_scope.',
-                TermType.NOTATION,
-                [],
-            ),
-            ("Inductive True : Prop := I : True.", TermType.INDUCTIVE, []),
-        ],
-        [],
-    ]
-    ranges = [
-        (21, 2, 21, 8),
-        (22, 4, 22, 15),
-        (23, 4, 23, 36),
-        (24, 4, 24, 25),
-        (25, 4, 25, 16),
-    ]
-    statement_context = [
-        (
-            "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , "
-            + "'/' P ']'\") : type_scope.",
-            TermType.NOTATION,
-            [],
-        ),
-        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        (
-            'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
-            TermType.NOTATION,
-            [],
-        ),
-        (
-            'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.',
-            TermType.NOTATION,
-            [],
-        ),
-        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
-    ]
-
-    compare_context(statement_context, proofs[1].context)
-    assert (
-        proofs[1].text
-        == "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
-    )
-    for i in range(4):
-        assert proofs[1].steps[i].ast.range.start.line == ranges[i][0]
-        assert proofs[1].steps[i].ast.range.start.character == ranges[i][1]
-        assert proofs[1].steps[i].ast.range.end.line == ranges[i][2]
-        assert proofs[1].steps[i].ast.range.end.character == ranges[i][3]
-        assert proofs[1].steps[i].text == texts[i]
-        assert str(proofs[1].steps[i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[1].steps[i].context)
-
-    texts = [
-        "\n      intros n.",
-        "\n      Compute mk_example n n.",
-        "\n      Compute Out.In.plus_O_n.",
-        "\n      reduce_eq.",
-    ]
-    goals = [
-        GoalAnswer(
-            versionId,
-            Position(33, 47),
-            [],
-            GoalConfig([Goal([], "∀ n : nat, n = 0 + n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(34, 15),
-            [],
-            GoalConfig([Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(35, 29),
-            [],
-            GoalConfig([Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], []),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(36, 30),
-            [],
-            GoalConfig([Goal([Hyp(["n"], "nat", None)], "n = 0 + n")], [], [], []),
-        ),
-    ]
-    contexts = [
-        [],
-        [
-            (
-                "Record example := mk_example { fst : nat; snd : nat }.",
-                TermType.RECORD,
-                ["Extra", "Fst"],
-            )
-        ],
-        [
-            (
-                "Theorem plus_O_n : forall n:nat, 0 + n = n.",
-                TermType.THEOREM,
-                ["Out", "In"],
-            )
-        ],
-        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
-    ]
-    statement_context = [
-        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
-        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        (
-            'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
-            TermType.NOTATION,
-            [],
-        ),
-    ]
-
-    compare_context(statement_context, proofs[2].context)
-    assert proofs[2].text == "Theorem plus_O_n : forall n:nat, n = 0 + n."
-    for i in range(4):
-        assert proofs[2].steps[i].text == texts[i]
-        assert str(proofs[2].steps[i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[2].steps[i].context)
-
-    texts = [
-        "\n    Proof.",
-        "\n      intros n m.",
-        "\n      rewrite <- (Fst.plus_O_n (|n| * m)).",
-        "\n      Compute {| Fst.fst := n; Fst.snd := n |}.",
-        "\n      reflexivity.",
-    ]
-    goals = [
-        GoalAnswer(
-            versionId,
-            Position(45, 30),
-            [],
-            GoalConfig(
-                [Goal([], "∀ n m : nat, | n | * m = 0 + | n | * m")], [], [], []
-            ),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(46, 10),
-            [],
-            GoalConfig(
-                [Goal([], "∀ n m : nat, | n | * m = 0 + | n | * m")], [], [], []
-            ),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(47, 17),
-            [],
-            GoalConfig(
-                [Goal([Hyp(["n", "m"], "nat", None)], "| n | * m = 0 + | n | * m")],
-                [],
-                [],
-                [],
-            ),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(48, 42),
-            [],
-            GoalConfig(
-                [Goal([Hyp(["n", "m"], "nat", None)], "| n | * m = | n | * m")],
-                [],
-                [],
-                [],
-            ),
-        ),
-        GoalAnswer(
-            versionId,
-            Position(49, 47),
-            [],
-            GoalConfig(
-                [Goal([Hyp(["n", "m"], "nat", None)], "| n | * m = | n | * m")],
-                [],
-                [],
-                [],
-            ),
-        ),
-    ]
-    contexts = [
-        [],
-        [],
-        [
-            (
-                "Theorem plus_O_n : forall n:nat, n = 0 + n.",
-                TermType.THEOREM,
-                ["Extra", "Fst"],
-            ),
-            (
-                'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.',
-                TermType.NOTATION,
-                [],
-            ),
-            (
-                'Notation "| a |" := (S a) (at level 30, right associativity).',
-                TermType.NOTATION,
-                ["Extra", "Snd"],
-            ),
-        ],
-        [
-            (
-                "Record example := mk_example { fst : nat; snd : nat }.",
-                TermType.RECORD,
-                ["Extra", "Fst"],
-            )
-        ],
-        [],
-    ]
-    statement_context = [
-        (
-            "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , "
-            + "'/' P ']'\") : type_scope.",
-            TermType.NOTATION,
-            [],
-        ),
-        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        (
-            'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.',
-            TermType.NOTATION,
-            [],
-        ),
-        ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
-        (
-            'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
-            TermType.NOTATION,
-            [],
-        ),
-    ]
-
-    compare_context(statement_context, proofs[3].context)
-    assert (
-        proofs[3].text == "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
-    )
-    for i in range(4):
-        assert proofs[3].steps[i].text == texts[i]
-        assert str(proofs[3].steps[i].goals) == str(goals[i])
-        compare_context(contexts[i], proofs[3].steps[i].context)
+    check_proofs("tests/proof_file/test_valid_file.yml", proofs)
 
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)

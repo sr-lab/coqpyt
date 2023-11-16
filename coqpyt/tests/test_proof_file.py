@@ -19,9 +19,7 @@ workspace: str = None
 file_path: str = ""
 
 
-def check_context(
-    test_context: List[Dict[str, Union[str, List]]], context: List[Term]
-):
+def check_context(test_context: List[Dict[str, Union[str, List]]], context: List[Term]):
     assert len(test_context) == len(context)
     for i in range(len(context)):
         assert test_context[i]["text"] == context[i].text
@@ -51,21 +49,25 @@ def check_step(test_step: Dict[str, Any], step: ProofStep):
     assert len(goals["messages"]) == len(step.goals.messages)
     for i in range(len(step.goals.messages)):
         assert goals["messages"][i] == step.goals.messages[i].text
-    
+
     assert len(goals["goals"]["goals"]) == len(step.goals.goals.goals)
     for i in range(len(step.goals.goals.goals)):
         check_goal(goals["goals"]["goals"][i], step.goals.goals.goals[i])
-    
+
     # Check stack
     assert len(goals["goals"]["stack"]) == len(step.goals.goals.stack)
     for i in range(len(step.goals.goals.stack)):
         assert len(goals["goals"]["stack"][i][0]) == len(step.goals.goals.stack[i][0])
         for j in range(len(step.goals.goals.stack[i][0])):
-            check_goal(goals["goals"]["stack"][i][0][j], step.goals.goals.stack[i][0][j])
+            check_goal(
+                goals["goals"]["stack"][i][0][j], step.goals.goals.stack[i][0][j]
+            )
 
         assert len(goals["goals"]["stack"][i][1]) == len(step.goals.goals.stack[i][1])
         for j in range(len(step.goals.goals.stack[i][1])):
-            check_goal(goals["goals"]["stack"][i][1][j], step.goals.goals.stack[i][1][j])
+            check_goal(
+                goals["goals"]["stack"][i][1][j], step.goals.goals.stack[i][1][j]
+            )
 
     # Check shelf
     assert len(goals["goals"]["shelf"]) == len(step.goals.goals.shelf)
@@ -193,9 +195,7 @@ def test_delete_and_add(setup, teardown):
     proof_file.delete_step(6)
 
     test_proofs = get_test_proofs(
-        "tests/proof_file/valid_file.yml", 
-        proof_file.proofs, 
-        2
+        "tests/proof_file/valid_file.yml", proof_file.proofs, 2
     )
     test_proofs["proofs"][0]["steps"].pop(1)
     test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
@@ -210,9 +210,7 @@ def test_delete_and_add(setup, teardown):
     proof_file.add_step(5, "\n      intros n.")
 
     test_proofs = get_test_proofs(
-        "tests/proof_file/valid_file.yml", 
-        proof_file.proofs, 
-        3
+        "tests/proof_file/valid_file.yml", proof_file.proofs, 3
     )
     test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
     check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
@@ -220,26 +218,17 @@ def test_delete_and_add(setup, teardown):
     # Check if context is changed correctly
     proof_file.add_step(7, "\n      Print minus.")
     step = {
-            "text": "\n      Print minus.",
+        "text": "\n      Print minus.",
+        "goals": {
             "goals": {
-                "goals": {
-                    "goals": [{
-                        "hyps": [{"names": ["n"], "ty": "nat"}],
-                        "ty": "0 + n = n"
-                    }]
-                },
-                "position": {
-                    "line": 12,
-                    "character": 6
-                },
+                "goals": [{"hyps": [{"names": ["n"], "ty": "nat"}], "ty": "0 + n = n"}]
             },
-            "context": [
-                {
-                    "text": "Notation minus := Nat.sub (only parsing).",
-                    "type": "NOTATION"
-                }
-            ]
-        }
+            "position": {"line": 12, "character": 6},
+        },
+        "context": [
+            {"text": "Notation minus := Nat.sub (only parsing).", "type": "NOTATION"}
+        ],
+    }
     add_step_defaults(step, 4)
     test_proofs["proofs"][0]["steps"].insert(3, step)
     for i, step in enumerate(test_proofs["proofs"][0]["steps"][4:]):

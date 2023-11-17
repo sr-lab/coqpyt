@@ -1,0 +1,41 @@
+proofs:
+  - text: "Goal [1] ++ [2] = [1; 2]."
+    steps:
+      - text: "\nProof."
+        goals:
+          goals:
+            goals:
+              - hyps: []
+                ty: "[1] ++ [2] = [1; 2]"
+          position:
+            line: 4
+            character: 0
+      - text: " reflexivity."
+        goals:
+          goals:
+            goals:
+              - hyps: []
+                ty: "[1] ++ [2] = [1; 2]"
+          position:
+            line: 4
+            character: 7
+        context:
+          # FIXME issue #24
+          - text: "Class Reflexive (R : A -> A -> Prop) := reflexivity : forall x : A, R x x."
+            type: CLASS
+      - text: " Qed."
+        goals:
+          position:
+            line: 4
+            character: 20
+    context:
+      - text: 'Notation "x = y" := (eq x y) : type_scope.'
+        type: NOTATION
+      - text: 'Infix "++" := app (right associativity, at level 60) : list_scope.'
+        type: NOTATION
+      - text: 'Notation "[ x ]" := (cons x nil) : list_scope.'
+        type: NOTATION
+        module: ["ListNotations"]
+      - text: "Notation \"[ x ; y ; .. ; z ]\" := (cons x (cons y .. (cons z nil) ..)) (format \"[ '[' x ; '/' y ; '/' .. ; '/' z ']' ]\") : list_scope."
+        type: NOTATION
+        module: ["ListNotations"]

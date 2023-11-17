@@ -19,6 +19,16 @@ workspace: str = None
 file_path: str = ""
 
 
+def compare_context(
+    test_context: List[Tuple[str, TermType, List[str]]], context: List[Term]
+):
+    assert len(test_context) == len(context)
+    for i in range(len(context)):
+        assert test_context[i][0] == context[i].text
+        assert test_context[i][1] == context[i].type
+        assert test_context[i][2] == context[i].module
+
+
 def check_context(test_context: List[Dict[str, Union[str, List]]], context: List[Term]):
     assert len(test_context) == len(context)
     for i in range(len(context)):
@@ -90,19 +100,12 @@ def check_step(test_step: Dict[str, Any], step: ProofStep):
         assert test_range["end"]["character"] == step_range.end.character
 
 
-def compare_context(
-    test_context: List[Tuple[str, TermType, List[str]]], context: List[Term]
-):
-    assert len(test_context) == len(context)
-    for i in range(len(context)):
-        assert test_context[i][0] == context[i].text
-        assert test_context[i][1] == context[i].type
-        assert test_context[i][2] == context[i].module
-
-
 def check_proof(test_proof: Dict, proof: ProofTerm):
     check_context(test_proof["context"], proof.context)
     assert len(test_proof["steps"]) == len(proof.steps)
+    if "program" in test_proof:
+        assert proof.program is not None
+        assert test_proof["program"] == proof.program.text
     for j, step in enumerate(test_proof["steps"]):
         check_step(step, proof.steps[j])
 
@@ -263,10 +266,7 @@ def test_delete_and_add(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
-def test_get_proofs_change_steps(setup, teardown):
-    versionId.version += 1
-    proofs = proof_file.proofs
-
+def test_proof_change_steps(setup, teardown):
     proof_file.change_steps(
         [
             CoqDeleteStep(6),
@@ -275,33 +275,27 @@ def test_get_proofs_change_steps(setup, teardown):
         ]
     )
 
-    texts = [
-        "\n    Proof.",
-        "\n      intros n.",
-        "\n      Print plus.",
-        "\n      Print minus.",
-        "\n      Print Nat.add.",
-        "\n      reduce_eq.",
-        "\n    Qed.",
-    ]
-    contexts = [
-        [],
-        [],
-        [("Notation plus := Nat.add (only parsing).", TermType.NOTATION, [])],
-        [("Notation minus := Nat.sub (only parsing).", TermType.NOTATION, [])],
-        [
-            (
-                'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.',
-                TermType.FIXPOINT,
-                [],
-            )
+    test_proofs = get_test_proofs(
+        "tests/proof_file/valid_file.yml", proof_file.proofs, 4
+    )
+    test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
+    step = {
+        "text": "\n      Print minus.",
+        "goals": {
+            "goals": {
+                "goals": [{"hyps": [{"names": ["n"], "ty": "nat"}], "ty": "0 + n = n"}]
+            },
+            "position": {"line": 12, "character": 6},
+        },
+        "context": [
+            {"text": "Notation minus := Nat.sub (only parsing).", "type": "NOTATION"}
         ],
-        [("Ltac reduce_eq := simpl; reflexivity.", TermType.TACTIC, [])],
-        [],
-    ]
-    for i, step in enumerate(proofs[0].steps):
-        assert step.text == texts[i]
-        compare_context(contexts[i], proofs[0].steps[i].context)
+    }
+    add_step_defaults(step, 4)
+    test_proofs["proofs"][0]["steps"].insert(3, step)
+    for step in test_proofs["proofs"][0]["steps"][4:]:
+        step["goals"]["position"]["line"] += 1
+    check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
 
     # Add outside of proof
     with pytest.raises(NotImplementedError):
@@ -330,7 +324,7 @@ def test_get_proofs_change_steps(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_valid.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
-def test_get_proofs_invalid_change(setup, teardown):
+def test_invalid_change(setup, teardown):
     n_old_steps = len(proof_file.steps)
     old_diagnostics = proof_file.diagnostics
     old_goals = []
@@ -372,21 +366,21 @@ def test_get_proofs_invalid_change(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_bug.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
-def test_get_proofs_change_notation(setup, teardown):
+def test_change_notation(setup, teardown):
     # Just checking if the program does not crash
     proof_file.add_step(len(proof_file.steps) - 3, " destruct (a <? n).")
 
 
 @pytest.mark.parametrize("setup", [("test_invalid_1.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
-def test_get_proofs_change_invalid(setup, teardown):
+def test_change_invalid(setup, teardown):
     with pytest.raises(InvalidFileException):
         proof_file.add_step(7, "Print plus.")
 
 
 @pytest.mark.parametrize("setup", [("test_change_empty.v", None, True)], indirect=True)
 @pytest.mark.parametrize("teardown", [(True,)], indirect=True)
-def test_get_proofs_change_empty(setup, teardown):
+def test_change_empty(setup, teardown):
     assert len(proof_file.proofs) == 0
     assert len(proof_file.open_proofs) == 1
 
@@ -404,33 +398,7 @@ def test_get_proofs_change_empty(setup, teardown):
     "setup", [("test_imports/test_import.v", "test_imports/")], indirect=True
 )
 def test_imports(setup, teardown):
-    proofs = proof_file.proofs
-    assert len(proofs) == 2
-    context = [
-        [],
-        [],
-        [
-            ("Local Theorem plus_O_n : forall n:nat, 0 + n = n.", TermType.THEOREM, []),
-            (
-                'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.',
-                TermType.NOTATION,
-                [],
-            ),
-            (
-                "Inductive nat : Set := | O : nat | S : nat -> nat.",
-                TermType.INDUCTIVE,
-                [],
-            ),
-        ],
-        [],  # FIXME: in the future we should get a Local Theorem from other file here
-        [("Lemma plus_O_n : forall n:nat, 0 + n = n.", TermType.LEMMA, [])],
-        [],
-        [],
-    ]
-
-    assert len(proofs[1].steps) == len(context)
-    for i, step in enumerate(proofs[1].steps):
-        compare_context(context[i], step.context)
+    check_proofs("tests/proof_file/imports.yml", proof_file.proofs)
 
 
 @pytest.mark.parametrize("setup", [("test_non_ending_proof.v", None)], indirect=True)
@@ -452,26 +420,7 @@ def test_exists_notation(setup, teardown):
 
 @pytest.mark.parametrize("setup", [("test_list_notation.v", None)], indirect=True)
 def test_list_notation(setup, teardown):
-    assert len(proof_file.proofs) == 1
-    context = [
-        ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
-        (
-            'Infix "++" := app (right associativity, at level 60) : list_scope.',
-            TermType.NOTATION,
-            [],
-        ),
-        (
-            'Notation "[ x ]" := (cons x nil) : list_scope.',
-            TermType.NOTATION,
-            ["ListNotations"],
-        ),
-        (
-            "Notation \"[ x ; y ; .. ; z ]\" := (cons x (cons y .. (cons z nil) ..)) (format \"[ '[' x ; '/' y ; '/' .. ; '/' z ']' ]\") : list_scope.",
-            TermType.NOTATION,
-            ["ListNotations"],
-        ),
-    ]
-    compare_context(context, proof_file.proofs[0].context)
+    check_proofs("tests/proof_file/list_notation.yml", proof_file.proofs)
 
 
 @pytest.mark.parametrize("setup", [("test_unknown_notation.v", None)], indirect=True)

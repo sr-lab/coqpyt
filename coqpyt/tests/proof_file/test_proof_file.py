@@ -1,152 +1,22 @@
 import os
-import yaml
 import shutil
 import uuid
 import subprocess
 import pytest
 import tempfile
-from typing import Tuple, List, Dict, Union, Any
 
 from coqpyt.coq.lsp.structs import *
 from coqpyt.coq.exceptions import *
 from coqpyt.coq.changes import *
-from coqpyt.coq.structs import TermType, Term
-from coqpyt.coq.proof_file import ProofFile, ProofTerm, ProofStep
+from coqpyt.coq.structs import TermType
+from coqpyt.coq.proof_file import ProofFile
+
+from utility import *
 
 versionId: VersionedTextDocumentIdentifier = None
 proof_file: ProofFile = None
 workspace: str = None
 file_path: str = ""
-
-
-def compare_context(
-    test_context: List[Tuple[str, TermType, List[str]]], context: List[Term]
-):
-    assert len(test_context) == len(context)
-    for i in range(len(context)):
-        assert test_context[i][0] == context[i].text
-        assert test_context[i][1] == context[i].type
-        assert test_context[i][2] == context[i].module
-
-
-def check_context(test_context: List[Dict[str, Union[str, List]]], context: List[Term]):
-    assert len(test_context) == len(context)
-    for i in range(len(context)):
-        assert test_context[i]["text"] == context[i].text
-        assert TermType[test_context[i]["type"]] == context[i].type
-        if "module" not in test_context[i]:
-            test_context[i]["module"] = []
-        assert test_context[i]["module"] == context[i].module
-
-
-def check_goal(test_goal: Dict, goal: Goal):
-    assert test_goal["ty"] == goal.ty
-    assert len(test_goal["hyps"]) == len(goal.hyps)
-    for j in range(len(goal.hyps)):
-        assert test_goal["hyps"][j]["ty"] == goal.hyps[j].ty
-        assert len(test_goal["hyps"][j]["names"]) == len(goal.hyps[j].names)
-        for k in range(len(goal.hyps[j].names)):
-            assert test_goal["hyps"][j]["names"][k] == goal.hyps[j].names[k]
-
-
-def check_step(test_step: Dict[str, Any], step: ProofStep):
-    assert test_step["text"] == step.text
-    goals = test_step["goals"]
-
-    assert goals["version"] == step.goals.textDocument.version
-    assert goals["position"]["line"] == step.goals.position.line
-    assert goals["position"]["character"] == step.goals.position.character
-    assert len(goals["messages"]) == len(step.goals.messages)
-    for i in range(len(step.goals.messages)):
-        assert goals["messages"][i] == step.goals.messages[i].text
-
-    assert len(goals["goals"]["goals"]) == len(step.goals.goals.goals)
-    for i in range(len(step.goals.goals.goals)):
-        check_goal(goals["goals"]["goals"][i], step.goals.goals.goals[i])
-
-    # Check stack
-    assert len(goals["goals"]["stack"]) == len(step.goals.goals.stack)
-    for i in range(len(step.goals.goals.stack)):
-        assert len(goals["goals"]["stack"][i][0]) == len(step.goals.goals.stack[i][0])
-        for j in range(len(step.goals.goals.stack[i][0])):
-            check_goal(
-                goals["goals"]["stack"][i][0][j], step.goals.goals.stack[i][0][j]
-            )
-
-        assert len(goals["goals"]["stack"][i][1]) == len(step.goals.goals.stack[i][1])
-        for j in range(len(step.goals.goals.stack[i][1])):
-            check_goal(
-                goals["goals"]["stack"][i][1][j], step.goals.goals.stack[i][1][j]
-            )
-
-    # Check shelf
-    assert len(goals["goals"]["shelf"]) == len(step.goals.goals.shelf)
-    for i in range(len(step.goals.goals.shelf)):
-        check_goal(goals["goals"]["shelf"][i], step.goals.goals.shelf[i])
-
-    # Check given_up
-    assert len(goals["goals"]["given_up"]) == len(step.goals.goals.given_up)
-    for i in range(len(step.goals.goals.given_up)):
-        check_goal(goals["goals"]["given_up"][i], step.goals.goals.given_up[i])
-
-    check_context(test_step["context"], step.context)
-
-    if "range" in test_step:
-        test_range = test_step["range"]
-        step_range = step.ast.range
-        assert test_range["start"]["line"] == step_range.start.line
-        assert test_range["start"]["character"] == step_range.start.character
-        assert test_range["end"]["line"] == step_range.end.line
-        assert test_range["end"]["character"] == step_range.end.character
-
-
-def check_proof(test_proof: Dict, proof: ProofTerm):
-    check_context(test_proof["context"], proof.context)
-    assert len(test_proof["steps"]) == len(proof.steps)
-    if "program" in test_proof:
-        assert proof.program is not None
-        assert test_proof["program"] == proof.program.text
-    for j, step in enumerate(test_proof["steps"]):
-        check_step(step, proof.steps[j])
-
-
-def check_proofs(yaml_file: str, proofs: List[ProofTerm]):
-    test_proofs = get_test_proofs(yaml_file, proofs)
-    assert len(proofs) == len(test_proofs["proofs"])
-    for i, test_proof in enumerate(test_proofs["proofs"]):
-        check_proof(test_proof, proofs[i])
-
-
-def add_step_defaults(step, default_version=1):
-    if "goals" not in step:
-        step["goals"] = {}
-    if "messages" not in step["goals"]:
-        step["goals"]["messages"] = []
-    if "goals" not in step["goals"]:
-        step["goals"]["goals"] = {}
-    if "goals" not in step["goals"]["goals"]:
-        step["goals"]["goals"]["goals"] = []
-    if "stack" not in step["goals"]["goals"]:
-        step["goals"]["goals"]["stack"] = []
-    if "shelf" not in step["goals"]["goals"]:
-        step["goals"]["goals"]["shelf"] = []
-    if "given_up" not in step["goals"]["goals"]:
-        step["goals"]["goals"]["given_up"] = []
-    if "version" not in step["goals"]:
-        step["goals"]["version"] = default_version
-    if "context" not in step:
-        step["context"] = []
-
-
-def get_test_proofs(yaml_file: str, proofs: List[ProofTerm], default_version=1):
-    with open(yaml_file, "r") as f:
-        test_proofs = yaml.safe_load(f)
-    for test_proof in test_proofs["proofs"]:
-        if "context" not in test_proof:
-            test_proof["context"] = []
-        for step in test_proof["steps"]:
-            add_step_defaults(step, default_version)
-    return test_proofs
 
 
 @pytest.fixture
@@ -186,6 +56,18 @@ def teardown(request):
         os.remove(file_path)
 
 
+class TestProofValidFile(SetupProofFile):
+    def setup_method(self, method):
+        self.setup("test_valid.v")
+
+    def teardown_method(self, method):
+        self.teardown()
+
+    def test_valid_file(self):
+        proofs = self.proof_file.proofs
+        check_proofs("tests/proof_file/valid_file.yml", proofs)
+
+
 @pytest.mark.parametrize("setup", [("test_valid.v", None)], indirect=True)
 def test_valid_file(setup, teardown):
     proofs = proof_file.proofs
@@ -198,7 +80,7 @@ def test_delete_and_add(setup, teardown):
     proof_file.delete_step(6)
 
     test_proofs = get_test_proofs(
-        "tests/proof_file/valid_file.yml", proof_file.proofs, 2
+        "tests/proof_file/valid_file.yml", 2
     )
     test_proofs["proofs"][0]["steps"].pop(1)
     test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
@@ -213,7 +95,7 @@ def test_delete_and_add(setup, teardown):
     proof_file.add_step(5, "\n      intros n.")
 
     test_proofs = get_test_proofs(
-        "tests/proof_file/valid_file.yml", proof_file.proofs, 3
+        "tests/proof_file/valid_file.yml", 3
     )
     test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
     check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
@@ -276,7 +158,7 @@ def test_proof_change_steps(setup, teardown):
     )
 
     test_proofs = get_test_proofs(
-        "tests/proof_file/valid_file.yml", proof_file.proofs, 4
+        "tests/proof_file/valid_file.yml", 4
     )
     test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
     step = {

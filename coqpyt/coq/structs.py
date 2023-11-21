@@ -45,6 +45,7 @@ class SegmentStack:
         self.module_types: List[str] = []
         self.sections: List[str] = []
         self.stack: List[SegmentType] = []
+        self.__current = -1
 
     def __match_apply(self, type: SegmentType, operation: Callable, *args: Any):
         match type:
@@ -57,11 +58,23 @@ class SegmentStack:
 
     def push(self, name: str, type: SegmentType):
         self.stack.append(type)
+        self.__current += 1
         self.__match_apply(type, list.append, name)
 
     def pop(self):
         if len(self.stack) > 0:
+            self.__current -= 1
             self.__match_apply(self.stack.pop(), list.pop)
+
+    def go_forward(self):
+        if len(self.stack) < self.__current - 1:
+            self.__current += 1
+            self.__match_apply(self.stack[self.__current], list.append)
+
+    def go_back(self):
+        if len(self.stack) > 0:
+            self.__current -= 1
+            self.__match_apply(self.stack[-1], list.pop)
 
 
 class Step(object):

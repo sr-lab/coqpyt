@@ -308,7 +308,7 @@ class FileContext:
 
         # Keep track of current segments
         if expr[0] == "VernacEndSegment":
-            self.__segments.pop()
+            self.__segments.go_back()
         elif expr[0] == "VernacDefineModule":
             self.__segments.push(expr[2]["v"][1], SegmentType.MODULE)
         elif expr[0] == "VernacDeclareModuleType":
@@ -319,6 +319,34 @@ class FileContext:
         # and should be overriden.
         elif not self.in_module_type:
             self.__add_terms(step, expr)
+
+    def remove_step(self, step: Step):
+        """Removes the terms defined by a step from the context.
+
+        Args:
+            step (Step): The step to be removed.
+        """
+        expr = self.expr(step)
+        if (
+            expr == [None]
+            or expr[0] == "VernacProof"
+            or (expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve")
+        ):
+            return
+
+        # Keep track of current segments
+        if expr[0] == "VernacEndSegment":
+            self.__segments.go_forward()
+        elif expr[0] == "VernacDefineModule":
+            self.__segments.pop()
+        elif expr[0] == "VernacDeclareModuleType":
+            self.__segments.pop()
+        elif expr[0] == "VernacBeginSection":
+            self.__segments.pop()
+        # HACK: We ignore terms inside a Module Type since they can't be used outside
+        # and should be overriden.
+        elif not self.in_module_type:
+            pass
 
     def expr(self, step: Step) -> List:
         """

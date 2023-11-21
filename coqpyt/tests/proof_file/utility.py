@@ -36,7 +36,9 @@ class SetupProofFile(ABC):
 
     def teardown_method(self, method):
         if self.workspace is not None:
-            subprocess.run(f"cd {self.workspace} && make clean", shell=True, capture_output=True)
+            subprocess.run(
+                f"cd {self.workspace} && make clean", shell=True, capture_output=True
+            )
         self.proof_file.close()
         os.remove(self.file_path)
 

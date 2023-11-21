@@ -52,7 +52,9 @@ class TestProofListNotation(SetupProofFile):
         self.setup("test_list_notation.v")
 
     def test_list_notation(self):
-        check_proofs("tests/proof_file/expected/list_notation.yml", self.proof_file.proofs)
+        check_proofs(
+            "tests/proof_file/expected/list_notation.yml", self.proof_file.proofs
+        )
 
 
 class TestProofUnknownNotation(SetupProofFile):
@@ -146,8 +148,13 @@ class TestProofTheoremTokens(SetupProofFile):
         proofs = self.proof_file.proofs
         assert len(proofs) == 7
         assert list(map(lambda proof: proof.type, proofs)) == [
-            TermType.REMARK, TermType.FACT, TermType.COROLLARY, TermType.PROPOSITION,
-            TermType.PROPERTY, TermType.THEOREM, TermType.LEMMA
+            TermType.REMARK,
+            TermType.FACT,
+            TermType.COROLLARY,
+            TermType.PROPOSITION,
+            TermType.PROPERTY,
+            TermType.THEOREM,
+            TermType.LEMMA,
         ]
 
 
@@ -182,7 +189,11 @@ class TestProofObligation(SetupProofFile):
         assert len(proofs) == 11
 
         statement_context = [
-            ("Inductive nat : Set := | O : nat | S : nat -> nat.", TermType.INDUCTIVE, []),
+            (
+                "Inductive nat : Set := | O : nat | S : nat -> nat.",
+                TermType.INDUCTIVE,
+                [],
+            ),
             ("Notation dec := sumbool_of_bool.", TermType.NOTATION, []),
             ("Notation leb := Nat.leb (only parsing).", TermType.NOTATION, []),
             ("Notation pred := Nat.pred (only parsing).", TermType.NOTATION, []),

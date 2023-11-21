@@ -6,6 +6,7 @@ from coqpyt.coq.changes import *
 
 from utility import *
 
+
 class TestProofValidFile(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_valid.v")
@@ -14,9 +15,7 @@ class TestProofValidFile(SetupProofFile):
         proof_file = self.proof_file
         proof_file.delete_step(6)
 
-        test_proofs = get_test_proofs(
-            "tests/proof_file/expected/valid_file.yml", 2
-        )
+        test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml", 2)
         test_proofs["proofs"][0]["steps"].pop(1)
         test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
         for i, step in enumerate(test_proofs["proofs"][0]["steps"]):
@@ -29,9 +28,7 @@ class TestProofValidFile(SetupProofFile):
 
         proof_file.add_step(5, "\n      intros n.")
 
-        test_proofs = get_test_proofs(
-            "tests/proof_file/expected/valid_file.yml", 3
-        )
+        test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml", 3)
         test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
         check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
 
@@ -41,12 +38,17 @@ class TestProofValidFile(SetupProofFile):
             "text": "\n      Print minus.",
             "goals": {
                 "goals": {
-                    "goals": [{"hyps": [{"names": ["n"], "ty": "nat"}], "ty": "0 + n = n"}]
+                    "goals": [
+                        {"hyps": [{"names": ["n"], "ty": "nat"}], "ty": "0 + n = n"}
+                    ]
                 },
                 "position": {"line": 12, "character": 6},
             },
             "context": [
-                {"text": "Notation minus := Nat.sub (only parsing).", "type": "NOTATION"}
+                {
+                    "text": "Notation minus := Nat.sub (only parsing).",
+                    "type": "NOTATION",
+                }
             ],
         }
         add_step_defaults(step, 4)
@@ -130,20 +132,23 @@ class TestProofValidFile(SetupProofFile):
             ]
         )
 
-        test_proofs = get_test_proofs(
-            "tests/proof_file/expected/valid_file.yml", 4
-        )
+        test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml", 4)
         test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
         step = {
             "text": "\n      Print minus.",
             "goals": {
                 "goals": {
-                    "goals": [{"hyps": [{"names": ["n"], "ty": "nat"}], "ty": "0 + n = n"}]
+                    "goals": [
+                        {"hyps": [{"names": ["n"], "ty": "nat"}], "ty": "0 + n = n"}
+                    ]
                 },
                 "position": {"line": 12, "character": 6},
             },
             "context": [
-                {"text": "Notation minus := Nat.sub (only parsing).", "type": "NOTATION"}
+                {
+                    "text": "Notation minus := Nat.sub (only parsing).",
+                    "type": "NOTATION",
+                }
             ],
         }
         add_step_defaults(step, 4)
@@ -215,7 +220,7 @@ class TestProofSimpleFileChanges(SetupProofFile):
 class TestProofChangeWithNotation(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_change_with_notation.v")
-    
+
     def test_change_with_notation(self):
         # Just checking if the program does not crash
         self.proof_file.add_step(len(self.proof_file.steps) - 3, " destruct (a <? n).")

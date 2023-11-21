@@ -1,0 +1,179 @@
+proofs:
+  # 1st proof
+  - text: "Theorem plus_O_n : forall n:nat, 0 + n = n."
+    steps:
+      - text: "\nProof."
+        goals:
+          goals:
+            goals:
+              - hyps: []
+                ty: "∀ n : nat, 0 + n = n"
+          position:
+            line: 6
+            character: 0
+      - text: "\n  intros n."
+        goals:
+          goals:
+            goals:
+              - hyps: []
+                ty: "∀ n : nat, 0 + n = n"
+          position:
+            line: 7
+            character: 2
+      - text: "\n  Print plus."
+        goals:
+          goals:
+            goals:
+              - hyps:
+                  - names: 
+                      - n
+                    ty: nat
+                ty: "0 + n = n"
+          position:
+            line: 8
+            character: 2
+        context:
+          - text: "Notation plus := Nat.add (only parsing)."
+            type: NOTATION
+      - text: "\n  Print Nat.add."
+        goals:
+          goals:
+            goals:
+              - hyps:
+                  - names: 
+                      - n
+                    ty: nat
+                ty: "0 + n = n"
+          position:
+            line: 9
+            character: 2
+        context:
+          - text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
+            type: FIXPOINT
+      - text: "\n  reduce_eq."
+        goals:
+          goals:
+            goals:
+              - hyps:
+                  - names: 
+                      - n
+                    ty: nat
+                ty: "0 + n = n"
+          position:
+            line: 10
+            character: 2
+        context:
+          - text: "Ltac reduce_eq := simpl; reflexivity."
+            type: TACTIC
+      - text: "\nQed."
+        goals:
+          position:
+            line: 11
+            character: 0
+    context:
+      - text: "Inductive nat : Set := | O : nat | S : nat -> nat."
+        type: INDUCTIVE
+      - text: 'Notation "x = y" := (eq x y) : type_scope.'
+        type: NOTATION
+      - text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
+        type: NOTATION
+  # 2nd proof
+  - text: "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
+    steps:
+      - text: "\nProof."
+        goals:
+          goals:
+            goals:
+              - hyps: []
+                ty: "∀ n m : nat, 0 + S n * m = S n * m"
+          position:
+            line: 15
+            character: 0
+      - text: "\n  intros n m."
+        goals:
+          goals:
+            goals:
+              - hyps: []
+                ty: "∀ n m : nat, 0 + S n * m = S n * m"
+          position:
+            line: 16
+            character: 2
+      - text: "\n  rewrite -> (plus_O_n (S n * m))."
+        goals:
+          goals:
+            goals:
+              - hyps:
+                  - names: 
+                      - n
+                      - m
+                    ty: nat
+                ty: "0 + S n * m = S n * m"
+          position:
+            line: 17
+            character: 2
+        context:
+          - text: "Local Theorem plus_O_n : forall n:nat, 0 + n = n."
+            type: THEOREM
+          - text: 'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.'
+            type: NOTATION
+          - text: "Inductive nat : Set := | O : nat | S : nat -> nat."
+            type: INDUCTIVE
+      - text: "\n  Locate test_import2.plus_O_n."
+        goals:
+          goals:
+            goals:
+              - hyps:
+                  - names: 
+                      - n
+                      - m
+                    ty: nat
+                ty: "S n * m = S n * m"
+          position:
+            line: 18
+            character: 2
+          # FIXME in the future we should get a Local Theorem from the other file here
+      - text: "\n  Locate Peano.plus_O_n."
+        goals:
+          goals:
+            goals:
+              - hyps:
+                  - names: 
+                      - n
+                      - m
+                    ty: nat
+                ty: "S n * m = S n * m"
+          position:
+            line: 19
+            character: 2
+        context:
+          - text: "Lemma plus_O_n : forall n:nat, 0 + n = n."
+            type: LEMMA
+      - text: "\n  reflexivity."
+        goals:
+          goals:
+            goals:
+              - hyps:
+                  - names: 
+                      - n
+                      - m
+                    ty: nat
+                ty: "S n * m = S n * m"
+          position:
+            line: 20
+            character: 2
+      - text: "\nDefined."
+        goals:
+          position:
+            line: 21
+            character: 0
+    context:
+      - text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
+        type: NOTATION
+      - text: 'Notation "x = y" := (eq x y) : type_scope.'
+        type: NOTATION
+      - text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
+        type: NOTATION
+      - text: 'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.'
+        type: NOTATION
+      - text: "Inductive nat : Set := | O : nat | S : nat -> nat."
+        type: INDUCTIVE

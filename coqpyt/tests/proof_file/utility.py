@@ -14,15 +14,12 @@ from coqpyt.coq.lsp.structs import *
 
 
 class SetupProofFile(ABC):
-    def setup(self, file_path, workspace=None, copy=False):
-        if copy:
-            new_path = os.path.join(
-                tempfile.gettempdir(), "test" + str(uuid.uuid4()).replace("-", "") + ".v"
-            )
-            shutil.copyfile(os.path.join("tests/resources", file_path), new_path)
-            self.file_path = new_path
-        else:
-            self.file_path = os.path.join("tests/resources", file_path)
+    def setup(self, file_path, workspace=None):
+        new_path = os.path.join(
+            tempfile.gettempdir(), "test" + str(uuid.uuid4()).replace("-", "") + ".v"
+        )
+        shutil.copyfile(os.path.join("tests/resources", file_path), new_path)
+        self.file_path = new_path
         if workspace is not None:
             self.workspace = os.path.join(os.getcwd(), "tests/resources", workspace)
             subprocess.run(f"cd {workspace} && make", shell=True, capture_output=True)
@@ -33,23 +30,15 @@ class SetupProofFile(ABC):
         self.proof_file.run()
         self.versionId = VersionedTextDocumentIdentifier(uri, 1)
 
-    def teardown(self, copy=False):
-        if self.workspace is not None:
-            subprocess.run(f"cd {self.workspace} && make clean", shell=True, capture_output=True)
-        self.proof_file.close()
-        if (
-            copy
-            and os.path.exists(self.file_path)
-        ):
-            os.remove(self.file_path)
-
     @abstractmethod
     def setup_method(self, method):
         pass
 
-    @abstractmethod
     def teardown_method(self, method):
-        pass
+        if self.workspace is not None:
+            subprocess.run(f"cd {self.workspace} && make clean", shell=True, capture_output=True)
+        self.proof_file.close()
+        os.remove(self.file_path)
 
 
 def compare_context(

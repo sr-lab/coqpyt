@@ -19,7 +19,7 @@ class TestProofValidFile(SetupProofFile):
         # Rollback whole file
         self.proof_file.exec(-len(self.proof_file.steps))
         assert "plus_O_n" in self.proof_file.context.terms
-        assert self.proof_file.context.terms["plus_O_n"].module == []
+        assert self.proof_file.context.get_term("plus_O_n").module == []
         assert self.proof_file.context.curr_modules == []
 
         steps = self.proof_file.exec(7)
@@ -27,7 +27,7 @@ class TestProofValidFile(SetupProofFile):
         assert steps[-1].text == "\n      intros n."
         assert self.proof_file.context.curr_modules == ["Out", "In"]
         assert "plus_O_n" in self.proof_file.context.terms
-        assert self.proof_file.context.terms["plus_O_n"].module == ["Out", "In"]
+        assert self.proof_file.context.get_term("plus_O_n").module == ["Out", "In"]
 
         # FIXME: We still need stacks in the context to handle when one term
         # is removed but other has the same name

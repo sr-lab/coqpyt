@@ -15,6 +15,23 @@ class TestProofValidFile(SetupProofFile):
         proofs = self.proof_file.proofs
         check_proofs("tests/proof_file/expected/valid_file.yml", proofs)
 
+    def test_exec(self):
+        # Rollback whole file
+        self.proof_file.exec(-len(self.proof_file.steps))
+        assert "plus_O_n" in self.proof_file.context.terms
+        assert self.proof_file.context.terms["plus_O_n"].module == []
+        assert self.proof_file.context.curr_modules == []
+
+        steps = self.proof_file.exec(7)
+        assert len(steps) == 7
+        assert steps[-1].text == "\n      intros n."
+        assert self.proof_file.context.curr_modules == ["Out", "In"]
+        assert "plus_O_n" in self.proof_file.context.terms
+        assert self.proof_file.context.terms["plus_O_n"].module == ["Out", "In"]
+
+        # FIXME: We still need stacks in the context to handle when one term
+        # is removed but other has the same name
+
 
 class TestProofImports(SetupProofFile):
     def setup_method(self, method):
@@ -128,13 +145,6 @@ class TestProofNestedProofs(SetupProofFile):
         assert len(proof_file.proofs) == 2
         assert len(proof_file.open_proofs) == 2
 
-        # Attempt to leave proof
-        with pytest.raises(NotImplementedError):
-            proof_file.exec(-3)
-
-        # Check rollback
-        assert len(proof_file.proofs) == 2
-        assert len(proof_file.open_proofs) == 2
         proof_file.exec(2)
         assert len(proof_file.proofs) == 4
         assert len(proof_file.open_proofs) == 0

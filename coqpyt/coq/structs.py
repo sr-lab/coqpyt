@@ -62,12 +62,12 @@ class SegmentStack:
         self.__match_apply(type, list.append, name)
 
     def pop(self):
+        self.__match_apply(self.stack.pop(self.__current), list.pop)
         self.__current -= 1
-        self.__match_apply(self.stack.pop(), list.pop)
 
     def go_forward(self, name: str):
-        self.__match_apply(self.stack[self.__current], list.append, name)
         self.__current += 1
+        self.__match_apply(self.stack[self.__current], list.append, name)
 
     def go_back(self):
         self.__match_apply(self.stack[self.__current], list.pop)

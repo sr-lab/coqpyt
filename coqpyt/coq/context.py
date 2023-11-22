@@ -108,7 +108,6 @@ class FileContext:
         if term.type == TermType.NOTATION:
             self.terms[name] = term
             return
-
         self.terms[".".join(modules + [name])] = term
 
         # The modules inside the file are handled by the get_term method

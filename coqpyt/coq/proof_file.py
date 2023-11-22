@@ -383,7 +383,6 @@ class ProofFile(CoqFile):
         if step.text.strip() == "":
             return
         # Forward steps outside of proofs are ignored
-        # NOTE: CoqFile raises an exception for backward steps
         if not self.in_proof and (goals is None or goals.goals is None):
             return
 
@@ -393,12 +392,6 @@ class ProofFile(CoqFile):
         # Regular proof steps for the last open proof
         elif self.context.term_type(step) == TermType.OTHER:
             self.__handle_proof_step(step, goals)
-        # FIXME: An exception is raised because we found a term definition
-        # and CoqFile does not remove the term when stepping backwards
-        elif goals is None:
-            raise NotImplementedError(
-                "Found term definition while going backwards in proof"
-            )
         # Ignore term definitions that do not generate new proof goals
         elif self.__is_proof_term(step):
             self.__handle_proof_term(step, goals)
@@ -484,25 +477,20 @@ class ProofFile(CoqFile):
         )
         step = self.__forward_step if sign == 1 else lambda _: self.__backward_step()
 
-        for i in range(nsteps):
+        for _ in range(nsteps):
             try:
                 goals = self.current_goals
             except Exception as e:
                 self.__aux_file.close()
                 raise e
 
-            try:
-                # HACK: We ignore steps inside a Module Type since they can't
-                # be used outside and should be overriden.
-                in_module_type = self.context.in_module_type
-                self._step(sign)
-                if in_module_type or self.context.in_module_type:
-                    continue
-                step(goals)
-            except NotImplementedError as e:
-                self.steps_taken -= sign  # Take back the faulty step
-                self.exec(nsteps=-sign * i)  # Re-take the steps in inverse order
-                raise e
+            # HACK: We ignore steps inside a Module Type since they can't
+            # be used outside and should be overriden.
+            in_module_type = self.context.in_module_type
+            self._step(sign)
+            if in_module_type or self.context.in_module_type:
+                continue
+            step(goals)
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
         return self.steps[slice[1 - last] : slice[last]]

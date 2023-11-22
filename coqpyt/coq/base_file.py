@@ -231,15 +231,11 @@ class CoqFile(object):
         self.__validate()
 
     def _step(self, sign):
-        self.steps_taken += sign
-        # FIXME: for now we ignore the terms in the context when going backwards
-        # on the file
         if sign == 1:
-            self.context.process_step(self.prev_step)
-        elif not self.in_proof:
-            raise NotImplementedError(
-                "Going backwards outside of a proof is not implemented yet"
-            )
+            self.context.process_step(self.curr_step)
+        else:
+            self.context.undo_step(self.prev_step)
+        self.steps_taken += sign
 
     def _make_change(self, change_function, *args):
         previous_steps = self.steps
@@ -478,13 +474,8 @@ class CoqFile(object):
             len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
 
-        for i in range(nsteps):
-            try:
-                self._step(sign)
-            except NotImplementedError as e:
-                self.steps_taken -= sign  # Take back the faulty step
-                self.exec(nsteps=-sign * i)  # Re-take the steps in inverse order
-                raise e
+        for _ in range(nsteps):
+            self._step(sign)
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
         return self.steps[slice[1 - last] : slice[last]]

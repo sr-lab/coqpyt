@@ -251,7 +251,7 @@ class TestProofModuleType(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_module_type.v")
 
-    def test_module_type(self):
+    def test_proof_module_type(self):
         # We ignore proofs inside a Module Type since they can't be used outside
         # and should be overriden.
         assert len(self.proof_file.proofs) == 1

@@ -34,9 +34,16 @@ def test_negative_step(setup, teardown):
     assert steps[-1].text == "\n      Print plus."
     steps = coq_file.exec(nsteps=-1)
     assert steps[0].text == "\n      Print plus."
-    steps = coq_file.exec(nsteps=-2)
-    with pytest.raises(NotImplementedError):
-        coq_file.exec(nsteps=-1)
+
+    assert "Out.In.plus_O_n" in coq_file.context.terms
+    steps = coq_file.exec(nsteps=-3)
+    assert steps[0].text == "\n    Theorem plus_O_n : forall n:nat, 0 + n = n."
+    assert "Out.In.plus_O_n" not in coq_file.context.terms
+
+    assert coq_file.context.curr_modules == ["Out", "In"]
+    steps = coq_file.exec(nsteps=-1)
+    assert steps[0].text == "\n  Module In."
+    assert coq_file.context.curr_modules == ["Out"]
 
 
 def test_delete_step():

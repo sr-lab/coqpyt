@@ -57,24 +57,21 @@ class SegmentStack:
                 operation(self.sections, *args)
 
     def push(self, name: str, type: SegmentType):
-        self.stack.append(type)
         self.__current += 1
+        self.stack.insert(self.__current, type)
         self.__match_apply(type, list.append, name)
 
     def pop(self):
-        if len(self.stack) > 0:
-            self.__current -= 1
-            self.__match_apply(self.stack.pop(), list.pop)
+        self.__current -= 1
+        self.__match_apply(self.stack.pop(), list.pop)
 
-    def go_forward(self):
-        if len(self.stack) < self.__current - 1:
-            self.__current += 1
-            self.__match_apply(self.stack[self.__current], list.append)
+    def go_forward(self, name: str):
+        self.__match_apply(self.stack[self.__current], list.append, name)
+        self.__current += 1
 
     def go_back(self):
-        if len(self.stack) > 0:
-            self.__current -= 1
-            self.__match_apply(self.stack[-1], list.pop)
+        self.__match_apply(self.stack[self.__current], list.pop)
+        self.__current -= 1
 
 
 class Step(object):

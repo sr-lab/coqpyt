@@ -1,7 +1,7 @@
 import re
 import subprocess
 from packaging import version
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 
 from coqpyt.coq.exceptions import NotationNotFoundException
 from coqpyt.coq.structs import SegmentType, SegmentStack, Step, TermType, Term
@@ -15,11 +15,11 @@ class FileContext:
         coqtop: str = "coqtop",
         terms: Optional[Dict[str, Term]] = None,
     ):
-        self.path = path
-        self.module = [] if module is None else module
+        self.__path = path
+        self.__module = [] if module is None else module
         self.__init_coq_version(coqtop)
         self.terms = {} if terms is None else terms
-        self.last_term: Optional[Term] = None
+        self.__last_terms: List[List[Tuple[str, Term]]] = []
         self.__segments = SegmentStack()
         self.__anonymous_id: Optional[int] = None
 
@@ -55,9 +55,9 @@ class FileContext:
                 # NOTE: We update the last term so as to obtain proofs even for
                 # section-local terms. This is safe, because the attribute is
                 # meant to be overwritten every time a new term is found.
-                self.last_term = Term(
-                    step, term_type, self.path, self.__segments.modules[:]
-                )
+                self.__last_terms[-1].append(("", Term(
+                    step, term_type, self.__path, self.__segments.modules[:]
+                )))
                 return
 
         if expr[0] == "VernacExtend" and expr[1][0] == "VernacTacticNotation":
@@ -91,9 +91,9 @@ class FileContext:
                 prop = FileContext.get_ident(expr[2][2])
                 self.__add_term(prop, step, term_type)
         elif term_type == TermType.OBLIGATION:
-            self.last_term = Term(
-                step, term_type, self.path, self.__segments.modules[:]
-            )
+            self.__last_terms[-1].append(("", Term(
+                step, term_type, self.__path, self.__segments.modules[:]
+            )))
         else:
             names = FileContext.__get_names(expr)
             for name in names:
@@ -103,18 +103,33 @@ class FileContext:
 
     def __add_term(self, name: str, step: Step, term_type: TermType):
         modules = self.__segments.modules[:]
-        term = Term(step, term_type, self.path, modules)
-        self.last_term = term
+        term = Term(step, term_type, self.__path, modules)
+        self.__last_terms[-1].append((name, term))
         if term.type == TermType.NOTATION:
             self.terms[name] = term
             return
 
         self.terms[".".join(modules + [name])] = term
 
+        # The modules inside the file are handled by the get_term method
+        # so we don't have to worry about them here.
         curr_module = ""
-        for module in reversed(self.module):
+        for module in reversed(self.__module):
             curr_module = module + "." + curr_module
             self.terms[curr_module + name] = term
+
+    def __remove_term(self, name: str, term: Term):
+        if term.type == TermType.NOTATION:
+            del self.terms[name]
+            return
+        
+        modules = self.__segments.modules[:]
+        del self.terms[".".join(modules + [name])]
+
+        curr_module = ""
+        for module in reversed(self.__module):
+            curr_module = module + "." + curr_module
+            del self.terms[curr_module + name]
 
     # Simultaneous definition of terms and notations (where clause)
     # https://coq.inria.fr/refman/user-extensions/syntax-extensions.html#simultaneous-definition-of-terms-and-notations
@@ -280,7 +295,7 @@ class FileContext:
             List[Term]: The executed terms defined in the current file.
         """
         return list(
-            filter(lambda term: term.file_path == self.path, self.terms.values())
+            filter(lambda term: term.file_path == self.__path, self.terms.values())
         )
 
     @property
@@ -290,7 +305,26 @@ class FileContext:
             bool: True if currently inside a module type.
         """
         return len(self.__segments.module_types) > 0
-
+    
+    @property
+    def last_term(self) -> Optional[Term]:
+        """
+        Returns:
+            Optional[Term]: The last term defined in the current file.
+        """
+        for terms in self.__last_terms[::-1]:
+            if len(terms) > 0:
+                return terms[-1][1]
+        return None
+    
+    @property
+    def curr_modules(self) -> List[str]:
+        """
+        Returns:
+            List[str]: The current module path.
+        """
+        return self.__segments.modules[:]
+    
     def process_step(self, step: Step):
         """Extracts the identifiers from a step and updates the context with
         new terms defined by the step.
@@ -299,6 +333,7 @@ class FileContext:
             step (Step): The step to be processed.
         """
         expr = self.expr(step)
+        self.__last_terms.append([])
         if (
             expr == [None]
             or expr[0] == "VernacProof"
@@ -320,33 +355,27 @@ class FileContext:
         elif not self.in_module_type:
             self.__add_terms(step, expr)
 
-    def remove_step(self, step: Step):
+    def undo_step(self, step: Step):
         """Removes the terms defined by a step from the context.
 
         Args:
-            step (Step): The step to be removed.
+            step (Step): The step to be reverted.
         """
         expr = self.expr(step)
-        if (
-            expr == [None]
-            or expr[0] == "VernacProof"
-            or (expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve")
-        ):
-            return
+        terms = self.__last_terms.pop()
 
         # Keep track of current segments
         if expr[0] == "VernacEndSegment":
-            self.__segments.go_forward()
+            self.__segments.go_forward(expr[1]["v"][1])
         elif expr[0] == "VernacDefineModule":
             self.__segments.pop()
         elif expr[0] == "VernacDeclareModuleType":
             self.__segments.pop()
         elif expr[0] == "VernacBeginSection":
             self.__segments.pop()
-        # HACK: We ignore terms inside a Module Type since they can't be used outside
-        # and should be overriden.
-        elif not self.in_module_type:
-            pass
+        
+        for name, term in terms:
+            self.__remove_term(name, term)
 
     def expr(self, step: Step) -> List:
         """

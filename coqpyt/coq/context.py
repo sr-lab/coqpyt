@@ -18,8 +18,11 @@ class FileContext:
         self.__path = path
         self.__module = [] if module is None else module
         self.__init_coq_version(coqtop)
-        self.terms = {} if terms is None else terms
-        self.__last_terms: List[List[Tuple[str, Term]]] = []
+        # NOTE: We use a stack for each term because of the following case:
+        # A) File A imports a file B with term C
+        # b) File A defines a new term C
+        self.__terms: Dict[str, List[Term]] = {} if terms is None else terms
+        self.__last_terms: List[Tuple[str, Term]] = []
         self.__segments = SegmentStack()
         self.__anonymous_id: Optional[int] = None
 
@@ -102,33 +105,44 @@ class FileContext:
         self.__handle_where_notations(step, expr, term_type)
 
     def __add_term(self, name: str, step: Step, term_type: TermType):
+        def check_and_add_term(name, term):
+            if name not in self.__terms:
+                self.__terms[name] = []
+            self.__terms[name].append(term)
+
         modules = self.__segments.modules[:]
         term = Term(step, term_type, self.__path, modules)
         self.__last_terms[-1].append((name, term))
         if term.type == TermType.NOTATION:
-            self.terms[name] = term
+            check_and_add_term(name, term)
             return
-        self.terms[".".join(modules + [name])] = term
+        check_and_add_term(".".join(modules + [name]), term)
 
         # The modules inside the file are handled by the get_term method
         # so we don't have to worry about them here.
         curr_module = ""
         for module in reversed(self.__module):
             curr_module = module + "." + curr_module
-            self.terms[curr_module + name] = term
+            check_and_add_term(curr_module + name, term)
 
     def __remove_term(self, name: str, term: Term):
+        def check_and_remove_term(name, term):
+            if name in self.__terms:
+                self.__terms[name].pop()
+            if len(self.__terms[name]) == 0:
+                del self.__terms[name]
+
         if term.type == TermType.NOTATION:
-            del self.terms[name]
+            check_and_remove_term(name, term)
             return
         
         modules = self.__segments.modules[:]
-        del self.terms[".".join(modules + [name])]
+        check_and_remove_term(".".join(modules + [name]), term)
 
         curr_module = ""
         for module in reversed(self.__module):
             curr_module = module + "." + curr_module
-            del self.terms[curr_module + name]
+            check_and_remove_term(curr_module + name, term)
 
     # Simultaneous definition of terms and notations (where clause)
     # https://coq.inria.fr/refman/user-extensions/syntax-extensions.html#simultaneous-definition-of-terms-and-notations
@@ -296,6 +310,17 @@ class FileContext:
         return list(
             filter(lambda term: term.file_path == self.__path, self.terms.values())
         )
+    
+    @property
+    def terms(self) -> Dict[str, Term]:
+        """
+        Returns:
+            Dict[str, Term]: All terms defined in the current file.
+        """
+        defined_terms = {}
+        for name, terms in self.__terms.items():
+            defined_terms[name] = terms[-1]
+        return defined_terms
 
     @property
     def in_module_type(self) -> bool:
@@ -410,7 +435,10 @@ class FileContext:
         Args:
             terms (Dict[str, Term]): The new terms to be added.
         """
-        self.terms.update(terms)
+        for name, term in terms.items():
+            if name not in self.__terms:
+                self.__terms[name] = []
+            self.__terms[name].append(term)
 
     def append_module_prefix(self, name: str) -> str:
         """Attaches the current module path to the start of a name.
@@ -434,8 +462,8 @@ class FileContext:
         """
         for i in range(len(self.__segments.modules), -1, -1):
             curr_name = ".".join(self.__segments.modules[:i] + [name])
-            if curr_name in self.terms:
-                return self.terms[curr_name]
+            if curr_name in self.__terms:
+                return self.__terms[curr_name][-1]
         return None
 
     def get_notation(self, notation: str, scope: str) -> Term:
@@ -467,20 +495,20 @@ class FileContext:
 
         # Search notations
         unscoped = None
-        for term in self.terms.keys():
+        for term in self.__terms.keys():
             if re.match(regex, term):
-                return self.terms[term]
+                return self.__terms[term][-1]
             if re.match(regex, term.split(":")[0].strip()):
                 unscoped = term
         # In case the stored id contains the scope but no scope is provided
         if unscoped is not None:
-            return self.terms[unscoped]
+            return self.__terms[unscoped][-1]
 
         # Search Infix
         if re.match("^_ ([^ ]*) _$", notation):
             op = notation[2:-2]
             key = FileContext.__get_notation_key(op, scope)
-            if key in self.terms:
-                return self.terms[key]
+            if key in self.__terms:
+                return self.__terms[key][-1]
 
         raise NotationNotFoundException(notation_id)

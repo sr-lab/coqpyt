@@ -29,16 +29,28 @@ class TestProofValidFile(SetupProofFile):
         assert "plus_O_n" in self.proof_file.context.terms
         assert self.proof_file.context.get_term("plus_O_n").module == ["Out", "In"]
 
-        # FIXME: We still need stacks in the context to handle when one term
-        # is removed but other has the same name
-
 
 class TestProofImports(SetupProofFile):
     def setup_method(self, method):
-        self.setup("test_imports/test_import.v", "test_imports/")
+        self.setup("test_imports/test_import.v", workspace="test_imports/")
 
     def test_imports(self):
         check_proofs("tests/proof_file/expected/imports.yml", self.proof_file.proofs)
+
+    def test_exec(self):
+        # Rollback whole file
+        self.proof_file.exec(-len(self.proof_file.steps))
+        assert "mult_0_plus" in self.proof_file.context.terms
+        # definition of test_import2
+        assert self.proof_file.context.get_term("mult_0_plus").text == "Definition mult_0_plus : forall n m : nat, 0 + 0 + (S n * m) = S n * m."
+
+        self.proof_file.exec(11)
+        assert "mult_0_plus" in self.proof_file.context.terms
+        # definition of test_import
+        assert self.proof_file.context.get_term("mult_0_plus").text == "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
+
+        # FIXME: We still need to support going back and forward in the
+        # imports
 
 
 class TestProofNonEndingProof(SetupProofFile):

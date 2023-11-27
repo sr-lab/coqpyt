@@ -2,7 +2,6 @@ import os
 import hashlib
 import shutil
 import uuid
-import tempfile
 from typing import Optional, Tuple, List, Dict
 
 from coqpyt.lsp.structs import (
@@ -27,9 +26,13 @@ _ProofTerm: Tuple[Term, List[Term], List[ProofStep], Optional[Term]]
 class _AuxFile(object):
     __CACHE: Dict[Tuple[str, str], FileContext] = {}
 
-    def __init__(self, file_path: Optional[str] = None, timeout: int = 30):
+    def __init__(self, file_path, copy: bool = False, workspace: Optional[str] = None, timeout: int = 30):
+        self.__copy = copy
         self.__init_path(file_path)
-        uri = f"file://{self.path}"
+        if workspace is not None:
+            uri = f"file://{workspace}"
+        else:
+            uri = f"file://{self.path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout)
 
     def __enter__(self):
@@ -39,15 +42,14 @@ class _AuxFile(object):
         self.close()
 
     def __init_path(self, file_path):
-        temp_dir = tempfile.gettempdir()
         new_path = os.path.join(
-            temp_dir, "aux_" + str(uuid.uuid4()).replace("-", "") + ".v"
+            os.path.dirname(file_path), "coqpyt_aux_" + str(uuid.uuid4()).replace("-", "") + ".v"
         )
         with open(new_path, "w"):
             # Create empty file
             pass
 
-        if file_path is not None:
+        if self.__copy:
             shutil.copyfile(file_path, new_path)
 
         self.path = new_path
@@ -148,8 +150,8 @@ class _AuxFile(object):
         os.remove(self.path)
 
     @staticmethod
-    def get_context(file_path: str, timeout: int):
-        with _AuxFile(file_path=file_path, timeout=timeout) as aux_file:
+    def get_context(file_path: str, timeout: int, workspace: str = None):
+        with _AuxFile(file_path=file_path, workspace=workspace, timeout=timeout, copy=True) as aux_file:
             aux_file.append("\nPrint Libraries.")
             aux_file.didOpen()
 
@@ -185,10 +187,11 @@ class _AuxFile(object):
                 # NOTE: We handle "Local" separately from section-local keywords
                 # due to the aforementioned reason. The handling should be different
                 # for both types of keywords.
-                for term in list(aux_context.terms.keys()):
-                    if aux_context.terms[term].text.startswith("Local"):
-                        aux_context.terms.pop(term)
-                context.update(aux_context.terms)
+                terms = aux_context.terms
+                for term in aux_context.terms.keys():
+                    if terms[term].text.startswith("Local"):
+                        terms.pop(term)
+                context.update(terms)
 
         return context
 
@@ -224,12 +227,12 @@ class ProofFile(CoqFile):
                 simply used to check the Coq version in use. Defaults to "coqtop".
         """
         super().__init__(file_path, library, timeout, workspace, coq_lsp, coqtop)
-        self.__aux_file = _AuxFile(timeout=self.timeout)
+        self.__aux_file = _AuxFile(file_path, timeout=self.timeout, workspace=workspace)
         self.__aux_file.didOpen()
 
         try:
             # We need to update the context already defined in the CoqFile
-            self.context.update(_AuxFile.get_context(self.path, self.timeout).terms)
+            self.context.update(_AuxFile.get_context(self.path, self.timeout, workspace=workspace).terms)
         except Exception as e:
             self.close()
             raise e

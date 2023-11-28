@@ -1,5 +1,6 @@
 import os
 import hashlib
+import tempfile
 import shutil
 import uuid
 from typing import Optional, Tuple, List, Dict
@@ -121,7 +122,9 @@ class _AuxFile(object):
     def truncate(self, text):
         text = text.encode("utf-8")
         with open(self.path, "rb+") as f:
-            f.seek(-len(text), os.SEEK_END)
+            # We find the last occurrence of text and truncate everything after it
+            file_content = f.read()
+            f.seek(-(len(file_content) - file_content.rfind(text)), os.SEEK_END)
             f.truncate()
 
     def didOpen(self):
@@ -150,49 +153,62 @@ class _AuxFile(object):
         os.remove(self.path)
 
     @staticmethod
-    def get_context(file_path: str, timeout: int, workspace: str = None):
-        with _AuxFile(file_path=file_path, workspace=workspace, timeout=timeout, copy=True) as aux_file:
-            aux_file.append("\nPrint Libraries.")
-            aux_file.didOpen()
+    def get_library(library_name: str, library_file: str, timeout: int) -> Dict[str, Term]:
+        with open(library_file, "r") as f:
+            hash = hashlib.md5(f.read().encode("utf-8")).hexdigest()
+        if (library_file, hash) in _AuxFile.__CACHE:
+            aux_context = _AuxFile.__CACHE[(library_file, hash)]
+        else:
+            coq_file = CoqFile(library_file, library=library_name, timeout=timeout)
+            coq_file.run()
+            aux_context = coq_file.context
+            _AuxFile.__CACHE[(library_file, hash)] = aux_context
+            coq_file.close()
 
-            last_line = len(aux_file.read().split("\n")) - 1
-            libraries = aux_file.get_diagnostics("Print Libraries", "", last_line)
-            libraries = list(
-                map(lambda line: line.strip(), libraries.split("\n")[1:-1])
-            )
+        # FIXME: we ignore the usage of "Local" from imported files to
+        # simplify the implementation. However, they can be used:
+        # https://coq.inria.fr/refman/language/core/modules.html?highlight=local#coq:attr.local
+        # NOTE: We handle "Local" separately from section-local keywords
+        # due to the aforementioned reason. The handling should be different
+        # for both types of keywords.
+        terms = aux_context.terms
+        for term in aux_context.terms.keys():
+            if terms[term].text.startswith("Local"):
+                terms.pop(term)
+        return terms
+    
+    @staticmethod
+    def get_libraries(aux_file: "_AuxFile") -> List[str]:
+        aux_file.append("\nPrint Libraries.")
+        aux_file.didChange()
+
+        last_line = len(aux_file.read().split("\n")) - 1
+        libraries = aux_file.get_diagnostics("Print Libraries", "", last_line)
+        return list(
+            map(lambda line: line.strip(), libraries.split("\n")[1:-1])
+        )
+
+    @staticmethod
+    def get_coq_context(timeout: int) -> FileContext:
+        temp_path = os.path.join(
+            tempfile.gettempdir(), "aux_" + str(uuid.uuid4()).replace("-", "") + ".v"
+        )
+
+        with _AuxFile(file_path=temp_path, timeout=timeout) as aux_file:
+            aux_file.didOpen()
+            libraries = _AuxFile.get_libraries(aux_file)
             for library in libraries:
                 aux_file.append(f"\nLocate Library {library}.")
             aux_file.didChange()
 
-            context = FileContext(file_path)
+            context = FileContext(temp_path)
             for i, library in enumerate(libraries):
                 v_file = aux_file.get_diagnostics(
-                    "Locate Library", library, last_line + i + 1
+                    "Locate Library", library, i + 2
                 ).split()[-1][:-1]
-
-                with open(v_file, "r") as f:
-                    hash = hashlib.md5(f.read().encode("utf-8")).hexdigest()
-                if (v_file, hash) in _AuxFile.__CACHE:
-                    aux_context = _AuxFile.__CACHE[(v_file, hash)]
-                else:
-                    coq_file = CoqFile(v_file, library=library, timeout=timeout)
-                    coq_file.run()
-                    aux_context = coq_file.context
-                    _AuxFile.__CACHE[(v_file, hash)] = aux_context
-                    coq_file.close()
-
-                # FIXME: we ignore the usage of "Local" from imported files to
-                # simplify the implementation. However, they can be used:
-                # https://coq.inria.fr/refman/language/core/modules.html?highlight=local#coq:attr.local
-                # NOTE: We handle "Local" separately from section-local keywords
-                # due to the aforementioned reason. The handling should be different
-                # for both types of keywords.
-                terms = aux_context.terms
-                for term in aux_context.terms.keys():
-                    if terms[term].text.startswith("Local"):
-                        terms.pop(term)
-                context.update(terms)
-
+                terms = _AuxFile.get_library(library, v_file, timeout)
+                context.add_library(library, terms)
+        
         return context
 
 
@@ -232,7 +248,7 @@ class ProofFile(CoqFile):
 
         try:
             # We need to update the context already defined in the CoqFile
-            self.context.update(_AuxFile.get_context(self.path, self.timeout, workspace=workspace).terms)
+            self.context.update(_AuxFile.get_coq_context(self.timeout))
         except Exception as e:
             self.close()
             raise e
@@ -494,6 +510,25 @@ class ProofFile(CoqFile):
             if in_module_type or self.context.in_module_type:
                 continue
             step(goals)
+
+            libraries = _AuxFile.get_libraries(self.__aux_file)
+            # New libraries
+            new_libraries = set(libraries) - set(self.context.libraries.keys())
+            last_line = len(self.__aux_file.read().split("\n")) - 1
+            for library in new_libraries:
+                self.__aux_file.append(f"\nLocate Library {library}.")
+            self.__aux_file.didChange()
+
+            for i, library in enumerate(new_libraries):
+                library_file = self.__aux_file.get_diagnostics(
+                    "Locate Library", library, last_line + i + 1
+                ).split()[-1][:-1]
+                library_terms = _AuxFile.get_library(library, library_file, self.timeout)
+                self.context.add_library(library, library_terms)
+
+            # Deleted libraries
+            for library in set(self.context.libraries.keys()) - set(libraries):
+                self.context.remove_library(library)
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
         return self.steps[slice[1 - last] : slice[last]]

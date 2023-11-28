@@ -1,7 +1,7 @@
 import re
 import subprocess
 from packaging import version
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Union
 
 from coqpyt.coq.exceptions import NotationNotFoundException
 from coqpyt.coq.structs import SegmentType, SegmentStack, Step, TermType, Term
@@ -15,6 +15,7 @@ class FileContext:
         coqtop: str = "coqtop",
         terms: Optional[Dict[str, Term]] = None,
     ):
+        self.libraries: Dict[str, Dict[str, Term]] = {}
         self.__path = path
         self.__module = [] if module is None else module
         self.__init_coq_version(coqtop)
@@ -428,17 +429,47 @@ class FileContext:
             List: The term type of the step.
         """
         return FileContext.__term_type(self.expr(step))
-
-    def update(self, terms: Dict[str, Term] = {}):
+ 
+    def update(self, context: Union["FileContext", Dict[str, Term]] = {}):
         """Updates the context with new terms.
 
         Args:
             terms (Dict[str, Term]): The new terms to be added.
         """
+        if isinstance(context, FileContext):
+            terms = context.terms
+            for library in context.libraries:
+                self.add_library(library, context.libraries[library])
+        else:
+            terms = context
+
         for name, term in terms.items():
             if name not in self.__terms:
                 self.__terms[name] = []
             self.__terms[name].append(term)
+
+    def add_library(self, name: str, terms: Dict[str, Term]):
+        """Adds a library to the context.
+
+        Args:
+            name (str): The name of the library.
+            terms (List[Term]): The terms defined by the library.
+        """
+        self.libraries[name] = terms
+        self.update(terms)
+
+    def remove_library(self, name: str):
+        """Removes a library from the context.
+
+        Args:
+            name (str): The name of the library.
+        """
+        if name in self.libraries:
+            for term_name, term in self.libraries[name].items():
+                self.__remove_term(term_name, term)
+            del self.libraries[name]
+        else:
+            raise RuntimeError(f"Library {name} not found.")
 
     def append_module_prefix(self, name: str) -> str:
         """Attaches the current module path to the start of a name.

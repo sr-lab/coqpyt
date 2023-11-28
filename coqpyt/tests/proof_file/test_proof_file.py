@@ -40,17 +40,18 @@ class TestProofImports(SetupProofFile):
     def test_exec(self):
         # Rollback whole file
         self.proof_file.exec(-len(self.proof_file.steps))
+        # mult_0_plus is not defined because the import of test_import2 is not executed
+        assert "mult_0_plus" not in self.proof_file.context.terms
+
+        self.proof_file.exec(2)
         assert "mult_0_plus" in self.proof_file.context.terms
         # definition of test_import2
         assert self.proof_file.context.get_term("mult_0_plus").text == "Definition mult_0_plus : forall n m : nat, 0 + 0 + (S n * m) = S n * m."
 
-        self.proof_file.exec(11)
+        self.proof_file.exec(9)
         assert "mult_0_plus" in self.proof_file.context.terms
         # definition of test_import
         assert self.proof_file.context.get_term("mult_0_plus").text == "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
-
-        # FIXME: We still need to support going back and forward in the
-        # imports
 
 
 class TestProofNonEndingProof(SetupProofFile):

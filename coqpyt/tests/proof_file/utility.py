@@ -16,21 +16,28 @@ from coqpyt.coq.lsp.structs import *
 class SetupProofFile(ABC):
     def setup(self, file_path, workspace=None):
         if workspace is not None:
-            self.workspace = os.path.join(tempfile.gettempdir(), "test" + str(uuid.uuid4()).replace("-", ""))
+            self.workspace = os.path.join(
+                tempfile.gettempdir(), "test" + str(uuid.uuid4()).replace("-", "")
+            )
             shutil.copytree(os.path.join("tests/resources", workspace), self.workspace)
-            run = subprocess.run(f"cd {self.workspace} && make", shell=True, capture_output=True)
+            run = subprocess.run(
+                f"cd {self.workspace} && make", shell=True, capture_output=True
+            )
             assert run.returncode == 0
             self.file_path = os.path.join(self.workspace, os.path.basename(file_path))
         else:
             self.workspace = None
             new_path = os.path.join(
-                tempfile.gettempdir(), "test" + str(uuid.uuid4()).replace("-", "") + ".v"
+                tempfile.gettempdir(),
+                "test" + str(uuid.uuid4()).replace("-", "") + ".v",
             )
             shutil.copyfile(os.path.join("tests/resources", file_path), new_path)
             self.file_path = new_path
 
         uri = "file://" + self.file_path
-        self.proof_file = ProofFile(self.file_path, timeout=60, workspace=self.workspace)
+        self.proof_file = ProofFile(
+            self.file_path, timeout=60, workspace=self.workspace
+        )
         self.proof_file.run()
         self.versionId = VersionedTextDocumentIdentifier(uri, 1)
 

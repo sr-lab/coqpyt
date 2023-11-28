@@ -27,7 +27,13 @@ _ProofTerm: Tuple[Term, List[Term], List[ProofStep], Optional[Term]]
 class _AuxFile(object):
     __CACHE: Dict[Tuple[str, str], FileContext] = {}
 
-    def __init__(self, file_path, copy: bool = False, workspace: Optional[str] = None, timeout: int = 30):
+    def __init__(
+        self,
+        file_path,
+        copy: bool = False,
+        workspace: Optional[str] = None,
+        timeout: int = 30,
+    ):
         self.__copy = copy
         self.__init_path(file_path)
         if workspace is not None:
@@ -44,7 +50,8 @@ class _AuxFile(object):
 
     def __init_path(self, file_path):
         new_path = os.path.join(
-            os.path.dirname(file_path), "coqpyt_aux_" + str(uuid.uuid4()).replace("-", "") + ".v"
+            os.path.dirname(file_path),
+            "coqpyt_aux_" + str(uuid.uuid4()).replace("-", "") + ".v",
         )
         with open(new_path, "w"):
             # Create empty file
@@ -153,7 +160,9 @@ class _AuxFile(object):
         os.remove(self.path)
 
     @staticmethod
-    def get_library(library_name: str, library_file: str, timeout: int) -> Dict[str, Term]:
+    def get_library(
+        library_name: str, library_file: str, timeout: int
+    ) -> Dict[str, Term]:
         with open(library_file, "r") as f:
             hash = hashlib.md5(f.read().encode("utf-8")).hexdigest()
         if (library_file, hash) in _AuxFile.__CACHE:
@@ -176,7 +185,7 @@ class _AuxFile(object):
             if terms[term].text.startswith("Local"):
                 terms.pop(term)
         return terms
-    
+
     @staticmethod
     def get_libraries(aux_file: "_AuxFile") -> List[str]:
         aux_file.append("\nPrint Libraries.")
@@ -185,9 +194,7 @@ class _AuxFile(object):
         last_line = len(aux_file.read().split("\n")) - 1
         libraries = aux_file.get_diagnostics("Print Libraries", "", last_line)
         aux_file.truncate("\nPrint Libraries.")
-        return list(
-            map(lambda line: line.strip(), libraries.split("\n")[1:-1])
-        )
+        return list(map(lambda line: line.strip(), libraries.split("\n")[1:-1]))
 
     @staticmethod
     def get_coq_context(timeout: int) -> FileContext:
@@ -209,7 +216,7 @@ class _AuxFile(object):
                 ).split()[-1][:-1]
                 terms = _AuxFile.get_library(library, v_file, timeout)
                 context.add_library(library, terms)
-        
+
         return context
 
 
@@ -463,7 +470,7 @@ class ProofFile(CoqFile):
         # The goals will be loaded if used (Lazy Loading)
         goals = self._goals
         return ProofStep(self.steps[step_index], goals, context)
-    
+
     def __update_libraries(self):
         libraries = _AuxFile.get_libraries(self.__aux_file)
         # New libraries
@@ -535,8 +542,15 @@ class ProofFile(CoqFile):
                 continue
             step(goals)
 
-            if ((sign == 1 and self.context.expr(self.prev_step)[0] in ["VernacRequire", "VernacImport"]) 
-                    or (sign == -1 and self.context.expr(self.curr_step)[0] in ["VernacRequire", "VernacImport"])):
+            if (
+                sign == 1
+                and self.context.expr(self.prev_step)[0]
+                in ["VernacRequire", "VernacImport"]
+            ) or (
+                sign == -1
+                and self.context.expr(self.curr_step)[0]
+                in ["VernacRequire", "VernacImport"]
+            ):
                 self.__update_libraries()
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)

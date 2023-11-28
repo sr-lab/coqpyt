@@ -59,9 +59,9 @@ class FileContext:
                 # NOTE: We update the last term so as to obtain proofs even for
                 # section-local terms. This is safe, because the attribute is
                 # meant to be overwritten every time a new term is found.
-                self.__last_terms[-1].append(("", Term(
-                    step, term_type, self.__path, self.__segments.modules[:]
-                )))
+                self.__last_terms[-1].append(
+                    ("", Term(step, term_type, self.__path, self.__segments.modules[:]))
+                )
                 return
 
         if expr[0] == "VernacExtend" and expr[1][0] == "VernacTacticNotation":
@@ -95,9 +95,9 @@ class FileContext:
                 prop = FileContext.get_ident(expr[2][2])
                 self.__add_term(prop, step, term_type)
         elif term_type == TermType.OBLIGATION:
-            self.__last_terms[-1].append(("", Term(
-                step, term_type, self.__path, self.__segments.modules[:]
-            )))
+            self.__last_terms[-1].append(
+                ("", Term(step, term_type, self.__path, self.__segments.modules[:]))
+            )
         else:
             names = FileContext.__get_names(expr)
             for name in names:
@@ -136,7 +136,7 @@ class FileContext:
         if term.type == TermType.NOTATION:
             check_and_remove_term(name, term)
             return
-        
+
         modules = self.__segments.modules[:]
         check_and_remove_term(".".join(modules + [name]), term)
 
@@ -311,7 +311,7 @@ class FileContext:
         return list(
             filter(lambda term: term.file_path == self.__path, self.terms.values())
         )
-    
+
     @property
     def terms(self) -> Dict[str, Term]:
         """
@@ -330,7 +330,7 @@ class FileContext:
             bool: True if currently inside a module type.
         """
         return len(self.__segments.module_types) > 0
-    
+
     @property
     def last_term(self) -> Optional[Term]:
         """
@@ -341,7 +341,7 @@ class FileContext:
             if len(terms) > 0:
                 return terms[-1][1]
         return None
-    
+
     @property
     def curr_modules(self) -> List[str]:
         """
@@ -349,7 +349,7 @@ class FileContext:
             List[str]: The current module path.
         """
         return self.__segments.modules[:]
-    
+
     def process_step(self, step: Step):
         """Extracts the identifiers from a step and updates the context with
         new terms defined by the step.
@@ -398,7 +398,7 @@ class FileContext:
             self.__segments.pop()
         elif expr[0] == "VernacBeginSection":
             self.__segments.pop()
-        
+
         for name, term in terms:
             self.__remove_term(name, term)
 
@@ -429,7 +429,7 @@ class FileContext:
             List: The term type of the step.
         """
         return FileContext.__term_type(self.expr(step))
- 
+
     def update(self, context: Union["FileContext", Dict[str, Term]] = {}):
         """Updates the context with new terms.
 

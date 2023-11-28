@@ -462,6 +462,29 @@ class ProofFile(CoqFile):
         # The goals will be loaded if used (Lazy Loading)
         goals = self._goals
         return ProofStep(self.steps[step_index], goals, context)
+    
+    def __update_libraries(self):
+        libraries = _AuxFile.get_libraries(self.__aux_file)
+        # New libraries
+        new_libraries = set(libraries) - set(self.context.libraries.keys())
+        last_line = len(self.__aux_file.read().split("\n")) - 1
+        for library in new_libraries:
+            self.__aux_file.append(f"\nLocate Library {library}.")
+
+        # The didChange is expensive so we only do it if needed
+        if len(new_libraries) > 0:
+            self.__aux_file.didChange()
+
+        for i, library in enumerate(new_libraries):
+            library_file = self.__aux_file.get_diagnostics(
+                "Locate Library", library, last_line + i + 1
+            ).split()[-1][:-1]
+            library_terms = _AuxFile.get_library(library, library_file, self.timeout)
+            self.context.add_library(library, library_terms)
+
+        # Deleted libraries
+        for library in set(self.context.libraries.keys()) - set(libraries):
+            self.context.remove_library(library)
 
     @property
     def proofs(self) -> List[ProofTerm]:
@@ -511,24 +534,8 @@ class ProofFile(CoqFile):
                 continue
             step(goals)
 
-            libraries = _AuxFile.get_libraries(self.__aux_file)
-            # New libraries
-            new_libraries = set(libraries) - set(self.context.libraries.keys())
-            last_line = len(self.__aux_file.read().split("\n")) - 1
-            for library in new_libraries:
-                self.__aux_file.append(f"\nLocate Library {library}.")
-            self.__aux_file.didChange()
-
-            for i, library in enumerate(new_libraries):
-                library_file = self.__aux_file.get_diagnostics(
-                    "Locate Library", library, last_line + i + 1
-                ).split()[-1][:-1]
-                library_terms = _AuxFile.get_library(library, library_file, self.timeout)
-                self.context.add_library(library, library_terms)
-
-            # Deleted libraries
-            for library in set(self.context.libraries.keys()) - set(libraries):
-                self.context.remove_library(library)
+            if self.context.expr(self.prev_step)[0] in ["VernacRequire", "VernacImport"]:
+                self.__update_libraries()
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
         return self.steps[slice[1 - last] : slice[last]]

@@ -69,6 +69,8 @@ def test_delete_step():
         with open(new_file_path, "r") as f:
             assert "Print plus." not in f.read()
 
+        # Test if mult_0_plus is removed
+        # It also tests if deletion with invalid intermediate states works
         coq_file.run()
         assert "mult_0_plus" in coq_file.context.terms
         coq_file.change_steps([
@@ -110,6 +112,18 @@ def test_add_step():
         coq_file.add_step(0, "\nDefinition x := 0.")
         assert "x" in coq_file.context.terms
         assert coq_file.context.get_term("x").text == "Definition x := 0."
+
+        coq_file.change_steps([
+            CoqAddStep(" Defined.", 15),
+            CoqAddStep("\n  reflexivity.", 15),
+            CoqAddStep("\n  rewrite -> (plus_O_n (S n * m)).", 15),
+            # Checks if there aren't problems with intermediate states
+            # (e.g. the ranges of the AST are updated incorrectly)
+            CoqDeleteStep(16),
+            CoqAddStep("\n  intros n m.", 15),
+            CoqAddStep("\nProof.", 15),
+            CoqAddStep("\nDefinition change_steps :  ∀ n m : nat,\n 0 + (S n * m) = S n * m.", 15),
+        ])
     finally:
         coq_file.close()
         if os.path.exists(new_file_path):

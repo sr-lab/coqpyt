@@ -13,7 +13,7 @@ from coqpyt.lsp.structs import (
     ErrorCodes,
     Diagnostic,
 )
-from coqpyt.coq.lsp.structs import Position, GoalAnswer, RangedSpan
+from coqpyt.coq.lsp.structs import Position, GoalAnswer, RangedSpan, Range
 from coqpyt.coq.lsp.client import CoqLspClient
 from coqpyt.coq.exceptions import *
 from coqpyt.coq.changes import *
@@ -255,6 +255,100 @@ class CoqFile(object):
             with open(self.path, "w") as f:
                 f.write(old_text)
             raise e
+        
+    def __delete_step_text(self, step_index: int):
+        with open(self.__path, "r") as f:
+            lines = f.readlines()
+
+        deleted_step = self.steps[step_index]
+        step = deleted_step
+        prev_step = self.steps[step_index - 1]
+        start_line = lines[prev_step.ast.range.end.line]
+        end_line = lines[step.ast.range.end.line]
+
+        start_line = start_line[: prev_step.ast.range.end.character]
+        end_line = end_line[step.ast.range.end.character :]
+
+        if prev_step.ast.range.end.line == step.ast.range.end.line:
+            lines[prev_step.ast.range.end.line] = start_line + end_line
+        else:
+            lines[prev_step.ast.range.end.line] = start_line
+            lines[step.ast.range.end.line] = end_line
+
+        # Delete lines between first and last line
+        for i in range(prev_step.ast.range.end.line + 1, step.ast.range.end.line):
+            del lines[i]
+        text = "".join(lines)
+
+        with open(self.__path, "w") as f:
+            f.write(text)
+
+    def __add_step_text(self, previous_step_index: int, step_text: str):
+        with open(self.__path, "r") as f:
+            lines = f.readlines()
+
+        previous_step = self.steps[previous_step_index]
+        end_line = lines[previous_step.ast.range.end.line]
+        end_line = end_line[: previous_step.ast.range.end.character] + step_text + end_line[previous_step.ast.range.end.character :]
+        lines[previous_step.ast.range.end.line] = end_line
+
+        text = "".join(lines)
+
+        with open(self.__path, "w") as f:
+            f.write(text)
+
+    def __delete_update_ast(self, step_index: int):
+        deleted_step = self.steps[step_index]
+        for step in self.steps[step_index + 1 :]:
+            remove_chars = deleted_step.ast.range.end.character
+            if deleted_step.ast.range.end.line == deleted_step.ast.range.start.line:
+                remove_chars -= deleted_step.ast.range.start.character
+
+            if step.ast.range.start.line == deleted_step.ast.range.end.line:
+                step.ast.range.start.character -= remove_chars
+            if step.ast.range.end.line == deleted_step.ast.range.end.line:
+                step.ast.range.end.character -= remove_chars
+
+            step.ast.range.start.line -= deleted_step.text.count("\n")
+            step.ast.range.end.line -= deleted_step.text.count("\n")
+
+    def __add_update_ast(self, previous_step_index: int, step_text: str) -> Step:
+        previous_step = self.steps[previous_step_index]
+
+        newline_start = len(step_text) - len(step_text.lstrip("\n"))
+        if newline_start > 0:
+            start_line = previous_step.ast.range.end.line + newline_start
+            start_char = 0
+        else:
+            start_line = previous_step.ast.range.end.line
+            start_char = previous_step.ast.range.end.character + len(step_text) - len(step_text.lstrip())
+
+        end_line = start_line + step_text.count("\n")
+        if start_line == end_line:
+            end_char = start_char + len(step_text.split("\n")[-1])
+        else:
+            end_char = len(step_text.split("\n")[-1])
+
+        # We will create a placeholder step that will be replaced later
+        added_step = Step(step_text, step_text, RangedSpan(Range(
+            Position(start_line, start_char),
+            Position(start_line, end_char)
+        ),None))
+
+        for i, step in enumerate(self.steps[previous_step_index + 1 :]):
+            add_chars = added_step.ast.range.end.character
+            if added_step.ast.range.start.line == added_step.ast.range.start.line:
+                add_chars -= added_step.ast.range.start.character
+
+            step.ast.range.start.line += step_text.count("\n")
+            step.ast.range.end.line += step_text.count("\n")
+
+            if step.ast.range.start.line == added_step.ast.range.end.line:
+                step.ast.range.start.character += add_chars
+            if step.ast.range.end.line == added_step.ast.range.end.line:
+                step.ast.range.end.character += add_chars
+
+        return added_step
 
     def _delete_step(
         self,
@@ -262,52 +356,13 @@ class CoqFile(object):
         validate_file: bool = True,
     ) -> None:
         # FIXME remove calls to in_proof in delete_step and add_step
-        with open(self.__path, "r") as f:
-            lines = f.readlines()
-
-        deleted_step = self.steps[step_index]
-
-        with open(self.path, "w") as f:
-            step = deleted_step
-            prev_step = self.steps[step_index - 1]
-            start_line = lines[prev_step.ast.range.end.line]
-            end_line = lines[step.ast.range.end.line]
-
-            start_line = start_line[: prev_step.ast.range.end.character]
-            end_line = end_line[step.ast.range.end.character :]
-
-            if prev_step.ast.range.end.line == step.ast.range.end.line:
-                lines[prev_step.ast.range.end.line] = start_line + end_line
-            else:
-                lines[prev_step.ast.range.end.line] = start_line
-                lines[step.ast.range.end.line] = end_line
-
-            # Delete lines between first and last line
-            for i in range(prev_step.ast.range.end.line + 1, step.ast.range.end.line):
-                del lines[i]
-            text = "".join(lines)
-            f.write(text)
+        self.__delete_step_text(step_index)
 
         # Modify the previous steps instead of creating new ones
         # This is important to preserve their references
         # For instance, in the ProofFile
         previous_steps = self.steps
-
-        if validate_file:
-            self.__update_steps()
-        else:
-            for step in previous_steps[step_index + 1 :]:
-                remove_chars = deleted_step.ast.range.end.character
-                if deleted_step.ast.range.end.line == deleted_step.ast.range.start.line:
-                    remove_chars -= deleted_step.ast.range.start.character
-
-                if step.ast.range.start.line == deleted_step.ast.range.end.line:
-                    step.ast.range.start.character -= remove_chars
-                if step.ast.range.end.line == deleted_step.ast.range.end.line:
-                    step.ast.range.end.character -= remove_chars
-
-                step.ast.range.start.line -= deleted_step.text.count("\n")
-                step.ast.range.end.line -= deleted_step.text.count("\n")
+        self.__update_steps()
 
         if validate_file and (
             # We will remove the step from the previous steps
@@ -316,7 +371,7 @@ class CoqFile(object):
         ):
             raise InvalidDeleteException(self.steps[step_index].text)
 
-        previous_steps.pop(step_index)
+        deleted_step = previous_steps.pop(step_index)
         for i, step in enumerate(previous_steps):
             step.text, step.ast = self.steps[i].text, self.steps[i].ast
             step.diagnostics = self.steps[i].diagnostics
@@ -339,25 +394,16 @@ class CoqFile(object):
         if validate_file and not self.is_valid:
             raise InvalidFileException(self.path)
 
-        with open(self.__path, "r") as f:
-            lines = f.read().split("\n")
-
-        with open(self.path, "w") as f:
-            previous_step = self.steps[previous_step_index]
-            end_line = previous_step.ast.range.end.line
-            end_char = previous_step.ast.range.end.character
-            lines[end_line] = (
-                lines[end_line][:end_char] + step_text + lines[end_line][end_char + 1 :]
-            )
-            text = "\n".join(lines)
-            f.write(text)
+        self.__add_step_text(previous_step_index, step_text)
 
         # Modify the previous steps instead of creating new ones
         # This is important to preserve their references
         # For instance, in the ProofFile
         previous_steps = self.steps
         step_index = previous_step_index + 1
+
         self.__update_steps()
+
         if validate_file and (
             # We will add the new step to the previous_steps
             len(self.steps) != len(previous_steps) + 1
@@ -381,24 +427,37 @@ class CoqFile(object):
 
     def _change_steps(self, changes: List[CoqChange]):
         offset_steps = 0
+        previous_steps = self.steps
         previous_steps_size = len(self.steps)
+        previous_steps_taken = self.steps_taken
 
         for _, change in enumerate(changes):
             if isinstance(change, CoqAddStep):
-                self._add_step(
-                    change.previous_step_index,
-                    change.step_text,
-                    validate_file=False,
-                )
+                self.__add_step_text(change.previous_step_index, change.step_text)
+                step = self.__add_update_ast(change.previous_step_index, change.step_text)
+                self.steps.insert(change.previous_step_index + 1, step)
                 offset_steps += 1
             elif isinstance(change, CoqDeleteStep):
-                self._delete_step(change.step_index, validate_file=False)
+                self.__delete_step_text(change.step_index)
+                self.__delete_update_ast(change.step_index)
+                self.steps.pop(change.step_index)
                 offset_steps -= 1
             else:
                 raise NotImplementedError(f"Unknown change: {change}")
 
+        self.__update_steps()
         if len(self.steps) != previous_steps_size + offset_steps or not self.is_valid:
             raise InvalidChangeException()
+
+        for i, step in enumerate(previous_steps):
+            step.text, step.ast = self.steps[i].text, self.steps[i].ast
+            # FIXME short text
+            step.diagnostics = self.steps[i].diagnostics
+        self.steps = previous_steps
+
+        self.context.reset()
+        self.steps_taken = 0
+        self.exec(previous_steps_taken + offset_steps)
 
     @property
     def curr_step(self):

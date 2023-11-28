@@ -259,21 +259,16 @@ class CoqFile(object):
     def _delete_step(
         self,
         step_index: int,
-        in_proof: bool = False,
         validate_file: bool = True,
     ) -> None:
-        if not in_proof and not self.__in_proof(
-            self._goals(self.steps[step_index - 1].ast.range.end)
-        ):
-            raise NotImplementedError(
-                "Deleting steps outside of a proof is not implemented yet"
-            )
-
+        # FIXME remove calls to in_proof in delete_step and add_step
         with open(self.__path, "r") as f:
             lines = f.readlines()
 
+        deleted_step = self.steps[step_index]
+
         with open(self.path, "w") as f:
-            step = self.steps[step_index]
+            step = deleted_step
             prev_step = self.steps[step_index - 1]
             start_line = lines[prev_step.ast.range.end.line]
             end_line = lines[step.ast.range.end.line]
@@ -286,6 +281,10 @@ class CoqFile(object):
             else:
                 lines[prev_step.ast.range.end.line] = start_line
                 lines[step.ast.range.end.line] = end_line
+
+            # Delete lines between first and last line
+            for i in range(prev_step.ast.range.end.line + 1, step.ast.range.end.line):
+                del lines[i]
             text = "".join(lines)
             f.write(text)
 
@@ -293,7 +292,23 @@ class CoqFile(object):
         # This is important to preserve their references
         # For instance, in the ProofFile
         previous_steps = self.steps
-        self.__update_steps()
+
+        if validate_file:
+            self.__update_steps()
+        else:
+            for step in previous_steps[step_index + 1 :]:
+                remove_chars = deleted_step.ast.range.end.character
+                if deleted_step.ast.range.end.line == deleted_step.ast.range.start.line:
+                    remove_chars -= deleted_step.ast.range.start.character
+
+                if step.ast.range.start.line == deleted_step.ast.range.end.line:
+                    step.ast.range.start.character -= remove_chars
+                if step.ast.range.end.line == deleted_step.ast.range.end.line:
+                    step.ast.range.end.character -= remove_chars
+
+                step.ast.range.start.line -= deleted_step.text.count("\n")
+                step.ast.range.end.line -= deleted_step.text.count("\n")
+
         if validate_file and (
             # We will remove the step from the previous steps
             len(self.steps) != len(previous_steps) - 1
@@ -307,22 +322,22 @@ class CoqFile(object):
             step.diagnostics = self.steps[i].diagnostics
         self.steps = previous_steps
 
+        if self.steps_taken > step_index:
+            self.steps_taken -= 1
+            n_steps = step_index - self.steps_taken
+            self.exec(n_steps)
+            self.context.undo_step(deleted_step)
+            self.exec(-n_steps)
+
     def _add_step(
         self,
         previous_step_index: int,
         step_text: str,
-        in_proof: bool = False,
         validate_file: bool = True,
     ) -> None:
+        # FIXME suffers from same problem when adding incorrect steps
         if validate_file and not self.is_valid:
             raise InvalidFileException(self.path)
-
-        if not in_proof and not self.__in_proof(
-            self._goals(self.steps[previous_step_index].ast.range.end)
-        ):
-            raise NotImplementedError(
-                "Deleting steps outside of a proof is not implemented yet"
-            )
 
         with open(self.__path, "r") as f:
             lines = f.read().split("\n")
@@ -359,12 +374,16 @@ class CoqFile(object):
 
         if self.steps_taken - 1 > previous_step_index:
             self.steps_taken += 1
+            n_steps = step_index - self.steps_taken
+            self.exec(n_steps)
+            self.context.process_step(self.steps[step_index])
+            self.exec(-n_steps)
 
     def _change_steps(self, changes: List[CoqChange]):
         offset_steps = 0
         previous_steps_size = len(self.steps)
 
-        for i, change in enumerate(changes):
+        for _, change in enumerate(changes):
             if isinstance(change, CoqAddStep):
                 self._add_step(
                     change.previous_step_index,

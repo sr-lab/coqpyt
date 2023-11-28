@@ -56,14 +56,31 @@ def test_delete_step():
     assert coq_file.steps[8].ast.range.start.line == 12
 
     try:
+        steps = coq_file.exec(nsteps=10)
+        assert steps[-1].text == "\n      reduce_eq."
+
         coq_file.delete_step(7)
         assert coq_file.steps[7].text == "\n      Print Nat.add."
         assert coq_file.steps[7].ast.range.start.line == 11
+
+        steps = coq_file.exec(nsteps=1)
+        assert steps[-1].text == "\n    Qed."
+
         with open(new_file_path, "r") as f:
             assert "Print plus." not in f.read()
 
-        with pytest.raises(NotImplementedError):
-            coq_file.delete_step(0)
+        coq_file.run()
+        assert "mult_0_plus" in coq_file.context.terms
+        coq_file.change_steps([
+            CoqDeleteStep(13),
+            CoqDeleteStep(13),
+            CoqDeleteStep(13),
+            CoqDeleteStep(13),
+            CoqDeleteStep(13),
+            CoqDeleteStep(13),
+            CoqDeleteStep(13),
+        ])
+        assert "mult_0_plus" not in coq_file.context.terms
     finally:
         coq_file.close()
         if os.path.exists(new_file_path):
@@ -90,8 +107,9 @@ def test_add_step():
         assert steps[-1].text == "\n      Print Nat.add."
         assert steps[-1].ast.range.start.line == 14
 
-        with pytest.raises(NotImplementedError):
-            coq_file.add_step(0, "\n      Print minus.")
+        coq_file.add_step(0, "\nDefinition x := 0.")
+        assert "x" in coq_file.context.terms
+        assert coq_file.context.get_term("x").text == "Definition x := 0."
     finally:
         coq_file.close()
         if os.path.exists(new_file_path):

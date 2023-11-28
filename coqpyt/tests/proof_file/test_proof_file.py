@@ -22,8 +22,13 @@ class TestProofValidFile(SetupProofFile):
         assert self.proof_file.context.get_term("plus_O_n").module == []
         assert self.proof_file.context.curr_modules == []
 
-        steps = self.proof_file.exec(7)
-        assert len(steps) == 7
+        # Check if roll back works for imports
+        assert "∀ x .. y , P : type_scope" not in self.proof_file.context.terms
+        self.proof_file.exec(1)
+        assert "∀ x .. y , P : type_scope" in self.proof_file.context.terms
+
+        steps = self.proof_file.exec(6)
+        assert len(steps) == 6
         assert steps[-1].text == "\n      intros n."
         assert self.proof_file.context.curr_modules == ["Out", "In"]
         assert "plus_O_n" in self.proof_file.context.terms

@@ -184,6 +184,7 @@ class _AuxFile(object):
 
         last_line = len(aux_file.read().split("\n")) - 1
         libraries = aux_file.get_diagnostics("Print Libraries", "", last_line)
+        aux_file.truncate("\nPrint Libraries.")
         return list(
             map(lambda line: line.strip(), libraries.split("\n")[1:-1])
         )
@@ -204,7 +205,7 @@ class _AuxFile(object):
             context = FileContext(temp_path)
             for i, library in enumerate(libraries):
                 v_file = aux_file.get_diagnostics(
-                    "Locate Library", library, i + 2
+                    "Locate Library", library, i + 1
                 ).split()[-1][:-1]
                 terms = _AuxFile.get_library(library, v_file, timeout)
                 context.add_library(library, terms)
@@ -534,7 +535,8 @@ class ProofFile(CoqFile):
                 continue
             step(goals)
 
-            if self.context.expr(self.prev_step)[0] in ["VernacRequire", "VernacImport"]:
+            if ((sign == 1 and self.context.expr(self.prev_step)[0] in ["VernacRequire", "VernacImport"]) 
+                    or (sign == -1 and self.context.expr(self.curr_step)[0] in ["VernacRequire", "VernacImport"])):
                 self.__update_libraries()
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)

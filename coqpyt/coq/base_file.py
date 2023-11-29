@@ -380,9 +380,10 @@ class CoqFile(object):
         if self.steps_taken > step_index:
             self.steps_taken -= 1
             n_steps = step_index - self.steps_taken
-            self.exec(n_steps)
+            # We don't use self to avoid calling method of ProofFile
+            CoqFile.exec(self, n_steps)
             self.context.undo_step(deleted_step)
-            self.exec(-n_steps)
+            CoqFile.exec(self, -n_steps)
 
     def _add_step(
         self,
@@ -421,9 +422,10 @@ class CoqFile(object):
         if self.steps_taken - 1 > previous_step_index:
             self.steps_taken += 1
             n_steps = step_index - self.steps_taken
-            self.exec(n_steps)
+            # We don't use self to avoid calling method of ProofFile
+            CoqFile.exec(self, n_steps)
             self.context.process_step(self.steps[step_index])
-            self.exec(-n_steps)
+            CoqFile.exec(self, -n_steps)
 
     def _change_steps(self, changes: List[CoqChange]):
         offset_steps = 0

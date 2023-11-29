@@ -440,10 +440,12 @@ class ProofFile(CoqFile):
         for proof in self.__open_proofs:
             for i, proof_step in enumerate(proof[2]):
                 if proof_step.ast.range == range:
+                    # FIXME I think this won't work because when we change
+                    # it, it won't change the reference we are saving
                     return (ProofTerm(*proof), i)
         return None
 
-    def __find_prev(self, range: Range) -> Tuple[ProofTerm, Optional[int]]:
+    def __find_prev(self, range: Range) -> Optional[Tuple[ProofTerm, Optional[int]]]:
         optional = self.__find_step(range)
         if optional is not None:
             return optional
@@ -454,11 +456,11 @@ class ProofFile(CoqFile):
                 return (proof, -1)
         for proof in self.__open_proofs:
             if proof[0].ast.range == range:
+                # FIXME I think this won't work because when we change
+                # it, it won't change the reference we are saving
                 return (ProofTerm(*proof), -1)
 
-        raise NotImplementedError(
-            "Adding steps outside of a proof is not implemented yet"
-        )
+        return None
 
     def __get_step(self, step_index):
         self.__aux_file.write("")
@@ -557,35 +559,34 @@ class ProofFile(CoqFile):
         return self.steps[slice[1 - last] : slice[last]]
 
     def add_step(self, previous_step_index: int, step_text: str):
-        proof, prev = self.__find_prev(self.steps[previous_step_index].ast.range)
-        if prev == -1:
-            self._make_change(self._add_step, previous_step_index, step_text)
-        else:
-            self._make_change(self._add_step, previous_step_index, step_text, True)
-        proof.steps.insert(prev + 1, self.__get_step(previous_step_index + 1))
-        # We should change the goals of all the steps in the same proof
-        # after the one that was changed
-        # NOTE: We assume the proofs and steps are in the order they are written
-        for e in range(prev + 2, len(proof.steps)):
-            # The goals will be loaded if used (Lazy Loading)
-            proof.steps[e].goals = self._goals
+        optional = self.__find_prev(self.steps[previous_step_index].ast.range)
+        self._make_change(self._add_step, previous_step_index, step_text)
+
+        if optional is not None:
+            proof, prev = optional
+            proof.steps.insert(prev + 1, self.__get_step(previous_step_index + 1))
+            # We should change the goals of all the steps in the same proof
+            # after the one that was changed
+            # NOTE: We assume the proofs and steps are in the order they are written
+            for e in range(prev + 2, len(proof.steps)):
+                # The goals will be loaded if used (Lazy Loading)
+                proof.steps[e].goals = self._goals
+        # FIXME add new proof
 
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]
         optional = self.__find_step(step.ast.range)
-        if optional is None:
-            raise NotImplementedError(
-                "Deleting steps outside of a proof is not implemented yet"
-            )
+        if optional is not None:
+            proof, i = optional
+            proof.steps.pop(i)
+            for e in range(i, len(proof.steps)):
+                # The goals will be loaded if used (Lazy Loading)
+                proof.steps[e].goals = self._goals
+        self._make_change(self._delete_step, step_index)
 
-        proof, i = optional
-        proof.steps.pop(i)
-        for e in range(i, len(proof.steps)):
-            # The goals will be loaded if used (Lazy Loading)
-            proof.steps[e].goals = self._goals
-        self._make_change(self._delete_step, step_index, True)
-
+    # FIXME
     def change_steps(self, changes: List[CoqChange]):
+        # Use EXEC
         offset_steps = 0
         previous_steps_size = len(self.steps)
 

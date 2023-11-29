@@ -58,17 +58,9 @@ class TestProofValidFile(SetupProofFile):
             step["goals"]["position"]["line"] += 1
         check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
 
-        # Add outside of proof
-        with pytest.raises(NotImplementedError):
-            proof_file.add_step(25, "\n    Print plus.")
-
         # Add step in beginning of proof
         proof_file.add_step(26, "\n    Print plus.")
         assert proof_file.steps[27].text == "\n    Print plus."
-
-        # Delete outside of proof
-        with pytest.raises(NotImplementedError):
-            proof_file.delete_step(33)
 
         # Add step to end of proof
         proof_file.add_step(31, "\n    Print plus.")
@@ -81,6 +73,13 @@ class TestProofValidFile(SetupProofFile):
         # Delete step in end of proof
         proof_file.delete_step(41)
         assert proof_file.steps[41].text == "\n    Admitted."
+
+        # FIXME
+        # Delete outside of proof
+        # proof_file.delete_step(33)
+
+        # Add outside of proof
+        # proof_file.add_step(25, "\n    Print plus.")
 
     def test_invalid_changes(self):
         proof_file = self.proof_file

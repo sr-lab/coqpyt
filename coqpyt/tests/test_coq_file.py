@@ -109,6 +109,7 @@ def test_add_step():
         assert steps[-1].text == "\n      Print Nat.add."
         assert steps[-1].ast.range.start.line == 14
 
+        assert "x" not in coq_file.context.terms
         coq_file.add_step(0, "\nDefinition x := 0.")
         assert "x" in coq_file.context.terms
         assert coq_file.context.get_term("x").text == "Definition x := 0."

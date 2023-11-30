@@ -74,12 +74,17 @@ class TestProofValidFile(SetupProofFile):
         proof_file.delete_step(41)
         assert proof_file.steps[41].text == "\n    Admitted."
 
-        # FIXME
-        # Delete outside of proof
-        # proof_file.delete_step(33)
-
+    def test_delete_and_add_outside_proof(self):
         # Add outside of proof
-        # proof_file.add_step(25, "\n    Print plus.")
+        len_steps = len(self.proof_file.steps)
+        self.proof_file.add_step(1, "\nPrint plus.")
+        assert len_steps + 1 == len(self.proof_file.steps)
+        assert self.proof_file.steps[2].text == "\nPrint plus."
+
+        # Delete outside of proof
+        self.proof_file.delete_step(2)
+        assert len_steps == len(self.proof_file.steps)
+        assert self.proof_file.steps[2].text == "\n\nModule Out."
 
     def test_invalid_changes(self):
         proof_file = self.proof_file
@@ -131,8 +136,7 @@ class TestProofValidFile(SetupProofFile):
             ]
         )
 
-        test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml", 4)
-        test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
+        test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml", 2)
         step = {
             "text": "\n      Print minus.",
             "goals": {
@@ -150,23 +154,25 @@ class TestProofValidFile(SetupProofFile):
                 }
             ],
         }
-        add_step_defaults(step, 4)
+        add_step_defaults(step, 2)
         test_proofs["proofs"][0]["steps"].insert(3, step)
         for step in test_proofs["proofs"][0]["steps"][4:]:
             step["goals"]["position"]["line"] += 1
         check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
 
+        # FIXME
         # Add outside of proof
-        with pytest.raises(NotImplementedError):
-            proof_file.change_steps([CoqAddStep("\n    Print plus.", 25)])
+        # with pytest.raises(NotImplementedError):
+        #     proof_file.change_steps([CoqAddStep("\n    Print plus.", 25)])
 
         # Add step in beginning of proof
         proof_file.change_steps([CoqAddStep("\n    Print plus.", 26)])
         assert proof_file.steps[27].text == "\n    Print plus."
 
+        # FIXME
         # # Delete outside of proof
-        with pytest.raises(NotImplementedError):
-            proof_file.change_steps([CoqDeleteStep(33)])
+        # with pytest.raises(NotImplementedError):
+        #     proof_file.change_steps([CoqDeleteStep(33)])
 
         # # Add step to end of proof
         proof_file.change_steps([CoqAddStep("\n    Print plus.", 31)])

@@ -302,7 +302,7 @@ class CoqFile(object):
         for step in self.steps[step_index + 1 :]:
             remove_chars = deleted_step.ast.range.end.character
             if deleted_step.ast.range.end.line == deleted_step.ast.range.start.line:
-                remove_chars -= deleted_step.ast.range.start.character
+                remove_chars -= deleted_step.ast.range.start.character - 1
 
             if step.ast.range.start.line == deleted_step.ast.range.end.line:
                 step.ast.range.start.character -= remove_chars
@@ -422,27 +422,32 @@ class CoqFile(object):
         if self.steps_taken - 1 > previous_step_index:
             self.steps_taken += 1
             n_steps = step_index - self.steps_taken
-            # We don't use self to avoid calling method of ProofFile
-            CoqFile.exec(self, n_steps)
-            self.context.process_step(self.steps[step_index])
+            CoqFile.exec(self, n_steps + 1)
+            # Ignore step when going back
+            self.steps_taken -= 1
             CoqFile.exec(self, -n_steps)
 
     def _change_steps(self, changes: List[CoqChange]):
+        CoqFile.exec(self, -self.steps_taken)
         offset_steps = 0
+        offset_steps_taken = 0
         previous_steps = self.steps
         previous_steps_size = len(self.steps)
-        previous_steps_taken = self.steps_taken
 
         for _, change in enumerate(changes):
             if isinstance(change, CoqAddStep):
                 self.__add_step_text(change.previous_step_index, change.step_text)
                 step = self.__add_update_ast(change.previous_step_index, change.step_text)
                 self.steps.insert(change.previous_step_index + 1, step)
+                if self.steps_taken > change.previous_step_index + 1:
+                    offset_steps_taken += 1
                 offset_steps += 1
             elif isinstance(change, CoqDeleteStep):
                 self.__delete_step_text(change.step_index)
                 self.__delete_update_ast(change.step_index)
                 self.steps.pop(change.step_index)
+                if self.steps_taken > change.step_index:
+                    offset_steps_taken -= 1
                 offset_steps -= 1
             else:
                 raise NotImplementedError(f"Unknown change: {change}")
@@ -456,10 +461,7 @@ class CoqFile(object):
             # FIXME short text
             step.diagnostics = self.steps[i].diagnostics
         self.steps = previous_steps
-
-        self.context.reset()
-        self.steps_taken = 0
-        self.exec(previous_steps_taken + offset_steps)
+        CoqFile.exec(self, self.steps_taken + offset_steps_taken)
 
     @property
     def curr_step(self):

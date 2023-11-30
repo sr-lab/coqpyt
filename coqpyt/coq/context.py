@@ -128,10 +128,11 @@ class FileContext:
 
     def __remove_term(self, name: str, term: Term):
         def check_and_remove_term(name, term):
+            # FIXME remove this verification
             if name in self.__terms:
                 self.__terms[name].pop()
-            if len(self.__terms[name]) == 0:
-                del self.__terms[name]
+                if len(self.__terms[name]) == 0:
+                    del self.__terms[name]
 
         if term.type == TermType.NOTATION:
             check_and_remove_term(name, term)

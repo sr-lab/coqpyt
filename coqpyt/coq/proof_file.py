@@ -571,7 +571,9 @@ class ProofFile(CoqFile):
             for e in range(prev + 2, len(proof.steps)):
                 # The goals will be loaded if used (Lazy Loading)
                 proof.steps[e].goals = self._goals
-        # FIXME add new proof
+
+        # TODO: Handle adding proofs
+        # FIXME: Update open proof
 
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]
@@ -584,48 +586,13 @@ class ProofFile(CoqFile):
                 proof.steps[e].goals = self._goals
         self._make_change(self._delete_step, step_index)
 
-    # FIXME
+        # TODO: Handle the case where deleting the Qed creates a nested proof
+
     def change_steps(self, changes: List[CoqChange]):
-        # Use EXEC
-        offset_steps = 0
-        previous_steps_size = len(self.steps)
-
-        for change in changes:
-            if isinstance(change, CoqAddStep):
-                proof, i = self.__find_prev(
-                    self.steps[change.previous_step_index].ast.range
-                )
-                self._add_step(
-                    change.previous_step_index,
-                    change.step_text,
-                    in_proof=True,
-                    validate_file=False,
-                )
-                proof.steps.insert(
-                    i + 1, self.__get_step(change.previous_step_index + 1)
-                )
-                i += 2
-                offset_steps += 1
-            elif isinstance(change, CoqDeleteStep):
-                optional = self.__find_step(self.steps[change.step_index].ast.range)
-                if optional is None:
-                    raise NotImplementedError(
-                        "Deleting steps outside of a proof is not implemented yet"
-                    )
-
-                proof, i = optional
-                self._delete_step(change.step_index, in_proof=True, validate_file=False)
-                proof.steps.pop(i)
-                offset_steps -= 1
-            else:
-                raise NotImplementedError(f"Unknown change: {change}")
-
-            for e in range(i, len(proof.steps)):
-                # The goals will be loaded if used (Lazy Loading)
-                proof.steps[e].goals = self._goals
-
-        if len(self.steps) != previous_steps_size + offset_steps or not self.is_valid:
-            raise InvalidChangeException()
+        steps = self.steps_taken
+        self.exec(-steps)
+        super().change_steps(changes)
+        self.exec(steps)
 
     def close(self):
         super().close()

@@ -590,6 +590,7 @@ class ProofFile(CoqFile):
 
     def change_steps(self, changes: List[CoqChange]):
         steps = self.steps_taken
+        # TODO: Improve performance
         self.exec(-steps)
         super().change_steps(changes)
         self.exec(steps)

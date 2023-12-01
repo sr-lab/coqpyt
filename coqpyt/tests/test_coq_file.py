@@ -80,30 +80,31 @@ def test_add_step(setup, teardown):
 
     steps = coq_file.exec(nsteps=8)
     assert steps[-1].text == "\n      Print plus."
+    steps_taken = coq_file.steps_taken
+
     coq_file.add_step(7, "\n      Print minus.")
+    assert coq_file.steps_taken == steps_taken
     steps = coq_file.exec(nsteps=1)
+    steps_taken = coq_file.steps_taken
     assert steps[-1].text == "\n      Print minus."
+
     coq_file.add_step(6, "\n      Print minus.")
+    assert coq_file.steps_taken == steps_taken + 1
     steps = coq_file.exec(nsteps=1)
     assert steps[-1].text == "\n      Print Nat.add."
     assert steps[-1].ast.range.start.line == 14
+
+
+@pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
+def test_add_definition(setup, teardown):
+    coq_file.exec(5)
+    steps_taken = coq_file.steps_taken
 
     assert "x" not in coq_file.context.terms
     coq_file.add_step(0, "\nDefinition x := 0.")
     assert "x" in coq_file.context.terms
     assert coq_file.context.get_term("x").text == "Definition x := 0."
-
-    coq_file.change_steps([
-        CoqAddStep(" Defined.", 15),
-        CoqAddStep("\n  reflexivity.", 15),
-        CoqAddStep("\n  rewrite -> (plus_O_n (S n * m)).", 15),
-        # Checks if there aren't problems with intermediate states
-        # (e.g. the ranges of the AST are updated incorrectly)
-        CoqDeleteStep(16),
-        CoqAddStep("\n  intros n m.", 15),
-        CoqAddStep("\nProof.", 15),
-        CoqAddStep("\nDefinition change_steps :  ∀ n m : nat,\n 0 + (S n * m) = S n * m.", 15),
-    ])
+    assert coq_file.steps_taken == steps_taken + 1
 
 
 @pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
@@ -134,6 +135,28 @@ def test_change_steps(setup, teardown):
                 CoqDeleteStep(11),  # delete reduce_eq
             ]
         )
+
+
+@pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
+def test_add_proof(setup, teardown):
+    coq_file.run()
+    steps_taken = coq_file.steps_taken
+    assert "change_steps" not in coq_file.context.terms
+
+    coq_file.change_steps([
+        CoqAddStep(" Defined.", 12),
+        CoqAddStep("\n  reflexivity.", 12),
+        CoqAddStep("\n  rewrite -> (plus_O_n (S n * m)).", 12),
+        # Checks if there aren't problems with intermediate states
+        # (e.g. the ranges of the AST are updated incorrectly)
+        CoqDeleteStep(13),
+        CoqAddStep("\n  intros n m.", 12),
+        CoqAddStep("\nProof.", 12),
+        CoqAddStep("\nDefinition change_steps :  ∀ n m : nat,\n 0 + (S n * m) = S n * m.", 12),
+    ])
+
+    assert "change_steps" in coq_file.context.terms
+    assert coq_file.steps_taken == steps_taken + 5
 
 
 @pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)

@@ -211,7 +211,7 @@ class CoqFile(object):
             and goals.bullet is None
         )
 
-    def __in_proof(self, goals: Optional[GoalAnswer]):
+    def _in_proof(self, goals: Optional[GoalAnswer]):
         return goals is not None and goals.goals is not None
 
     def __update_steps(self):
@@ -419,7 +419,7 @@ class CoqFile(object):
             step.diagnostics = self.steps[i].diagnostics
         self.steps = previous_steps
 
-        if self.steps_taken - 1 > previous_step_index:
+        if self.steps_taken > previous_step_index + 1:
             self.steps_taken += 1
             n_steps = step_index - self.steps_taken
             CoqFile.exec(self, n_steps + 1)
@@ -433,7 +433,7 @@ class CoqFile(object):
 
         for change in changes:
             if isinstance(change, CoqAddStep):
-                if change.previous_step_index < steps_taken:
+                if change.previous_step_index + 1 < steps_taken:
                     offset += 1
                     steps_taken += 1
             elif isinstance(change, CoqDeleteStep):
@@ -531,7 +531,7 @@ class CoqFile(object):
         Returns:
             bool: True if the current step is inside a proof.
         """
-        return self.__in_proof(self.current_goals)
+        return self._in_proof(self.current_goals)
 
     @property
     def can_close_proof(self):

@@ -160,11 +160,6 @@ class TestProofValidFile(SetupProofFile):
             step["goals"]["position"]["line"] += 1
         check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
 
-        # FIXME
-        # Add outside of proof
-        # with pytest.raises(NotImplementedError):
-        #     proof_file.change_steps([CoqAddStep("\n    Print plus.", 25)])
-
         # Add step in beginning of proof
         proof_file.change_steps([CoqAddStep("\n    Print plus.", 26)])
         assert proof_file.steps[27].text == "\n    Print plus."
@@ -185,6 +180,53 @@ class TestProofValidFile(SetupProofFile):
         # # Delete step in end of proof
         proof_file.change_steps([CoqDeleteStep(41)])
         assert proof_file.steps[41].text == "\n    Admitted."
+
+    def test_change_steps_add_proof(self):
+        proofs = len(self.proof_file.proofs)
+        steps_taken = self.proof_file.steps_taken
+        self.proof_file.change_steps([
+            CoqAddStep("\nTheorem change_steps : forall n:nat, 0 + n = n.", 1),
+            CoqAddStep("\nProof.", 2),
+            CoqAddStep("\nintros n.", 3),
+            CoqAddStep("\nreduce_eq.", 4),
+            CoqAddStep("\nQed.", 5),
+        ])
+        assert self.proof_file.steps_taken == steps_taken + 5
+        assert len(self.proof_file.proofs) == proofs + 1
+
+    def test_change_steps_delete_proof(self):
+        proofs = len(self.proof_file.proofs)
+        steps_taken = self.proof_file.steps_taken
+        self.proof_file.change_steps([
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+        ])
+        assert self.proof_file.steps_taken == steps_taken - 7
+        assert len(self.proof_file.proofs) == proofs - 1
+
+
+class TestChangeStepsAddOpenProof(SetupProofFile):
+    def setup_method(self, method):
+        self.setup("test_add_open_proof.v")
+
+    def test_change_steps_add_open_proof(self):
+        open_proofs = len(self.proof_file.open_proofs)
+        proofs = len(self.proof_file.proofs)
+        steps_taken = self.proof_file.steps_taken
+
+        self.proof_file.change_steps([
+            CoqAddStep("\nTheorem change_steps : forall n:nat, 0 + n = n.", 0),
+            CoqAddStep("\nProof.", 1),
+            CoqAddStep("\nintros n.", 2),
+        ])
+        assert self.proof_file.steps_taken == steps_taken + 3
+        assert len(self.proof_file.proofs) == proofs
+        assert len(self.proof_file.open_proofs) == open_proofs + 1
 
 
 class TestProofSimpleFileChanges(SetupProofFile):

@@ -403,34 +403,36 @@ class ProofFile(CoqFile):
             TermType.CLASS,
             TermType.SCHEME,
             TermType.VARIANT,
+            TermType.OTHER
         ]
+    
+    def __is_end_proof(self, step: Step):
+        return self.context.expr(step)[0] in ["VernacEndProof", "VernacExactProof"]
 
     def __check_proof_step(self, step: Step, goals: Optional[GoalAnswer] = None):
         # Last step of the file
         if step.text.strip() == "":
             return
-        # Forward steps outside of proofs are ignored
-        if not self.in_proof and (goals is None or goals.goals is None):
-            return
 
         # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
-        if self.context.expr(step)[0] in ["VernacEndProof", "VernacExactProof"]:
+        if self.__is_end_proof(step):
             self.__handle_end_proof(step, goals)
-        # Regular proof steps for the last open proof
-        elif self.context.term_type(step) == TermType.OTHER:
-            self.__handle_proof_step(step, goals)
-        # Ignore term definitions that do not generate new proof goals
         elif self.__is_proof_term(step):
             self.__handle_proof_term(step, goals)
+        # Avoids Tactics, Notations, Inductive...
+        elif self.context.term_type(step) == TermType.OTHER:
+            self.__handle_proof_step(step, goals)
 
     def __forward_step(self, goals: GoalAnswer):
         self.__aux_file.append(self.prev_step.text)
         self.__check_program()
-        self.__check_proof_step(self.prev_step, goals)
+        if self.in_proof or self.__is_end_proof(self.prev_step):
+            self.__check_proof_step(self.prev_step, goals)
 
     def __backward_step(self):
         self.__aux_file.truncate(self.curr_step.text)
-        self.__check_proof_step(self.curr_step)
+        if len(self.open_proofs) > 0 or self.__is_end_proof(self.curr_step):
+            self.__check_proof_step(self.curr_step)
 
     def __find_step(self, range: Range) -> Optional[Tuple[ProofTerm, int]]:
         for proof in self.__proofs:
@@ -590,6 +592,7 @@ class ProofFile(CoqFile):
 
     def change_steps(self, changes: List[CoqChange]):
         min_step = self.steps_taken
+        offset = self._get_steps_taken_offset(changes)
 
         for change in changes:
             if isinstance(change, CoqAddStep):
@@ -600,7 +603,7 @@ class ProofFile(CoqFile):
 
         self.exec(-steps)
         super().change_steps(changes)
-        self.exec(steps + self._get_steps_taken_offset(changes))
+        self.exec(steps + offset)
 
     def close(self):
         super().close()

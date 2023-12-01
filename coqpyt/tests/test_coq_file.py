@@ -1,6 +1,8 @@
 import os
+import uuid
 import shutil
 import pytest
+import tempfile
 
 from coqpyt.coq.exceptions import *
 from coqpyt.coq.changes import *
@@ -13,7 +15,12 @@ coq_file: CoqFile = None
 def setup(request):
     global coq_file
     file_path = os.path.join("tests/resources", request.param)
-    coq_file = CoqFile(file_path, timeout=60)
+    new_file_path = os.path.join(
+        tempfile.gettempdir(),
+        "test" + str(uuid.uuid4()).replace("-", "") + ".v",
+    )
+    shutil.copyfile(file_path, new_file_path)
+    coq_file = CoqFile(new_file_path, timeout=60)
     yield
 
 
@@ -21,6 +28,7 @@ def setup(request):
 def teardown():
     yield
     coq_file.close()
+    os.remove(coq_file.path)
 
 
 @pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
@@ -46,129 +54,106 @@ def test_negative_step(setup, teardown):
     assert coq_file.context.curr_modules == ["Out"]
 
 
-def test_delete_step():
-    file_path = os.path.join("tests/resources", "test_valid.v")
-    new_file_path = os.path.join("tests/resources", "test_valid_delete.v")
-    shutil.copyfile(file_path, new_file_path)
-    coq_file = CoqFile(new_file_path, timeout=60)
-
+@pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
+def test_delete_step(setup, teardown):
     assert coq_file.steps[8].text == "\n      Print Nat.add."
     assert coq_file.steps[8].ast.range.start.line == 12
 
-    try:
-        steps = coq_file.exec(nsteps=10)
-        assert steps[-1].text == "\n      reduce_eq."
+    steps = coq_file.exec(nsteps=10)
+    assert steps[-1].text == "\n      reduce_eq."
 
-        coq_file.delete_step(7)
-        assert coq_file.steps[7].text == "\n      Print Nat.add."
-        assert coq_file.steps[7].ast.range.start.line == 11
+    coq_file.delete_step(7)
+    assert coq_file.steps[7].text == "\n      Print Nat.add."
+    assert coq_file.steps[7].ast.range.start.line == 11
 
-        steps = coq_file.exec(nsteps=1)
-        assert steps[-1].text == "\n    Qed."
+    steps = coq_file.exec(nsteps=1)
+    assert steps[-1].text == "\n    Qed."
 
-        with open(new_file_path, "r") as f:
-            assert "Print plus." not in f.read()
-
-        # Test if mult_0_plus is removed
-        # It also tests if deletion with invalid intermediate states works
-        coq_file.run()
-        # FIXME: Check where steps taken is
-        assert "mult_0_plus" in coq_file.context.terms
-        coq_file.change_steps([
-            CoqDeleteStep(13),
-            CoqDeleteStep(13),
-            CoqDeleteStep(13),
-            CoqDeleteStep(13),
-            CoqDeleteStep(13),
-            CoqDeleteStep(13),
-            CoqDeleteStep(13),
-        ])
-        assert "mult_0_plus" not in coq_file.context.terms
-    finally:
-        coq_file.close()
-        if os.path.exists(new_file_path):
-            os.remove(new_file_path)
+    with open(coq_file.path, "r") as f:
+        assert "Print plus." not in f.read()
 
 
-def test_add_step():
-    file_path = os.path.join("tests/resources", "test_valid.v")
-    new_file_path = os.path.join("tests/resources", "test_valid_add.v")
-    shutil.copyfile(file_path, new_file_path)
-    coq_file = CoqFile(new_file_path, timeout=60)
-
+@pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
+def test_add_step(setup, teardown):
     assert coq_file.steps[8].text == "\n      Print Nat.add."
     assert coq_file.steps[8].ast.range.start.line == 12
 
-    try:
-        steps = coq_file.exec(nsteps=8)
-        assert steps[-1].text == "\n      Print plus."
-        coq_file.add_step(7, "\n      Print minus.")
-        steps = coq_file.exec(nsteps=1)
-        assert steps[-1].text == "\n      Print minus."
-        coq_file.add_step(6, "\n      Print minus.")
-        steps = coq_file.exec(nsteps=1)
-        assert steps[-1].text == "\n      Print Nat.add."
-        assert steps[-1].ast.range.start.line == 14
+    steps = coq_file.exec(nsteps=8)
+    assert steps[-1].text == "\n      Print plus."
+    coq_file.add_step(7, "\n      Print minus.")
+    steps = coq_file.exec(nsteps=1)
+    assert steps[-1].text == "\n      Print minus."
+    coq_file.add_step(6, "\n      Print minus.")
+    steps = coq_file.exec(nsteps=1)
+    assert steps[-1].text == "\n      Print Nat.add."
+    assert steps[-1].ast.range.start.line == 14
 
-        assert "x" not in coq_file.context.terms
-        coq_file.add_step(0, "\nDefinition x := 0.")
-        assert "x" in coq_file.context.terms
-        assert coq_file.context.get_term("x").text == "Definition x := 0."
+    assert "x" not in coq_file.context.terms
+    coq_file.add_step(0, "\nDefinition x := 0.")
+    assert "x" in coq_file.context.terms
+    assert coq_file.context.get_term("x").text == "Definition x := 0."
 
-        coq_file.change_steps([
-            CoqAddStep(" Defined.", 15),
-            CoqAddStep("\n  reflexivity.", 15),
-            CoqAddStep("\n  rewrite -> (plus_O_n (S n * m)).", 15),
-            # Checks if there aren't problems with intermediate states
-            # (e.g. the ranges of the AST are updated incorrectly)
-            CoqDeleteStep(16),
-            CoqAddStep("\n  intros n m.", 15),
-            CoqAddStep("\nProof.", 15),
-            CoqAddStep("\nDefinition change_steps :  ∀ n m : nat,\n 0 + (S n * m) = S n * m.", 15),
-        ])
-    finally:
-        coq_file.close()
-        if os.path.exists(new_file_path):
-            os.remove(new_file_path)
+    coq_file.change_steps([
+        CoqAddStep(" Defined.", 15),
+        CoqAddStep("\n  reflexivity.", 15),
+        CoqAddStep("\n  rewrite -> (plus_O_n (S n * m)).", 15),
+        # Checks if there aren't problems with intermediate states
+        # (e.g. the ranges of the AST are updated incorrectly)
+        CoqDeleteStep(16),
+        CoqAddStep("\n  intros n m.", 15),
+        CoqAddStep("\nProof.", 15),
+        CoqAddStep("\nDefinition change_steps :  ∀ n m : nat,\n 0 + (S n * m) = S n * m.", 15),
+    ])
 
 
-def test_change_steps():
-    file_path = os.path.join("tests/resources", "test_valid.v")
-    new_file_path = os.path.join("tests/resources", "test_valid_change_steps.v")
-    shutil.copyfile(file_path, new_file_path)
-    coq_file = CoqFile(new_file_path, timeout=60)
-
+@pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
+def test_change_steps(setup, teardown):
     assert coq_file.steps[8].text == "\n      Print Nat.add."
     assert coq_file.steps[8].ast.range.start.line == 12
 
-    try:
-        changes = [
-            CoqAddStep("\n      Print minus.", 7),
-            CoqAddStep("\n      Print minus.", 6),
-            CoqDeleteStep(9),  # Delete first print minus
-            CoqDeleteStep(19),  # Delete Compute True /\ True.
-        ]
-        coq_file.change_steps(changes)
-        steps = coq_file.exec(nsteps=8)
-        assert steps[-1].text == "\n      Print minus."
-        assert steps[-1].ast.range.start.line == 11
-        steps = coq_file.exec(nsteps=1)
-        assert steps[-1].text == "\n      Print plus."
-        assert coq_file.steps[8].ast.range.start.line == 12
-        steps = coq_file.exec(nsteps=11)
-        assert steps[-1].text == "\n    reflexivity."
+    changes = [
+        CoqAddStep("\n      Print minus.", 7),
+        CoqAddStep("\n      Print minus.", 6),
+        CoqDeleteStep(9),  # Delete first print minus
+        CoqDeleteStep(19),  # Delete Compute True /\ True.
+    ]
+    coq_file.change_steps(changes)
+    steps = coq_file.exec(nsteps=8)
+    assert steps[-1].text == "\n      Print minus."
+    assert steps[-1].ast.range.start.line == 11
+    steps = coq_file.exec(nsteps=1)
+    assert steps[-1].text == "\n      Print plus."
+    assert coq_file.steps[8].ast.range.start.line == 12
+    steps = coq_file.exec(nsteps=11)
+    assert steps[-1].text == "\n    reflexivity."
 
-        with pytest.raises(InvalidChangeException):
-            coq_file.change_steps(
-                [
-                    CoqAddStep("\n      Print minus.", 7),
-                    CoqDeleteStep(11),  # delete reduce_eq
-                ]
-            )
-    finally:
-        coq_file.close()
-        if os.path.exists(new_file_path):
-            os.remove(new_file_path)
+    with pytest.raises(InvalidChangeException):
+        coq_file.change_steps(
+            [
+                CoqAddStep("\n      Print minus.", 7),
+                CoqDeleteStep(11),  # delete reduce_eq
+            ]
+        )
+
+
+@pytest.mark.parametrize("setup", ["test_valid.v"], indirect=True)
+def test_delete_proof(setup, teardown):
+    # Test if mult_0_plus is removed
+    # It also tests if deletion with invalid intermediate states works
+    coq_file.run()
+    steps_taken = coq_file.steps_taken
+    assert "mult_0_plus" in coq_file.context.terms
+    coq_file.change_steps([
+        CoqDeleteStep(14),
+        CoqDeleteStep(14),
+        CoqDeleteStep(14),
+        CoqDeleteStep(14),
+        CoqDeleteStep(14),
+        CoqDeleteStep(14),
+        CoqDeleteStep(14),
+    ])
+    assert "mult_0_plus" not in coq_file.context.terms
+    assert coq_file.steps_taken == steps_taken - 7
 
 
 @pytest.mark.parametrize("setup", ["test_where_notation.v"], indirect=True)

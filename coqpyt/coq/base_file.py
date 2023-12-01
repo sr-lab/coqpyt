@@ -444,11 +444,10 @@ class CoqFile(object):
         return offset
 
     def _change_steps(self, changes: List[CoqChange]):
+        previous_steps_takens = self.steps_taken
+        offset_steps, offset_steps_taken = 0, self._get_steps_taken_offset(changes)
+        previous_steps, previous_steps_size = self.steps, len(self.steps)
         CoqFile.exec(self, -self.steps_taken)
-        offset_steps = 0
-        offset_steps_taken = self._get_steps_taken_offset(changes)
-        previous_steps = self.steps
-        previous_steps_size = len(self.steps)
 
         for change in changes:
             if isinstance(change, CoqAddStep):
@@ -473,7 +472,7 @@ class CoqFile(object):
             # FIXME short text
             step.diagnostics = self.steps[i].diagnostics
         self.steps = previous_steps
-        CoqFile.exec(self, self.steps_taken + offset_steps_taken)
+        CoqFile.exec(self, previous_steps_takens + offset_steps_taken)
 
     @property
     def curr_step(self):

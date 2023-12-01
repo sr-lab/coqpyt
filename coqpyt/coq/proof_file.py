@@ -589,11 +589,18 @@ class ProofFile(CoqFile):
         # TODO: Handle the case where deleting the Qed creates a nested proof
 
     def change_steps(self, changes: List[CoqChange]):
-        steps = self.steps_taken
-        # TODO: Improve performance
+        min_step = self.steps_taken
+
+        for change in changes:
+            if isinstance(change, CoqAddStep):
+                min_step = min(min_step, change.previous_step_index)
+            elif isinstance(change, CoqDeleteStep):
+                min_step = min(min_step, change.step_index)
+        steps = self.steps_taken - min_step
+
         self.exec(-steps)
         super().change_steps(changes)
-        self.exec(steps)
+        self.exec(steps + self._get_steps_taken_offset(changes))
 
     def close(self):
         super().close()

@@ -72,6 +72,7 @@ def test_delete_step():
         # Test if mult_0_plus is removed
         # It also tests if deletion with invalid intermediate states works
         coq_file.run()
+        # FIXME: Check where steps taken is
         assert "mult_0_plus" in coq_file.context.terms
         coq_file.change_steps([
             CoqDeleteStep(13),

@@ -427,27 +427,39 @@ class CoqFile(object):
             self.steps_taken -= 1
             CoqFile.exec(self, -n_steps)
 
+    def _get_steps_taken_offset(self, changes: List[CoqChange]):
+        offset = 0
+        steps_taken = self.steps_taken
+
+        for change in changes:
+            if isinstance(change, CoqAddStep):
+                if change.previous_step_index < steps_taken:
+                    offset += 1
+                    steps_taken += 1
+            elif isinstance(change, CoqDeleteStep):
+                if change.step_index < steps_taken:
+                    offset -= 1
+                    steps_taken -= 1
+
+        return offset
+
     def _change_steps(self, changes: List[CoqChange]):
         CoqFile.exec(self, -self.steps_taken)
         offset_steps = 0
-        offset_steps_taken = 0
+        offset_steps_taken = self._get_steps_taken_offset(changes)
         previous_steps = self.steps
         previous_steps_size = len(self.steps)
 
-        for _, change in enumerate(changes):
+        for change in changes:
             if isinstance(change, CoqAddStep):
                 self.__add_step_text(change.previous_step_index, change.step_text)
                 step = self.__add_update_ast(change.previous_step_index, change.step_text)
                 self.steps.insert(change.previous_step_index + 1, step)
-                if self.steps_taken > change.previous_step_index + 1:
-                    offset_steps_taken += 1
                 offset_steps += 1
             elif isinstance(change, CoqDeleteStep):
                 self.__delete_step_text(change.step_index)
                 self.__delete_update_ast(change.step_index)
                 self.steps.pop(change.step_index)
-                if self.steps_taken > change.step_index:
-                    offset_steps_taken -= 1
                 offset_steps -= 1
             else:
                 raise NotImplementedError(f"Unknown change: {change}")

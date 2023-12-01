@@ -350,12 +350,18 @@ class CoqFile(object):
 
         return added_step
 
+    def __copy_steps(self, previous_steps: List[Step]):
+        for i, step in enumerate(previous_steps):
+            step.text, step.ast = self.steps[i].text, self.steps[i].ast
+            step.diagnostics = self.steps[i].diagnostics
+            step.short_text = self.steps[i].short_text
+        self.steps = previous_steps
+
     def _delete_step(
         self,
         step_index: int,
         validate_file: bool = True,
     ) -> None:
-        # FIXME remove calls to in_proof in delete_step and add_step
         self.__delete_step_text(step_index)
 
         # Modify the previous steps instead of creating new ones
@@ -372,10 +378,7 @@ class CoqFile(object):
             raise InvalidDeleteException(self.steps[step_index].text)
 
         deleted_step = previous_steps.pop(step_index)
-        for i, step in enumerate(previous_steps):
-            step.text, step.ast = self.steps[i].text, self.steps[i].ast
-            step.diagnostics = self.steps[i].diagnostics
-        self.steps = previous_steps
+        self.__copy_steps(previous_steps)
 
         if self.steps_taken > step_index:
             self.steps_taken -= 1
@@ -414,10 +417,7 @@ class CoqFile(object):
             raise InvalidStepException(step_text)
 
         previous_steps.insert(step_index, self.steps[step_index])
-        for i, step in enumerate(previous_steps):
-            step.text, step.ast = self.steps[i].text, self.steps[i].ast
-            step.diagnostics = self.steps[i].diagnostics
-        self.steps = previous_steps
+        self.__copy_steps(previous_steps)
 
         if self.steps_taken > previous_step_index + 1:
             self.steps_taken += 1
@@ -467,11 +467,7 @@ class CoqFile(object):
         if len(self.steps) != previous_steps_size + offset_steps or not self.is_valid:
             raise InvalidChangeException()
 
-        for i, step in enumerate(previous_steps):
-            step.text, step.ast = self.steps[i].text, self.steps[i].ast
-            # FIXME short text
-            step.diagnostics = self.steps[i].diagnostics
-        self.steps = previous_steps
+        self.__copy_steps(self.steps)
         CoqFile.exec(self, previous_steps_takens + offset_steps_taken)
 
     @property

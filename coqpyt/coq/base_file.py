@@ -394,7 +394,6 @@ class CoqFile(object):
         step_text: str,
         validate_file: bool = True,
     ) -> None:
-        # FIXME suffers from same problem when adding incorrect steps
         if validate_file and not self.is_valid:
             raise InvalidFileException(self.path)
 

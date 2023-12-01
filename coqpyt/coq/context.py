@@ -127,24 +127,22 @@ class FileContext:
             check_and_add_term(curr_module + name, term)
 
     def __remove_term(self, name: str, term: Term):
-        def check_and_remove_term(name, term):
-            # FIXME remove this verification
-            if name in self.__terms:
-                self.__terms[name].pop()
-                if len(self.__terms[name]) == 0:
-                    del self.__terms[name]
+        def remove_term(name):
+            self.__terms[name].pop()
+            if len(self.__terms[name]) == 0:
+                del self.__terms[name]
 
         if term.type == TermType.NOTATION:
-            check_and_remove_term(name, term)
+            remove_term(name)
             return
 
         modules = self.__segments.modules[:]
-        check_and_remove_term(".".join(modules + [name]), term)
+        remove_term(".".join(modules + [name]))
 
         curr_module = ""
         for module in reversed(self.__module):
             curr_module = module + "." + curr_module
-            check_and_remove_term(curr_module + name, term)
+            remove_term(curr_module + name)
 
     # Simultaneous definition of terms and notations (where clause)
     # https://coq.inria.fr/refman/user-extensions/syntax-extensions.html#simultaneous-definition-of-terms-and-notations

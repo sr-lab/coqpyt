@@ -164,11 +164,6 @@ class TestProofValidFile(SetupProofFile):
         proof_file.change_steps([CoqAddStep("\n    Print plus.", 26)])
         assert proof_file.steps[27].text == "\n    Print plus."
 
-        # FIXME
-        # # Delete outside of proof
-        # with pytest.raises(NotImplementedError):
-        #     proof_file.change_steps([CoqDeleteStep(33)])
-
         # # Add step to end of proof
         proof_file.change_steps([CoqAddStep("\n    Print plus.", 31)])
         assert proof_file.steps[32].text == "\n    Print plus."
@@ -210,7 +205,7 @@ class TestProofValidFile(SetupProofFile):
         assert len(self.proof_file.proofs) == proofs - 1
 
 
-class TestChangeStepsAddOpenProof(SetupProofFile):
+class TestAddOpenProof(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_add_open_proof.v")
 
@@ -227,6 +222,16 @@ class TestChangeStepsAddOpenProof(SetupProofFile):
         assert self.proof_file.steps_taken == steps_taken + 3
         assert len(self.proof_file.proofs) == proofs
         assert len(self.proof_file.open_proofs) == open_proofs + 1
+
+    def test_add_step_add_open_proofs(self):
+        open_proofs = len(self.proof_file.open_proofs)
+        self.proof_file.add_step(0, "\nTheorem add_step : forall n:nat, 0 + n = n.")
+        self.proof_file.add_step(0, "\nTheorem add_step2 : forall n:nat, 0 + n = n.")
+        self.proof_file.add_step(1, "\nTheorem add_step3 : forall n:nat, 0 + n = n.")
+        assert len(self.proof_file.open_proofs) == open_proofs + 3
+        assert self.proof_file.open_proofs[0].text == "Theorem add_step2 : forall n:nat, 0 + n = n."
+        assert self.proof_file.open_proofs[1].text == "Theorem add_step3 : forall n:nat, 0 + n = n."
+        assert self.proof_file.open_proofs[2].text == "Theorem add_step : forall n:nat, 0 + n = n."
 
 
 class TestProofSimpleFileChanges(SetupProofFile):

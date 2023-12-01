@@ -378,7 +378,7 @@ class ProofFile(CoqFile):
             context = self.__step_context(step)
             self.__open_proofs[-1][2].append(ProofStep(step, goals, context))
 
-    def __handle_proof_term(self, step: Step, goals: Optional[GoalAnswer]):
+    def __handle_proof_term(self, step: Step, goals: Optional[GoalAnswer], index:Optional[int]=None):
         if goals is None:
             self.__open_proofs.pop()
         else:
@@ -388,12 +388,15 @@ class ProofFile(CoqFile):
                 program, statement_context = self.__get_program_context()
             else:
                 statement_context = self.__step_context(step)
-            self.__open_proofs.append((proof_term, statement_context, [], program))
+            if index is not None:
+                self.__open_proofs.insert(index, (proof_term, statement_context, [], program))
+            else:
+                self.__open_proofs.append((proof_term, statement_context, [], program))
 
     def __is_proof_term(self, step: Step):
         term_type = self.context.term_type(step)
         # Assume that terms of the following types do not introduce new proofs
-        # FIXME: Should probably check if [type != OTHER] and if goals were changed
+        # FIXME: Should probably check if goals were changed
         return term_type not in [
             TermType.TACTIC,
             TermType.NOTATION,
@@ -442,8 +445,8 @@ class ProofFile(CoqFile):
         for proof in self.__open_proofs:
             for i, proof_step in enumerate(proof[2]):
                 if proof_step.ast.range == range:
-                    # FIXME I think this won't work because when we change
-                    # it, it won't change the reference we are saving
+                    # NOTE: This works because the change of the structures inside
+                    # will reflect on the open proof (e.g. list)
                     return (ProofTerm(*proof), i)
         return None
 
@@ -458,8 +461,8 @@ class ProofFile(CoqFile):
                 return (proof, -1)
         for proof in self.__open_proofs:
             if proof[0].ast.range == range:
-                # FIXME I think this won't work because when we change
-                # it, it won't change the reference we are saving
+                # NOTE: This works because the change of the structures inside
+                # will reflect on the open proof (e.g. list)
                 return (ProofTerm(*proof), -1)
 
         return None
@@ -497,6 +500,12 @@ class ProofFile(CoqFile):
         # Deleted libraries
         for library in set(self.context.libraries.keys()) - set(libraries):
             self.context.remove_library(library)
+
+    def __find_open_proof_index(self, step: Step) -> int:
+        for i, proof in enumerate(self.__open_proofs):
+            if proof[0].step.ast.range > step.ast.range:
+                return i
+        return len(self.__open_proofs)
 
     @property
     def proofs(self) -> List[ProofTerm]:
@@ -561,6 +570,10 @@ class ProofFile(CoqFile):
         return self.steps[slice[1 - last] : slice[last]]
 
     def add_step(self, previous_step_index: int, step_text: str):
+        steps = self.steps_taken - previous_step_index - 1
+        offset = 1 if previous_step_index + 1 < self.steps_taken else 0
+        super().exec(-steps)
+
         optional = self.__find_prev(self.steps[previous_step_index].ast.range)
         self._make_change(self._add_step, previous_step_index, step_text)
 
@@ -574,8 +587,17 @@ class ProofFile(CoqFile):
                 # The goals will be loaded if used (Lazy Loading)
                 proof.steps[e].goals = self._goals
 
-        # TODO: Handle adding proofs
-        # FIXME: Update open proof
+        # NOTE: We rollback so the last_term is the correct one
+        # We use the CoqFile is exec because it is faster
+        super().exec(1)
+        # Allows to add open proofs
+        step = self.steps[previous_step_index + 1]
+        if self.__is_proof_term(step):
+            goals = self._goals(step.ast.range.end)
+            if self._in_proof(goals):
+                index = self.__find_open_proof_index(step)
+                self.__handle_proof_term(step, goals, index=index)
+        super().exec(steps + offset - 1)
 
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]

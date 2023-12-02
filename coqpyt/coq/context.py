@@ -542,7 +542,7 @@ class FileContext:
                 return self.__terms[key][-1]
 
         raise NotationNotFoundException(notation_id)
-    
+
     def reset(self):
         """Resets the context to its initial state."""
         self.__terms = {}

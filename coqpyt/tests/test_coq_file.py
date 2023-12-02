@@ -143,17 +143,22 @@ def test_add_proof(setup, teardown):
     steps_taken = coq_file.steps_taken
     assert "change_steps" not in coq_file.context.terms
 
-    coq_file.change_steps([
-        CoqAddStep(" Defined.", 12),
-        CoqAddStep("\n  reflexivity.", 12),
-        CoqAddStep("\n  rewrite -> (plus_O_n (S n * m)).", 12),
-        # Checks if there aren't problems with intermediate states
-        # (e.g. the ranges of the AST are updated incorrectly)
-        CoqDeleteStep(13),
-        CoqAddStep("\n  intros n m.", 12),
-        CoqAddStep("\nProof.", 12),
-        CoqAddStep("\nDefinition change_steps :  ∀ n m : nat,\n 0 + (S n * m) = S n * m.", 12),
-    ])
+    coq_file.change_steps(
+        [
+            CoqAddStep(" Defined.", 12),
+            CoqAddStep("\n  reflexivity.", 12),
+            CoqAddStep("\n  rewrite -> (plus_O_n (S n * m)).", 12),
+            # Checks if there aren't problems with intermediate states
+            # (e.g. the ranges of the AST are updated incorrectly)
+            CoqDeleteStep(13),
+            CoqAddStep("\n  intros n m.", 12),
+            CoqAddStep("\nProof.", 12),
+            CoqAddStep(
+                "\nDefinition change_steps :  ∀ n m : nat,\n 0 + (S n * m) = S n * m.",
+                12,
+            ),
+        ]
+    )
 
     assert "change_steps" in coq_file.context.terms
     assert coq_file.steps_taken == steps_taken + 5
@@ -166,15 +171,17 @@ def test_delete_proof(setup, teardown):
     coq_file.run()
     steps_taken = coq_file.steps_taken
     assert "mult_0_plus" in coq_file.context.terms
-    coq_file.change_steps([
-        CoqDeleteStep(14),
-        CoqDeleteStep(14),
-        CoqDeleteStep(14),
-        CoqDeleteStep(14),
-        CoqDeleteStep(14),
-        CoqDeleteStep(14),
-        CoqDeleteStep(14),
-    ])
+    coq_file.change_steps(
+        [
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+            CoqDeleteStep(14),
+        ]
+    )
     assert "mult_0_plus" not in coq_file.context.terms
     assert coq_file.steps_taken == steps_taken - 7
 

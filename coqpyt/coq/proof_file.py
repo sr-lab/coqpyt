@@ -360,14 +360,19 @@ class ProofFile(CoqFile):
             self.__step_context(self.prev_step),
         )
 
-    def __handle_end_proof(self, step: Step, goals: Optional[GoalAnswer], index: Optional[int] = None, open_index: Optional[int] = None):
+    def __handle_end_proof(
+        self,
+        step: Step,
+        goals: Optional[GoalAnswer],
+        index: Optional[int] = None,
+        open_index: Optional[int] = None,
+    ):
         if goals is None:
             index = -1 if index is None else index
             open_index = len(self.__open_proofs) if open_index is None else open_index
             proof = self.__proofs.pop(index)
             self.__open_proofs.insert(
-                open_index,
-                (proof, proof.context, proof.steps[:-1], proof.program)
+                open_index, (proof, proof.context, proof.steps[:-1], proof.program)
             )
         else:
             index = len(self.__proofs) if index is None else index
@@ -383,7 +388,9 @@ class ProofFile(CoqFile):
             context = self.__step_context(step)
             self.__open_proofs[-1][2].append(ProofStep(step, goals, context))
 
-    def __handle_proof_term(self, step: Step, goals: Optional[GoalAnswer], index: Optional[int] = None):
+    def __handle_proof_term(
+        self, step: Step, goals: Optional[GoalAnswer], index: Optional[int] = None
+    ):
         if goals is None:
             index = -1 if index is None else index
             self.__open_proofs.pop(index)
@@ -395,7 +402,9 @@ class ProofFile(CoqFile):
                 program, statement_context = self.__get_program_context()
             else:
                 statement_context = self.__step_context(step)
-            self.__open_proofs.insert(index, (proof_term, statement_context, [], program))
+            self.__open_proofs.insert(
+                index, (proof_term, statement_context, [], program)
+            )
 
     def __is_proof_term(self, step: Step):
         term_type = self.context.term_type(step)
@@ -410,9 +419,9 @@ class ProofFile(CoqFile):
             TermType.CLASS,
             TermType.SCHEME,
             TermType.VARIANT,
-            TermType.OTHER
+            TermType.OTHER,
         ]
-    
+
     def __is_end_proof(self, step: Step):
         return self.context.expr(step)[0] in ["VernacEndProof", "VernacExactProof"]
 
@@ -445,21 +454,21 @@ class ProofFile(CoqFile):
         for p, proof in enumerate(self.__proofs):
             if proof.ast.range == range:
                 return (proof, p, -1)
-            
+
             for i, proof_step in enumerate(proof.steps):
                 if proof_step.ast.range == range:
                     return (proof, p, i)
-        
+
         for p, proof in enumerate(self.__open_proofs):
             if proof[0].ast.range == range:
                 # NOTE: This works because the change of the structures inside
                 # will reflect on the open proof (e.g. list)
                 return (ProofTerm(*proof), p, -1)
-            
+
             for i, proof_step in enumerate(proof[2]):
                 if proof_step.ast.range == range:
                     return (ProofTerm(*proof), p, i)
-        
+
         return None
 
     def __get_step(self, step_index):
@@ -501,7 +510,7 @@ class ProofFile(CoqFile):
             if proof[0].step.ast.range > step.ast.range:
                 return i
         return len(self.__open_proofs)
-    
+
     def __find_proof_index(self, step: Step) -> int:
         for i, proof in enumerate(self.__proofs):
             if proof.step.ast.range > step.ast.range:
@@ -573,7 +582,7 @@ class ProofFile(CoqFile):
     def add_step(self, previous_step_index: int, step_text: str):
         steps = self.steps_taken - previous_step_index - 1
         offset = 1 if previous_step_index + 1 < self.steps_taken else 0
-        
+
         optional = self.__find_step(self.steps[previous_step_index].ast.range)
         self._make_change(self._add_step, previous_step_index, step_text)
 
@@ -598,7 +607,7 @@ class ProofFile(CoqFile):
             # This is not outside of the ifs for performance reasons
             goals = self._goals(step.ast.range.end)
             index = self.__find_proof_index(step)
-            open_index = self.__find_open_proof_index(step) -1
+            open_index = self.__find_open_proof_index(step) - 1
             self.__handle_end_proof(step, goals, index=index, open_index=open_index)
         # Regular proof steps
         elif optional is not None:

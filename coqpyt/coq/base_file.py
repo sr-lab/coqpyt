@@ -255,7 +255,7 @@ class CoqFile(object):
             with open(self.path, "w") as f:
                 f.write(old_text)
             raise e
-        
+
     def __delete_step_text(self, step_index: int):
         with open(self.__path, "r") as f:
             lines = f.readlines()
@@ -293,7 +293,11 @@ class CoqFile(object):
 
         previous_step = self.steps[previous_step_index]
         end_line = lines[previous_step.ast.range.end.line]
-        end_line = end_line[: previous_step.ast.range.end.character] + step_text + end_line[previous_step.ast.range.end.character :]
+        end_line = (
+            end_line[: previous_step.ast.range.end.character]
+            + step_text
+            + end_line[previous_step.ast.range.end.character :]
+        )
         lines[previous_step.ast.range.end.line] = end_line
 
         text = "".join(lines)
@@ -325,7 +329,11 @@ class CoqFile(object):
             start_char = 0
         else:
             start_line = previous_step.ast.range.end.line
-            start_char = previous_step.ast.range.end.character + len(step_text) - len(step_text.lstrip())
+            start_char = (
+                previous_step.ast.range.end.character
+                + len(step_text)
+                - len(step_text.lstrip())
+            )
 
         end_line = start_line + step_text.count("\n")
         if start_line == end_line:
@@ -334,10 +342,14 @@ class CoqFile(object):
             end_char = len(step_text.split("\n")[-1])
 
         # We will create a placeholder step that will be replaced later
-        added_step = Step(step_text, step_text, RangedSpan(Range(
-            Position(start_line, start_char),
-            Position(start_line, end_char)
-        ),None))
+        added_step = Step(
+            step_text,
+            step_text,
+            RangedSpan(
+                Range(Position(start_line, start_char), Position(start_line, end_char)),
+                None,
+            ),
+        )
 
         for i, step in enumerate(self.steps[previous_step_index + 1 :]):
             add_chars = added_step.ast.range.end.character
@@ -455,7 +467,9 @@ class CoqFile(object):
         for change in changes:
             if isinstance(change, CoqAddStep):
                 self.__add_step_text(change.previous_step_index, change.step_text)
-                step = self.__add_update_ast(change.previous_step_index, change.step_text)
+                step = self.__add_update_ast(
+                    change.previous_step_index, change.step_text
+                )
                 self.steps.insert(change.previous_step_index + 1, step)
                 offset_steps += 1
             elif isinstance(change, CoqDeleteStep):

@@ -179,28 +179,32 @@ class TestProofValidFile(SetupProofFile):
     def test_change_steps_add_proof(self):
         proofs = len(self.proof_file.proofs)
         steps_taken = self.proof_file.steps_taken
-        self.proof_file.change_steps([
-            CoqAddStep("\nTheorem change_steps : forall n:nat, 0 + n = n.", 1),
-            CoqAddStep("\nProof.", 2),
-            CoqAddStep("\nintros n.", 3),
-            CoqAddStep("\nreduce_eq.", 4),
-            CoqAddStep("\nQed.", 5),
-        ])
+        self.proof_file.change_steps(
+            [
+                CoqAddStep("\nTheorem change_steps : forall n:nat, 0 + n = n.", 1),
+                CoqAddStep("\nProof.", 2),
+                CoqAddStep("\nintros n.", 3),
+                CoqAddStep("\nreduce_eq.", 4),
+                CoqAddStep("\nQed.", 5),
+            ]
+        )
         assert self.proof_file.steps_taken == steps_taken + 5
         assert len(self.proof_file.proofs) == proofs + 1
 
     def test_change_steps_delete_proof(self):
         proofs = len(self.proof_file.proofs)
         steps_taken = self.proof_file.steps_taken
-        self.proof_file.change_steps([
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-        ])
+        self.proof_file.change_steps(
+            [
+                CoqDeleteStep(14),
+                CoqDeleteStep(14),
+                CoqDeleteStep(14),
+                CoqDeleteStep(14),
+                CoqDeleteStep(14),
+                CoqDeleteStep(14),
+                CoqDeleteStep(14),
+            ]
+        )
         assert self.proof_file.steps_taken == steps_taken - 7
         assert len(self.proof_file.proofs) == proofs - 1
 
@@ -214,11 +218,13 @@ class TestAddOpenProof(SetupProofFile):
         proofs = len(self.proof_file.proofs)
         steps_taken = self.proof_file.steps_taken
 
-        self.proof_file.change_steps([
-            CoqAddStep("\nTheorem change_steps : forall n:nat, 0 + n = n.", 0),
-            CoqAddStep("\nProof.", 1),
-            CoqAddStep("\nintros n.", 2),
-        ])
+        self.proof_file.change_steps(
+            [
+                CoqAddStep("\nTheorem change_steps : forall n:nat, 0 + n = n.", 0),
+                CoqAddStep("\nProof.", 1),
+                CoqAddStep("\nintros n.", 2),
+            ]
+        )
         assert self.proof_file.steps_taken == steps_taken + 3
         assert len(self.proof_file.proofs) == proofs
         assert len(self.proof_file.open_proofs) == open_proofs + 1
@@ -229,9 +235,18 @@ class TestAddOpenProof(SetupProofFile):
         self.proof_file.add_step(0, "\nTheorem add_step2 : forall n:nat, 0 + n = n.")
         self.proof_file.add_step(1, "\nTheorem add_step3 : forall n:nat, 0 + n = n.")
         assert len(self.proof_file.open_proofs) == open_proofs + 3
-        assert self.proof_file.open_proofs[0].text == "Theorem add_step2 : forall n:nat, 0 + n = n."
-        assert self.proof_file.open_proofs[1].text == "Theorem add_step3 : forall n:nat, 0 + n = n."
-        assert self.proof_file.open_proofs[2].text == "Theorem add_step : forall n:nat, 0 + n = n."
+        assert (
+            self.proof_file.open_proofs[0].text
+            == "Theorem add_step2 : forall n:nat, 0 + n = n."
+        )
+        assert (
+            self.proof_file.open_proofs[1].text
+            == "Theorem add_step3 : forall n:nat, 0 + n = n."
+        )
+        assert (
+            self.proof_file.open_proofs[2].text
+            == "Theorem add_step : forall n:nat, 0 + n = n."
+        )
 
 
 class TestAddOpenProof(SetupProofFile):
@@ -246,11 +261,23 @@ class TestAddOpenProof(SetupProofFile):
         assert proofs - 1 == len(self.proof_file.proofs)
         assert open_proofs + 1 == len(self.proof_file.open_proofs)
 
-        assert self.proof_file.open_proofs[0].text == "Theorem delete_qed : forall n:nat, 0 + n = n."
-        assert self.proof_file.open_proofs[1].text == "Theorem delete_qed2 : forall n:nat, 0 + n = n."
-        assert self.proof_file.open_proofs[2].text == "Theorem delete_qed3 : forall n:nat, 0 + n = n."
+        assert (
+            self.proof_file.open_proofs[0].text
+            == "Theorem delete_qed : forall n:nat, 0 + n = n."
+        )
+        assert (
+            self.proof_file.open_proofs[1].text
+            == "Theorem delete_qed2 : forall n:nat, 0 + n = n."
+        )
+        assert (
+            self.proof_file.open_proofs[2].text
+            == "Theorem delete_qed3 : forall n:nat, 0 + n = n."
+        )
 
-        assert self.proof_file.proofs[0].text == "Theorem delete_qed4 : forall n:nat, 0 + n = n."
+        assert (
+            self.proof_file.proofs[0].text
+            == "Theorem delete_qed4 : forall n:nat, 0 + n = n."
+        )
 
 
 class TestProofSimpleFileChanges(SetupProofFile):

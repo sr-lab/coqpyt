@@ -262,21 +262,25 @@ class CoqFile(object):
 
         deleted_step = self.steps[step_index]
         step = deleted_step
-        prev_step = self.steps[step_index - 1]
-        start_line = lines[prev_step.ast.range.end.line]
+        if step_index != 0:
+            prev_step_end = self.steps[step_index - 1].ast.range.end
+        else:
+            prev_step_end = Position(0, 0)
+
+        start_line = lines[prev_step_end.line]
         end_line = lines[step.ast.range.end.line]
 
-        start_line = start_line[: prev_step.ast.range.end.character]
+        start_line = start_line[: prev_step_end.character]
         end_line = end_line[step.ast.range.end.character :]
 
-        if prev_step.ast.range.end.line == step.ast.range.end.line:
-            lines[prev_step.ast.range.end.line] = start_line + end_line
+        if prev_step_end.line == step.ast.range.end.line:
+            lines[prev_step_end.line] = start_line + end_line
         else:
-            lines[prev_step.ast.range.end.line] = start_line
+            lines[prev_step_end.line] = start_line
             lines[step.ast.range.end.line] = end_line
 
         # Delete lines between first and last line
-        for i in range(prev_step.ast.range.end.line + 1, step.ast.range.end.line):
+        for i in range(prev_step_end.line + 1, step.ast.range.end.line):
             del lines[i]
         text = "".join(lines)
 

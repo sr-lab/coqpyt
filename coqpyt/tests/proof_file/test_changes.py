@@ -328,3 +328,11 @@ class TestProofChangeEmptyProof(SetupProofFile):
         assert len(proof_file.proofs) == 0
         assert len(proof_file.open_proofs) == 1
         assert len(proof_file.open_proofs[0].steps) == 1
+
+        # Delete Proof.
+        proof_file.delete_step(1)
+        assert len(proof_file.open_proofs[0].steps) == 0
+
+        # Delete Lemma statement
+        proof_file.delete_step(0)
+        assert len(proof_file.open_proofs) == 0

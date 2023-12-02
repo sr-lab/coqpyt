@@ -234,6 +234,25 @@ class TestAddOpenProof(SetupProofFile):
         assert self.proof_file.open_proofs[2].text == "Theorem add_step : forall n:nat, 0 + n = n."
 
 
+class TestAddOpenProof(SetupProofFile):
+    def setup_method(self, method):
+        self.setup("test_delete_qed.v")
+
+    def test_delete_qed(self):
+        open_proofs = len(self.proof_file.open_proofs)
+        proofs = len(self.proof_file.proofs)
+        self.proof_file.delete_step(9)
+
+        assert proofs - 1 == len(self.proof_file.proofs)
+        assert open_proofs + 1 == len(self.proof_file.open_proofs)
+
+        assert self.proof_file.open_proofs[0].text == "Theorem delete_qed : forall n:nat, 0 + n = n."
+        assert self.proof_file.open_proofs[1].text == "Theorem delete_qed2 : forall n:nat, 0 + n = n."
+        assert self.proof_file.open_proofs[2].text == "Theorem delete_qed3 : forall n:nat, 0 + n = n."
+
+        assert self.proof_file.proofs[0].text == "Theorem delete_qed4 : forall n:nat, 0 + n = n."
+
+
 class TestProofSimpleFileChanges(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_simple_file.v")
@@ -297,10 +316,15 @@ class TestProofChangeEmptyProof(SetupProofFile):
         assert len(proof_file.open_proofs) == 1
 
         proof_file.add_step(len(proof_file.steps) - 2, "\nAdmitted.")
+
+        assert len(proof_file.proofs) == 1
+        assert len(proof_file.open_proofs) == 0
         assert proof_file.steps[-2].text == "\nAdmitted."
-        assert len(proof_file.open_proofs[0].steps) == 2
-        assert proof_file.open_proofs[0].steps[-1].text == "\nAdmitted."
+        assert len(proof_file.proofs[0].steps) == 2
+        assert proof_file.proofs[0].steps[-1].text == "\nAdmitted."
 
         proof_file.delete_step(len(proof_file.steps) - 2)
         assert len(proof_file.steps) == 3
+        assert len(proof_file.proofs) == 0
+        assert len(proof_file.open_proofs) == 1
         assert len(proof_file.open_proofs[0].steps) == 1

@@ -360,16 +360,21 @@ class ProofFile(CoqFile):
             self.__step_context(self.prev_step),
         )
 
-    def __handle_end_proof(self, step: Step, goals: Optional[GoalAnswer]):
+    def __handle_end_proof(self, step: Step, goals: Optional[GoalAnswer], index: Optional[int] = None, open_index: Optional[int] = None):
         if goals is None:
-            proof = self.__proofs.pop()
-            self.__open_proofs.append(
+            index = -1 if index is None else index
+            open_index = len(self.__open_proofs) if open_index is None else open_index
+            proof = self.__proofs.pop(index)
+            self.__open_proofs.insert(
+                open_index,
                 (proof, proof.context, proof.steps[:-1], proof.program)
             )
         else:
-            open_proof = self.__open_proofs.pop()
+            index = len(self.__proofs) if index is None else index
+            open_index = -1 if open_index is None else open_index
+            open_proof = self.__open_proofs.pop(open_index)
             open_proof[2].append(ProofStep(step, goals, []))
-            self.__proofs.append(ProofTerm(*open_proof))
+            self.__proofs.insert(index, ProofTerm(*open_proof))
 
     def __handle_proof_step(self, step: Step, goals: Optional[GoalAnswer]):
         if goals is None:
@@ -378,20 +383,19 @@ class ProofFile(CoqFile):
             context = self.__step_context(step)
             self.__open_proofs[-1][2].append(ProofStep(step, goals, context))
 
-    def __handle_proof_term(self, step: Step, goals: Optional[GoalAnswer], index:Optional[int]=None):
+    def __handle_proof_term(self, step: Step, goals: Optional[GoalAnswer], index: Optional[int] = None):
         if goals is None:
-            self.__open_proofs.pop()
+            index = -1 if index is None else index
+            self.__open_proofs.pop(index)
         else:
+            index = len(self.__open_proofs) if index is None else index
             # New proof terms can be either obligations or regular proofs
             proof_term, program = self.context.last_term, None
             if self.context.term_type(step) == TermType.OBLIGATION:
                 program, statement_context = self.__get_program_context()
             else:
                 statement_context = self.__step_context(step)
-            if index is not None:
-                self.__open_proofs.insert(index, (proof_term, statement_context, [], program))
-            else:
-                self.__open_proofs.append((proof_term, statement_context, [], program))
+            self.__open_proofs.insert(index, (proof_term, statement_context, [], program))
 
     def __is_proof_term(self, step: Step):
         term_type = self.context.term_type(step)
@@ -506,6 +510,12 @@ class ProofFile(CoqFile):
             if proof[0].step.ast.range > step.ast.range:
                 return i
         return len(self.__open_proofs)
+    
+    def __find_proof_index(self, step: Step) -> int:
+        for i, proof in enumerate(self.__proofs):
+            if proof.step.ast.range > step.ast.range:
+                return i
+        return len(self.__proofs)
 
     @property
     def proofs(self) -> List[ProofTerm]:
@@ -572,20 +582,15 @@ class ProofFile(CoqFile):
     def add_step(self, previous_step_index: int, step_text: str):
         steps = self.steps_taken - previous_step_index - 1
         offset = 1 if previous_step_index + 1 < self.steps_taken else 0
-        super().exec(-steps)
-
+        
         optional = self.__find_prev(self.steps[previous_step_index].ast.range)
         self._make_change(self._add_step, previous_step_index, step_text)
 
-        if optional is not None:
-            proof, prev = optional
-            proof.steps.insert(prev + 1, self.__get_step(previous_step_index + 1))
-            # We should change the goals of all the steps in the same proof
-            # after the one that was changed
-            # NOTE: We assume the proofs and steps are in the order they are written
-            for e in range(prev + 2, len(proof.steps)):
-                # The goals will be loaded if used (Lazy Loading)
-                proof.steps[e].goals = self._goals
+        # The step was not processed yet
+        if self.steps_taken <= previous_step_index + 1:
+            super().exec(steps + offset)
+            return
+        super().exec(-steps)
 
         # NOTE: We rollback so the last_term is the correct one
         # We use the CoqFile is exec because it is faster
@@ -597,20 +602,47 @@ class ProofFile(CoqFile):
             if self._in_proof(goals):
                 index = self.__find_open_proof_index(step)
                 self.__handle_proof_term(step, goals, index=index)
+        # Handles case where Qed is added
+        elif self.__is_end_proof(step):
+            # This is not outside of the ifs for performance reasons
+            goals = self._goals(step.ast.range.end)
+            index = self.__find_proof_index(step)
+            open_index = self.__find_open_proof_index(step) -1
+            self.__handle_end_proof(step, goals, index=index, open_index=open_index)
+        # Regular proof steps
+        elif optional is not None:
+            proof, prev = optional
+            proof.steps.insert(prev + 1, self.__get_step(previous_step_index + 1))
+            # We should change the goals of all the steps in the same proof
+            # after the one that was changed
+            # NOTE: We assume the proofs and steps are in the order they are written
+            for e in range(prev + 2, len(proof.steps)):
+                # The goals will be loaded if used (Lazy Loading)
+                proof.steps[e].goals = self._goals
         super().exec(steps + offset - 1)
 
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]
         optional = self.__find_step(step.ast.range)
-        if optional is not None:
+
+        self._make_change(self._delete_step, step_index)
+        # The step was not processed yet
+        if self.steps_taken <= step_index:
+            return
+
+        # Handles case where Qed is deleted
+        if self.__is_end_proof(step):
+            index = self.__find_proof_index(step) - 1
+            open_index = self.__find_open_proof_index(step)
+            self.__handle_end_proof(step, None, index=index, open_index=open_index)
+        # Handle regular proof steps
+        elif optional is not None:
             proof, i = optional
             proof.steps.pop(i)
             for e in range(i, len(proof.steps)):
                 # The goals will be loaded if used (Lazy Loading)
                 proof.steps[e].goals = self._goals
-        self._make_change(self._delete_step, step_index)
-
-        # TODO: Handle the case where deleting the Qed creates a nested proof
+        # TODO delete proof without anything
 
     def change_steps(self, changes: List[CoqChange]):
         min_step = self.steps_taken

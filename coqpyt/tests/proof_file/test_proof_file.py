@@ -160,6 +160,9 @@ class TestProofNestedProofs(SetupProofFile):
         proof_file.exec(-1)
         proof_file.add_step(proof_file.steps_taken - 1, "\nQed.")
         proof_file.add_step(proof_file.steps_taken - 1, "\nQed.")
+        assert len(proof_file.proofs) == 2
+        assert len(proof_file.open_proofs) == 2
+
         proof_file.exec(2)
         assert len(proof_file.proofs) == 4
         assert len(proof_file.open_proofs) == 0

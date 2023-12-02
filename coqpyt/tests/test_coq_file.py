@@ -171,17 +171,7 @@ def test_delete_proof(setup, teardown):
     coq_file.run()
     steps_taken = coq_file.steps_taken
     assert "mult_0_plus" in coq_file.context.terms
-    coq_file.change_steps(
-        [
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-            CoqDeleteStep(14),
-        ]
-    )
+    coq_file.change_steps([CoqDeleteStep(14) for _ in range(7)])
     assert "mult_0_plus" not in coq_file.context.terms
     assert coq_file.steps_taken == steps_taken - 7
 

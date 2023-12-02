@@ -194,17 +194,7 @@ class TestProofValidFile(SetupProofFile):
     def test_change_steps_delete_proof(self):
         proofs = len(self.proof_file.proofs)
         steps_taken = self.proof_file.steps_taken
-        self.proof_file.change_steps(
-            [
-                CoqDeleteStep(14),
-                CoqDeleteStep(14),
-                CoqDeleteStep(14),
-                CoqDeleteStep(14),
-                CoqDeleteStep(14),
-                CoqDeleteStep(14),
-                CoqDeleteStep(14),
-            ]
-        )
+        self.proof_file.change_steps([CoqDeleteStep(14) for _ in range(7)])
         assert self.proof_file.steps_taken == steps_taken - 7
         assert len(self.proof_file.proofs) == proofs - 1
 
@@ -249,7 +239,7 @@ class TestAddOpenProof(SetupProofFile):
         )
 
 
-class TestAddOpenProof(SetupProofFile):
+class TestOpenClosedProof(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_delete_qed.v")
 

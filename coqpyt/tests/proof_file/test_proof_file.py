@@ -17,7 +17,7 @@ class TestProofValidFile(SetupProofFile):
 
     def test_exec(self):
         # Rollback whole file
-        self.proof_file.exec(-len(self.proof_file.steps))
+        self.proof_file.exec(-self.proof_file.steps_taken)
         assert "plus_O_n" in self.proof_file.context.terms
         assert self.proof_file.context.get_term("plus_O_n").module == []
         assert self.proof_file.context.curr_modules == []
@@ -44,7 +44,7 @@ class TestProofImports(SetupProofFile):
 
     def test_exec(self):
         # Rollback whole file
-        self.proof_file.exec(-len(self.proof_file.steps))
+        self.proof_file.exec(-self.proof_file.steps_taken)
         # mult_0_plus is not defined because the import of test_import2 is not executed
         assert "mult_0_plus" not in self.proof_file.context.terms
 

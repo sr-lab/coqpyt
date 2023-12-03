@@ -277,62 +277,46 @@ class CoqFile(object):
 
     def __delete_update_ast(self, step_index: int):
         deleted_step = self.steps[step_index]
-        for step in self.steps[step_index + 1 :]:
-            remove_chars = deleted_step.ast.range.end.character
-            if deleted_step.ast.range.end.line == deleted_step.ast.range.start.line:
-                remove_chars -= deleted_step.ast.range.start.character - 1
+        if step_index != 0:
+            prev_step_end = self.steps[step_index - 1].ast.range.end
+        else:
+            prev_step_end = Position(0, 0)
+
+        deleted_lines = deleted_step.text.count("\n")
+        last_line_chars = deleted_step.ast.range.end.character
+        if deleted_step.ast.range.start.line == prev_step_end.line:
+            last_line_chars -= prev_step_end.character
+
+        for step in self.steps[step_index:]:
+            step.ast.range.start.line -= deleted_lines
+            step.ast.range.end.line -= deleted_lines
 
             if step.ast.range.start.line == deleted_step.ast.range.end.line:
-                step.ast.range.start.character -= remove_chars
+                step.ast.range.start.character -= last_line_chars
             if step.ast.range.end.line == deleted_step.ast.range.end.line:
-                step.ast.range.end.character -= remove_chars
-
-            step.ast.range.start.line -= deleted_step.text.count("\n")
-            step.ast.range.end.line -= deleted_step.text.count("\n")
+                step.ast.range.end.character -= last_line_chars
 
     def __add_update_ast(self, previous_step_index: int, step_text: str) -> Step:
-        previous_step = self.steps[previous_step_index]
+        prev_step_end = self.steps[previous_step_index].ast.range.end
+        start = Position(prev_step_end.line, prev_step_end.character)
 
-        newline_start = len(step_text) - len(step_text.lstrip("\n"))
-        if newline_start > 0:
-            start_line = previous_step.ast.range.end.line + newline_start
-            start_char = 0
-        else:
-            start_line = previous_step.ast.range.end.line
-            start_char = (
-                previous_step.ast.range.end.character
-                + len(step_text)
-                - len(step_text.lstrip())
-            )
-
-        end_line = start_line + step_text.count("\n")
-        if start_line == end_line:
-            end_char = start_char + len(step_text.split("\n")[-1])
-        else:
-            end_char = len(step_text.split("\n")[-1])
+        added_lines = step_text.count("\n")
+        end_char = last_line_chars = len(step_text.split("\n")[-1])
+        if added_lines == 0:
+            end_char += start.character
+        end = Position(start.line + added_lines, end_char)
 
         # We will create a placeholder step that will be replaced later
-        added_step = Step(
-            step_text,
-            step_text,
-            RangedSpan(
-                Range(Position(start_line, start_char), Position(start_line, end_char)),
-                None,
-            ),
-        )
+        added_step = Step(step_text, step_text, RangedSpan(Range(start, end), None))
 
-        for i, step in enumerate(self.steps[previous_step_index + 1 :]):
-            add_chars = added_step.ast.range.end.character
-            if added_step.ast.range.start.line == added_step.ast.range.start.line:
-                add_chars -= added_step.ast.range.start.character
-
-            step.ast.range.start.line += step_text.count("\n")
-            step.ast.range.end.line += step_text.count("\n")
+        for step in self.steps[previous_step_index + 1 :]:
+            step.ast.range.start.line += added_lines
+            step.ast.range.end.line += added_lines
 
             if step.ast.range.start.line == added_step.ast.range.end.line:
-                step.ast.range.start.character += add_chars
+                step.ast.range.start.character += last_line_chars
             if step.ast.range.end.line == added_step.ast.range.end.line:
-                step.ast.range.end.character += add_chars
+                step.ast.range.end.character += last_line_chars
 
         return added_step
 

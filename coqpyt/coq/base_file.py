@@ -13,7 +13,7 @@ from coqpyt.lsp.structs import (
     ErrorCodes,
     Diagnostic,
 )
-from coqpyt.coq.lsp.structs import Position, GoalAnswer, RangedSpan, Range
+from coqpyt.coq.lsp.structs import Position, RangedSpan, Range
 from coqpyt.coq.lsp.client import CoqLspClient
 from coqpyt.coq.exceptions import *
 from coqpyt.coq.changes import *
@@ -63,9 +63,9 @@ class CoqFile(object):
         if workspace is not None:
             uri = f"file://{workspace}"
         else:
-            uri = f"file://{self.__path}"
+            uri = f"file://{self._path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout, coq_lsp=coq_lsp)
-        uri = f"file://{self.__path}"
+        uri = f"file://{self._path}"
         text = self.__read()
 
         try:
@@ -80,8 +80,6 @@ class CoqFile(object):
         self.__validate()
         self.context = FileContext(self.path, module=self.file_module, coqtop=coqtop)
         self.version = 1
-        self.__last_end_pos: Optional[Position] = None
-        self.__current_goals = None
 
     def __enter__(self):
         return self
@@ -94,7 +92,7 @@ class CoqFile(object):
         self.__from_lib = self.file_module[:2] == ["Coq", "Init"]
         self.path = file_path
         if not self.__from_lib:
-            self.__path = file_path
+            self._path = file_path
             return
 
         # Coq LSP cannot open files from Coq library, so we need to work with
@@ -104,7 +102,7 @@ class CoqFile(object):
             temp_dir, "coq_" + str(uuid.uuid4()).replace("-", "") + ".v"
         )
         shutil.copyfile(file_path, new_path)
-        self.__path = new_path
+        self._path = new_path
 
     def __handle_exception(self, e):
         if not isinstance(e, ResponseError) or e.code not in [
@@ -114,7 +112,7 @@ class CoqFile(object):
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
         if self.__from_lib:
-            os.remove(self.__path)
+            os.remove(self._path)
 
     def __init_step(
         self,
@@ -147,7 +145,7 @@ class CoqFile(object):
             self.steps.append(self.__init_step(lines, i, curr_ast, ast[i - 1]))
 
     def __validate(self):
-        uri = f"file://{self.__path}"
+        uri = f"file://{self._path}"
         self.is_valid = True
         if uri not in self.coq_lsp_client.lsp_endpoint.diagnostics:
             return
@@ -183,36 +181,6 @@ class CoqFile(object):
     def __read(self):
         with open(self.path, "r") as f:
             return f.read()
-
-    def _goals(self, end_pos: Position):
-        uri = f"file://{self.__path}"
-        try:
-            return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
-        except Exception as e:
-            self.__handle_exception(e)
-            raise e
-
-    def _can_close_proof(self, goals: Optional[GoalAnswer]):
-        def empty_stack(stack):
-            # e.g. [([], [])]
-            for tuple in stack:
-                if len(tuple[0]) > 0 or len(tuple[1]) > 0:
-                    return False
-            return True
-
-        goals = goals.goals
-        if goals is None:
-            return False
-
-        return (
-            len(goals.goals) == 0
-            and empty_stack(goals.stack)
-            and len(goals.shelf) == 0
-            and goals.bullet is None
-        )
-
-    def _in_proof(self, goals: Optional[GoalAnswer]):
-        return goals is not None and goals.goals is not None
 
     def __update_steps(self):
         uri = f"file://{self.path}"
@@ -257,7 +225,7 @@ class CoqFile(object):
             raise e
 
     def __delete_step_text(self, step_index: int):
-        with open(self.__path, "r") as f:
+        with open(self._path, "r") as f:
             lines = f.readlines()
 
         step = self.steps[step_index]
@@ -283,11 +251,11 @@ class CoqFile(object):
             del lines[i]
         text = "".join(lines)
 
-        with open(self.__path, "w") as f:
+        with open(self._path, "w") as f:
             f.write(text)
 
     def __add_step_text(self, previous_step_index: int, step_text: str):
-        with open(self.__path, "r") as f:
+        with open(self._path, "r") as f:
             lines = f.readlines()
 
         previous_step = self.steps[previous_step_index]
@@ -301,7 +269,7 @@ class CoqFile(object):
 
         text = "".join(lines)
 
-        with open(self.__path, "w") as f:
+        with open(self._path, "w") as f:
             f.write(text)
 
     def __delete_update_ast(self, step_index: int):
@@ -520,47 +488,13 @@ class CoqFile(object):
         return self.steps_taken == len(self.steps)
 
     @property
-    def current_goals(self) -> Optional[GoalAnswer]:
-        """Get goals in current position.
-
-        Returns:
-            Optional[GoalAnswer]: Goals in the current position if there are goals.
-        """
-        if self.steps_taken == len(self.steps):
-            end_pos = self.prev_step.ast.range.end
-        else:
-            end_pos = self.curr_step.ast.range.start
-
-        if end_pos != self.__last_end_pos:
-            self.__current_goals = self._goals(end_pos)
-            self.__last_end_pos = end_pos
-
-        return self.__current_goals
-
-    @property
-    def in_proof(self) -> bool:
-        """
-        Returns:
-            bool: True if the current step is inside a proof.
-        """
-        return self._in_proof(self.current_goals)
-
-    @property
-    def can_close_proof(self):
-        """
-        Returns:
-            bool: True if the next step can be a [Qed].
-        """
-        return self._can_close_proof(self.current_goals)
-
-    @property
     def diagnostics(self) -> List[Diagnostic]:
         """
         Returns:
             List[Diagnostic]: The diagnostics of the file.
                 Includes all messages given by Coq.
         """
-        uri = f"file://{self.__path}"
+        uri = f"file://{self._path}"
         return self.coq_lsp_client.lsp_endpoint.diagnostics[uri]
 
     def exec(self, nsteps=1) -> List[Step]:
@@ -594,14 +528,11 @@ class CoqFile(object):
         return self.exec(len(self.steps) - self.steps_taken)
 
     def delete_step(self, step_index: int) -> None:
-        """Deletes a step from the file. The step must be inside a proof.
-        This function will change the original file.
+        """Deletes a step from the file. This function will change the original file.
+        If an exception is thrown the file will not be changed.
 
         Args:
             step_index (int): The index of the step to remove.
-
-        Raises:
-            NotImplementedError: If the step is outside a proof.
         """
         self._make_change(self._delete_step, step_index)
 
@@ -610,32 +541,35 @@ class CoqFile(object):
         previous_step_index: int,
         step_text: str,
     ) -> None:
-        """Adds a step to the file. The step must be inside a proof.
-        This function will change the original file. If an exception is thrown
-        the file will not be changed.
+        """Adds a step to the file. This function will change the original file.
+        If an exception is thrown the file will not be changed.
 
         Args:
             previous_step_index (int): The index of the previous step of the new step.
             step_text (str): The text of the step to add.
 
         Raises:
-            NotImplementedError: If the step added is not on a proof.
             InvalidFileException: If the file being changed is not valid.
             InvalidStepException: If the step added is not valid.
         """
         self._make_change(self._add_step, previous_step_index, step_text)
 
     def change_steps(self, changes: List[CoqChange]):
-        """Changes the steps of the Coq file transactionally.
+        """Changes the steps of the original Coq file transactionally.
+        If an exception is thrown the file will not be changed.
 
         Args:
             changes (List[CoqChange]): The changes to be applied to the Coq file.
+
+        Raises:
+            InvalidChangeException: If the change list contains an object
+                that is not a CoqAddStep or a CoqDeleteStep.
         """
         self._make_change(self.__change_steps, changes)
 
     def save_vo(self):
         """Compiles the vo file for this Coq file."""
-        uri = f"file://{self.__path}"
+        uri = f"file://{self._path}"
         try:
             self.coq_lsp_client.save_vo(TextDocumentIdentifier(uri))
         except Exception as e:
@@ -647,4 +581,4 @@ class CoqFile(object):
         self.coq_lsp_client.shutdown()
         self.coq_lsp_client.exit()
         if self.__from_lib:
-            os.remove(self.__path)
+            os.remove(self._path)

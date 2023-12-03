@@ -7,12 +7,13 @@ from typing import Optional, Tuple, List, Dict
 
 from coqpyt.lsp.structs import (
     TextDocumentItem,
+    TextDocumentIdentifier,
     VersionedTextDocumentIdentifier,
     TextDocumentContentChangeEvent,
     ResponseError,
     ErrorCodes,
 )
-from coqpyt.coq.lsp.structs import Result, Query, Range, GoalAnswer
+from coqpyt.coq.lsp.structs import Result, Query, Range, GoalAnswer, Position
 from coqpyt.coq.lsp.client import CoqLspClient
 from coqpyt.coq.structs import TermType, Step, Term, ProofStep, ProofTerm
 from coqpyt.coq.exceptions import *
@@ -264,6 +265,8 @@ class ProofFile(CoqFile):
         self.__program_context: Dict[str, Tuple[Term, List[Term]]] = {}
         self.__proofs: List[ProofTerm] = []
         self.__open_proofs: List[_ProofTerm] = []
+        self.__last_end_pos: Optional[Position] = None
+        self.__current_goals = None
 
     def __enter__(self):
         return self
@@ -479,7 +482,7 @@ class ProofFile(CoqFile):
         context = self.__step_context(self.steps[step_index])
 
         # The goals will be loaded if used (Lazy Loading)
-        goals = self._goals
+        goals = self.__goals
         return ProofStep(self.steps[step_index], goals, context)
 
     def __update_libraries(self):
@@ -517,6 +520,36 @@ class ProofFile(CoqFile):
                 return i
         return len(self.__proofs)
 
+    def __goals(self, end_pos: Position):
+        uri = f"file://{self._path}"
+        try:
+            return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
+        except Exception as e:
+            self.__handle_exception(e)
+            raise e
+
+    def __in_proof(self, goals: Optional[GoalAnswer]):
+        return goals is not None and goals.goals is not None
+
+    def __can_close_proof(self, goals: Optional[GoalAnswer]):
+        def empty_stack(stack):
+            # e.g. [([], [])]
+            for tuple in stack:
+                if len(tuple[0]) > 0 or len(tuple[1]) > 0:
+                    return False
+            return True
+
+        goals = goals.goals
+        if goals is None:
+            return False
+
+        return (
+            len(goals.goals) == 0
+            and empty_stack(goals.stack)
+            and len(goals.shelf) == 0
+            and goals.bullet is None
+        )
+
     @property
     def proofs(self) -> List[ProofTerm]:
         """Gets all the closed proofs in the file and their corresponding steps.
@@ -540,6 +573,40 @@ class ProofFile(CoqFile):
                 context used for each step and the goals in that step.
         """
         return [ProofTerm(*proof) for proof in self.__open_proofs]
+
+    @property
+    def current_goals(self) -> Optional[GoalAnswer]:
+        """Get goals in current position.
+
+        Returns:
+            Optional[GoalAnswer]: Goals in the current position if there are goals.
+        """
+        if self.steps_taken == len(self.steps):
+            end_pos = self.prev_step.ast.range.end
+        else:
+            end_pos = self.curr_step.ast.range.start
+
+        if end_pos != self.__last_end_pos:
+            self.__current_goals = self.__goals(end_pos)
+            self.__last_end_pos = end_pos
+
+        return self.__current_goals
+
+    @property
+    def in_proof(self) -> bool:
+        """
+        Returns:
+            bool: True if the current step is inside a proof.
+        """
+        return self.__in_proof(self.current_goals)
+
+    @property
+    def can_close_proof(self):
+        """
+        Returns:
+            bool: True if the next step can be a [Qed].
+        """
+        return self.__can_close_proof(self.current_goals)
 
     def exec(self, nsteps=1) -> List[Step]:
         sign = 1 if nsteps > 0 else -1
@@ -598,14 +665,14 @@ class ProofFile(CoqFile):
         # Allows to add open proofs
         step = self.steps[previous_step_index + 1]
         if self.__is_proof_term(step):
-            goals = self._goals(step.ast.range.end)
-            if self._in_proof(goals):
+            goals = self.__goals(step.ast.range.end)
+            if self.__in_proof(goals):
                 index = self.__find_open_proof_index(step)
                 self.__handle_proof_term(step, goals, index=index)
         # Handles case where Qed is added
         elif self.__is_end_proof(step):
             # This is not outside of the ifs for performance reasons
-            goals = self._goals(step.ast.range.end)
+            goals = self.__goals(step.ast.range.end)
             index = self.__find_proof_index(step)
             open_index = self.__find_open_proof_index(step) - 1
             self.__handle_end_proof(step, goals, index=index, open_index=open_index)
@@ -618,7 +685,7 @@ class ProofFile(CoqFile):
             # NOTE: We assume the proofs and steps are in the order they are written
             for e in range(prev + 2, len(proof.steps)):
                 # The goals will be loaded if used (Lazy Loading)
-                proof.steps[e].goals = self._goals
+                proof.steps[e].goals = self.__goals
         super().exec(steps + offset - 1)
 
     def delete_step(self, step_index: int) -> None:
@@ -645,7 +712,7 @@ class ProofFile(CoqFile):
                 proof.steps.pop(i)
                 for e in range(i, len(proof.steps)):
                     # The goals will be loaded if used (Lazy Loading)
-                    proof.steps[e].goals = self._goals
+                    proof.steps[e].goals = self.__goals
 
     def change_steps(self, changes: List[CoqChange]):
         min_step = self.steps_taken

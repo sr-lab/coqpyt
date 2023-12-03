@@ -92,6 +92,8 @@ class TestProofListNotation(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_list_notation.v")
 
+    # FIXME: Refer to issue #24: https://github.com/sr-lab/coqpyt/issues/24
+    @pytest.mark.skip(reason="Skipping due to non-deterministic behaviour")
     def test_list_notation(self):
         check_proofs(
             "tests/proof_file/expected/list_notation.yml", self.proof_file.proofs

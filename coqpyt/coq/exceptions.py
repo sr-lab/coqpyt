@@ -7,7 +7,7 @@ class InvalidAddException(InvalidChangeException):
         self.step: str = step
 
     def __str__(self):
-        return "Adding the step {} is not valid.".format(self.step)
+        return "Adding the step {} is not valid.".format(repr(self.step))
 
 
 class InvalidDeleteException(InvalidChangeException):
@@ -15,7 +15,7 @@ class InvalidDeleteException(InvalidChangeException):
         self.step: str = step
 
     def __str__(self):
-        return "Deleting the step {} is not valid.".format(self.step)
+        return "Deleting the step {} is not valid.".format(repr(self.step))
 
 
 class InvalidFileException(Exception):

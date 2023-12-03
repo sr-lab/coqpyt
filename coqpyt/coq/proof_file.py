@@ -647,21 +647,19 @@ class ProofFile(CoqFile):
         return self.steps[slice[1 - last] : slice[last]]
 
     def add_step(self, previous_step_index: int, step_text: str):
-        steps = self.steps_taken - previous_step_index - 1
-        offset = 1 if previous_step_index + 1 < self.steps_taken else 0
-
         optional = self.__find_step(self.steps[previous_step_index].ast.range)
         self._make_change(self._add_step, previous_step_index, step_text)
 
         # The step was not processed yet
         if self.steps_taken <= previous_step_index + 1:
-            super().exec(steps + offset)
             return
-        super().exec(-steps)
 
+        n_steps = self.steps_taken - previous_step_index - 1
+        super().exec(-n_steps)
         # NOTE: We rollback so the last_term is the correct one
         # We use the CoqFile is exec because it is faster
         super().exec(1)
+
         # Allows to add open proofs
         step = self.steps[previous_step_index + 1]
         if self.__is_proof_term(step):
@@ -686,7 +684,7 @@ class ProofFile(CoqFile):
             for e in range(prev + 2, len(proof.steps)):
                 # The goals will be loaded if used (Lazy Loading)
                 proof.steps[e].goals = self.__goals
-        super().exec(steps + offset - 1)
+        super().exec(n_steps)
 
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]

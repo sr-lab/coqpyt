@@ -357,3 +357,45 @@ class TestProofChangeEmptyProof(SetupProofFile):
         # Delete Lemma statement
         proof_file.delete_step(0)
         assert len(proof_file.open_proofs) == 0
+
+
+class TestProofChangeNestedProofs(SetupProofFile):
+    def setup_method(self, method):
+        self.setup("test_nested_proofs.v")
+
+    def test_change_nested_proofs(self):
+        proof_file = self.proof_file
+        # Take back last (empty) step
+        proof_file.exec(-1)
+
+        # Close proofs in file
+        proof_file.add_step(proof_file.steps_taken - 1, "\nQed.")
+        proof_file.add_step(proof_file.steps_taken, "\nQed.")
+        assert len(proof_file.proofs) == 2
+        assert len(proof_file.open_proofs) == 2
+
+        # Close proofs in ProofFile
+        proof_file.exec(2)
+        assert len(proof_file.proofs) == 4
+        assert len(proof_file.open_proofs) == 0
+
+        # Re-open proofs in ProofFile
+        proof_file.exec(-2)
+        assert len(proof_file.proofs) == 2
+        assert len(proof_file.open_proofs) == 2
+
+        # Close proofs in ProofFile again to check rollback
+        proof_file.exec(2)
+        assert len(proof_file.proofs) == 4
+        assert len(proof_file.open_proofs) == 0
+
+        # Re-open proofs in file
+        proof_file.exec(-2)
+        proof_file.delete_step(proof_file.steps_taken + 1)
+        proof_file.delete_step(proof_file.steps_taken)
+
+        # Take last (empty) step
+        proof_file.exec(1)
+        assert len(proof_file.proofs) == 2
+        assert len(proof_file.open_proofs) == 2
+        assert proof_file.steps_taken == len(proof_file.steps)

@@ -86,46 +86,6 @@ class TestProofValidFile(SetupProofFile):
         assert len_steps == len(self.proof_file.steps)
         assert self.proof_file.steps[2].text == "\n\nModule Out."
 
-    def test_invalid_changes(self):
-        proof_file = self.proof_file
-        n_old_steps = len(proof_file.steps)
-        old_diagnostics = proof_file.diagnostics
-        old_goals = []
-        for proof in proof_file.proofs:
-            for step in proof.steps:
-                old_goals.append(step.goals)
-
-        def check_rollback():
-            with open(proof_file.path, "r") as f:
-                assert n_old_steps == len(proof_file.steps)
-                assert old_diagnostics == proof_file.diagnostics
-                assert proof_file.is_valid
-                assert "invalid_tactic" not in f.read()
-                i = 0
-                for proof in proof_file.proofs:
-                    for step in proof.steps:
-                        assert step.goals == old_goals[i]
-                        i += 1
-
-        with pytest.raises(InvalidDeleteException):
-            proof_file.delete_step(9)
-            check_rollback()
-        with pytest.raises(InvalidDeleteException):
-            proof_file.delete_step(16)
-            check_rollback()
-        with pytest.raises(InvalidAddException):
-            proof_file.add_step(7, "invalid_tactic")
-            check_rollback()
-        with pytest.raises(InvalidAddException):
-            proof_file.add_step(7, "invalid_tactic.")
-            check_rollback()
-        with pytest.raises(InvalidAddException):
-            proof_file.add_step(7, "\n    invalid_tactic.")
-            check_rollback()
-        with pytest.raises(InvalidAddException):
-            proof_file.add_step(7, "\n    invalid_tactic x $$$ y.")
-            check_rollback()
-
     def test_change_steps(self):
         proof_file = self.proof_file
         proof_file.change_steps(
@@ -325,6 +285,87 @@ class TestProofChangeInvalidFile(SetupProofFile):
             self.proof_file.delete_step(7)
         with pytest.raises(InvalidFileException):
             self.proof_file.change_steps([])
+
+
+class TestProofInvalidChanges(SetupProofFile):
+    def setup_method(self, method):
+        self.setup("test_invalid_changes.v")
+        self.n_steps = len(self.proof_file.steps)
+        self.diagnostics = self.proof_file.diagnostics
+        with open(self.proof_file.path, "r") as f:
+            self.text = f.read()
+        self.goals = []
+        for proof in self.proof_file.proofs:
+            for step in proof.steps:
+                self.goals.append(step.goals)
+
+    def __check_rollback(self, new=0):
+        assert self.n_steps == len(self.proof_file.steps)
+        assert self.proof_file.is_valid
+        assert len(self.proof_file.diagnostics) == len(self.diagnostics) + new
+        with open(self.proof_file.path, "r") as f:
+            assert self.text == f.read()
+        i = 0
+        for proof in self.proof_file.proofs:
+            for step in proof.steps:
+                assert step.goals == self.goals[i]
+                i += 1
+
+    def test_invalid_add(self):
+        # File becomes invalid
+        with pytest.raises(InvalidAddException):
+            # Add a non-existing tactic
+            self.proof_file.add_step(6, "\n    invalid_tactic.")
+        self.__check_rollback(new=1)
+        with pytest.raises(InvalidAddException):
+            # Add an existing tactic that fails
+            self.proof_file.add_step(6, "\n    inversion 1.")
+        self.__check_rollback(new=1)
+        with pytest.raises(InvalidAddException):
+            # Add a tactic when there are no goals
+            self.proof_file.add_step(7, "\n    reflexivity.")
+        self.__check_rollback(new=1)
+        with pytest.raises(InvalidAddException):
+            # Add a tactic with undefined tokens
+            self.proof_file.add_step(6, "\n    invalid_tactic x $$$ y.")
+        self.__check_rollback(new=1)
+
+        # File remains valid but not a valid step
+        with pytest.raises(InvalidAddException):
+            # Add two valid steps
+            self.proof_file.add_step(6, "\n    Check A.x. Check A.x.")
+        self.__check_rollback(new=2)
+        with pytest.raises(InvalidAddException):
+            # Modify the previous step
+            self.proof_file.add_step(6, "x.")
+        self.__check_rollback()
+        with pytest.raises(InvalidAddException):
+            # Modify the next step
+            self.proof_file.add_step(6, " try")
+        self.__check_rollback()
+        # TODO: Handle this case. Should this be allowed or not?
+        # with pytest.raises(InvalidAddException):
+        #     # Modify existing steps and add a new one
+        #     self.proof_file.add_step(6, "x. Check A.x. try")
+        #     self.__check_rollback()
+        with pytest.raises(InvalidAddException):
+            # Add whitespaces to end of file
+            self.proof_file.add_step(8, "\n \t")
+        self.__check_rollback()
+        with pytest.raises(InvalidAddException):
+            # Add comment to end of file
+            self.proof_file.add_step(8, "\n(* I'm useless *)")
+        self.__check_rollback()
+
+    def test_invalid_delete(self):
+        with pytest.raises(InvalidDeleteException):
+            # Delete proof term
+            self.proof_file.delete_step(4)
+        self.__check_rollback(new=2)
+        with pytest.raises(InvalidDeleteException):
+            # Delete necessary proof step
+            self.proof_file.delete_step(7)
+        self.__check_rollback()
 
 
 class TestProofChangeEmptyProof(SetupProofFile):

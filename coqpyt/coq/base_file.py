@@ -352,7 +352,7 @@ class CoqFile(object):
         previous_steps = self.steps
         self.__update_steps()
 
-        if len(self.steps) != len(previous_steps) - 1 or not self.is_valid:
+        if not self.is_valid:
             raise InvalidDeleteException(self.steps[step_index].text)
 
         # We will remove the step from the previous steps
@@ -377,11 +377,9 @@ class CoqFile(object):
         step_index = previous_step_index + 1
         self.__update_steps()
 
-        if (
-            len(self.steps) != len(previous_steps) + 1
-            or self.steps[step_index].ast.span is None
-            or not self.is_valid
-        ):
+        # NOTE: We check if exactly 1 step was added, because the text might contain
+        # two steps or something that might lead to similar unwanted behaviour.
+        if len(self.steps) != len(previous_steps) + 1 or not self.is_valid:
             raise InvalidAddException(step_text)
 
         # We will add the new step to the previous_steps
@@ -435,6 +433,8 @@ class CoqFile(object):
                 raise NotImplementedError(f"Unknown change: {change}")
 
         self.__update_steps()
+        # NOTE: We check the expected offset, because a given step text might contain
+        # two steps or something that might lead to similar unwanted behaviour.
         if len(self.steps) != previous_steps_size + offset_steps or not self.is_valid:
             raise InvalidChangeException()
 

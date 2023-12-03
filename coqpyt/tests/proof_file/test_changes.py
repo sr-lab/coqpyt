@@ -113,16 +113,16 @@ class TestProofValidFile(SetupProofFile):
         with pytest.raises(InvalidDeleteException):
             proof_file.delete_step(16)
             check_rollback()
-        with pytest.raises(InvalidStepException):
+        with pytest.raises(InvalidAddException):
             proof_file.add_step(7, "invalid_tactic")
             check_rollback()
-        with pytest.raises(InvalidStepException):
+        with pytest.raises(InvalidAddException):
             proof_file.add_step(7, "invalid_tactic.")
             check_rollback()
-        with pytest.raises(InvalidStepException):
+        with pytest.raises(InvalidAddException):
             proof_file.add_step(7, "\n    invalid_tactic.")
             check_rollback()
-        with pytest.raises(InvalidStepException):
+        with pytest.raises(InvalidAddException):
             proof_file.add_step(7, "\n    invalid_tactic x $$$ y.")
             check_rollback()
 
@@ -321,6 +321,10 @@ class TestProofChangeInvalidFile(SetupProofFile):
     def test_change_invalid_file(self):
         with pytest.raises(InvalidFileException):
             self.proof_file.add_step(7, "Print plus.")
+        with pytest.raises(InvalidFileException):
+            self.proof_file.delete_step(7)
+        with pytest.raises(InvalidFileException):
+            self.proof_file.change_steps([])
 
 
 class TestProofChangeEmptyProof(SetupProofFile):

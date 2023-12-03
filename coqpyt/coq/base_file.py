@@ -206,6 +206,9 @@ class CoqFile(object):
         self.steps_taken += sign
 
     def _make_change(self, change_function, *args):
+        if not self.is_valid:
+            raise InvalidFileException(self.path)
+
         previous_steps = self.steps
         old_steps_taken = self.steps_taken
         old_diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics
@@ -340,11 +343,7 @@ class CoqFile(object):
             step.short_text = self.steps[i].short_text
         self.steps = previous_steps
 
-    def _delete_step(
-        self,
-        step_index: int,
-        validate_file: bool = True,
-    ) -> None:
+    def _delete_step(self, step_index: int) -> None:
         self.__delete_step_text(step_index)
 
         # Modify the previous steps instead of creating new ones
@@ -353,13 +352,10 @@ class CoqFile(object):
         previous_steps = self.steps
         self.__update_steps()
 
-        if validate_file and (
-            # We will remove the step from the previous steps
-            len(self.steps) != len(previous_steps) - 1
-            or not self.is_valid
-        ):
+        if len(self.steps) != len(previous_steps) - 1 or not self.is_valid:
             raise InvalidDeleteException(self.steps[step_index].text)
 
+        # We will remove the step from the previous steps
         deleted_step = previous_steps.pop(step_index)
         self.__copy_steps(previous_steps)
 
@@ -371,15 +367,7 @@ class CoqFile(object):
             self.context.undo_step(deleted_step)
             CoqFile.exec(self, n_steps)
 
-    def _add_step(
-        self,
-        previous_step_index: int,
-        step_text: str,
-        validate_file: bool = True,
-    ) -> None:
-        if validate_file and not self.is_valid:
-            raise InvalidFileException(self.path)
-
+    def _add_step(self, previous_step_index: int, step_text: str) -> None:
         self.__add_step_text(previous_step_index, step_text)
 
         # Modify the previous steps instead of creating new ones
@@ -387,17 +375,16 @@ class CoqFile(object):
         # For instance, in the ProofFile
         previous_steps = self.steps
         step_index = previous_step_index + 1
-
         self.__update_steps()
 
-        if validate_file and (
-            # We will add the new step to the previous_steps
+        if (
             len(self.steps) != len(previous_steps) + 1
             or self.steps[step_index].ast.span is None
             or not self.is_valid
         ):
-            raise InvalidStepException(step_text)
+            raise InvalidAddException(step_text)
 
+        # We will add the new step to the previous_steps
         previous_steps.insert(step_index, self.steps[step_index])
         self.__copy_steps(previous_steps)
 
@@ -533,6 +520,10 @@ class CoqFile(object):
 
         Args:
             step_index (int): The index of the step to remove.
+
+        Raises:
+            InvalidFileException: If the file being changed is not valid.
+            InvalidDeleteException: If the file is invalid after deleting the step.
         """
         self._make_change(self._delete_step, step_index)
 
@@ -550,7 +541,7 @@ class CoqFile(object):
 
         Raises:
             InvalidFileException: If the file being changed is not valid.
-            InvalidStepException: If the step added is not valid.
+            InvalidAddException: If the file is invalid after adding the step.
         """
         self._make_change(self._add_step, previous_step_index, step_text)
 
@@ -562,8 +553,9 @@ class CoqFile(object):
             changes (List[CoqChange]): The changes to be applied to the Coq file.
 
         Raises:
-            InvalidChangeException: If the change list contains an object
-                that is not a CoqAddStep or a CoqDeleteStep.
+            InvalidFileException: If the file being changed is not valid.
+            InvalidChangeException: If the file is invalid after applying the changes.
+            NotImplementedError: If the changes contain a CoqChange that is not a CoqAddStep or CoqDeleteStep.
         """
         self._make_change(self.__change_steps, changes)
 

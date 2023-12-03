@@ -260,8 +260,7 @@ class CoqFile(object):
         with open(self.__path, "r") as f:
             lines = f.readlines()
 
-        deleted_step = self.steps[step_index]
-        step = deleted_step
+        step = self.steps[step_index]
         if step_index != 0:
             prev_step_end = self.steps[step_index - 1].ast.range.end
         else:
@@ -398,11 +397,11 @@ class CoqFile(object):
 
         if self.steps_taken > step_index:
             self.steps_taken -= 1
-            n_steps = step_index - self.steps_taken
+            n_steps = self.steps_taken - step_index
             # We don't use self to avoid calling method of ProofFile
-            CoqFile.exec(self, n_steps)
-            self.context.undo_step(deleted_step)
             CoqFile.exec(self, -n_steps)
+            self.context.undo_step(deleted_step)
+            CoqFile.exec(self, n_steps)
 
     def _add_step(
         self,
@@ -434,13 +433,13 @@ class CoqFile(object):
         previous_steps.insert(step_index, self.steps[step_index])
         self.__copy_steps(previous_steps)
 
-        if self.steps_taken > previous_step_index + 1:
+        if self.steps_taken > step_index:
             self.steps_taken += 1
-            n_steps = step_index - self.steps_taken
-            CoqFile.exec(self, n_steps + 1)
+            n_steps = self.steps_taken - step_index
+            CoqFile.exec(self, -n_steps + 1)
             # Ignore step when going back
             self.steps_taken -= 1
-            CoqFile.exec(self, -n_steps)
+            CoqFile.exec(self, n_steps)
 
     def _get_steps_taken_offset(self, changes: List[CoqChange]):
         offset = 0
@@ -458,7 +457,7 @@ class CoqFile(object):
 
         return offset
 
-    def _change_steps(self, changes: List[CoqChange]):
+    def __change_steps(self, changes: List[CoqChange]):
         previous_steps_takens = self.steps_taken
         offset_steps, offset_steps_taken = 0, self._get_steps_taken_offset(changes)
         previous_steps, previous_steps_size = self.steps, len(self.steps)
@@ -632,7 +631,7 @@ class CoqFile(object):
         Args:
             changes (List[CoqChange]): The changes to be applied to the Coq file.
         """
-        self._make_change(self._change_steps, changes)
+        self._make_change(self.__change_steps, changes)
 
     def save_vo(self):
         """Compiles the vo file for this Coq file."""

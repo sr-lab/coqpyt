@@ -19,13 +19,7 @@ class FileContext:
         self.__path = path
         self.__module = [] if module is None else module
         self.__init_coq_version(coqtop)
-        # NOTE: We use a stack for each term because of the following case:
-        # A) File A imports a file B with term C
-        # b) File A defines a new term C
-        self.__terms: Dict[str, List[Term]] = {} if terms is None else terms
-        self.__last_terms: List[Tuple[str, Term]] = []
-        self.__segments = SegmentStack()
-        self.__anonymous_id: Optional[int] = None
+        self.__init_context(terms)
 
     def __init_coq_version(self, coqtop):
         output = subprocess.check_output(f"{coqtop} -v", shell=True)
@@ -39,6 +33,15 @@ class FileContext:
 
         self.__expr = lambda e: e if outdated else e[1]
         self.__where_notation_key = "decl_ntn" if outdated else "ntn_decl"
+
+    def __init_context(self, terms: Optional[Dict[str, Term]] = None):
+        # NOTE: We use a stack for each term because of the following case:
+        # 1) File A imports a file B with term C
+        # 2) File A defines a new term C
+        self.__terms: Dict[str, List[Term]] = {} if terms is None else terms
+        self.__last_terms: List[Tuple[str, Term]] = []
+        self.__segments = SegmentStack()
+        self.__anonymous_id: Optional[int] = None
 
     def __add_terms(self, step: Step, expr: List):
         term_type = FileContext.__term_type(expr)
@@ -117,10 +120,11 @@ class FileContext:
         if term.type == TermType.NOTATION:
             check_and_add_term(name, term)
             return
-        check_and_add_term(".".join(modules + [name]), term)
 
         # The modules inside the file are handled by the get_term method
         # so we don't have to worry about them here.
+        check_and_add_term(".".join(modules + [name]), term)
+
         curr_module = ""
         for module in reversed(self.__module):
             curr_module = module + "." + curr_module
@@ -545,7 +549,4 @@ class FileContext:
 
     def reset(self):
         """Resets the context to its initial state."""
-        self.__terms = {}
-        self.__last_terms = []
-        self.__segments = SegmentStack()
-        self.__anonymous_id = None
+        self.__init_context()

@@ -619,7 +619,7 @@ class ProofFile(CoqFile):
 
         for _ in range(nsteps):
             try:
-                goals = self.current_goals
+                goals = self.current_goals if sign == 1 else None
             except Exception as e:
                 self.__aux_file.close()
                 raise e
@@ -647,22 +647,34 @@ class ProofFile(CoqFile):
         return self.steps[slice[1 - last] : slice[last]]
 
     def add_step(self, previous_step_index: int, step_text: str):
+        def local_exec(n_steps):
+            sign = 1 if n_steps > 0 else -1
+            for _ in range(n_steps * sign):
+                self._step(sign)
+                if sign == 1:
+                    self.__aux_file.append(self.prev_step.text)
+                else:
+                    self.__aux_file.truncate(self.curr_step.text)
+
         optional = self.__find_step(self.steps[previous_step_index].ast.range)
         self._make_change(self._add_step, previous_step_index, step_text)
 
         # The step was not processed yet
         if self.steps_taken <= previous_step_index + 1:
             return
+        
+        # At most, we only need to update 1 proof, so we execute the steps
+        # in CoqFile which is faster. For ProofFile, we only update AuxFile,
+        # leaving the remaining proofs as is.
+        n_steps = self.steps_taken - previous_step_index - 2
+        local_exec(-n_steps)  # Backtrack until added step
+        self.steps_taken -= 1  # Ignore added step while backtracking
+        local_exec(1)  # Execute added step, updating last_term
 
-        n_steps = self.steps_taken - previous_step_index - 1
-        super().exec(-n_steps)
-        # NOTE: We rollback so the last_term is the correct one
-        # We use the CoqFile is exec because it is faster
-        super().exec(1)
-
-        # Allows to add open proofs
         step = self.steps[previous_step_index + 1]
+        # Allows to add open proofs
         if self.__is_proof_term(step):
+            # This is not outside of the ifs for performance reasons
             goals = self.__goals(step.ast.range.end)
             if self.__in_proof(goals):
                 index = self.__find_open_proof_index(step)
@@ -684,7 +696,7 @@ class ProofFile(CoqFile):
             for e in range(prev + 2, len(proof.steps)):
                 # The goals will be loaded if used (Lazy Loading)
                 proof.steps[e].goals = self.__goals
-        super().exec(n_steps)
+        local_exec(n_steps)  # Execute until starting point
 
     def delete_step(self, step_index: int) -> None:
         step = self.steps[step_index]

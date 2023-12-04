@@ -422,7 +422,7 @@ class CoqFile(object):
         if len(self.steps) != previous_steps_size + offset_steps or not self.is_valid:
             raise InvalidChangeException()
 
-        self.__copy_steps(self.steps)
+        self.__copy_steps(previous_steps)
         CoqFile.exec(self, previous_steps_takens + offset_steps_taken)
 
     @property

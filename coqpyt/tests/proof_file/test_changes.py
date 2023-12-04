@@ -376,27 +376,82 @@ class TestProofChangeEmptyProof(SetupProofFile):
         proof_file = self.proof_file
         assert len(proof_file.proofs) == 0
         assert len(proof_file.open_proofs) == 1
+        assert len(proof_file.open_proofs[0].steps) == 1
+        assert proof_file.open_proofs[0].steps[0].text == "\nProof."
+        lemma_end = proof_file.open_proofs[0].step.ast.range.end
+        texts = [" Check\nplus.", "\nreflexivity.", " Print\nplus.", " Admitted."]
 
-        proof_file.add_step(len(proof_file.steps) - 2, "\nAdmitted.")
-
+        # Add [Admitted.]
+        proof_file.add_step(1, texts[3])
         assert len(proof_file.proofs) == 1
+        steps = proof_file.proofs[0].steps
+        assert len(steps) == 2
+        assert steps[1].text == texts[3]
         assert len(proof_file.open_proofs) == 0
-        assert proof_file.steps[-2].text == "\nAdmitted."
-        assert len(proof_file.proofs[0].steps) == 2
-        assert proof_file.proofs[0].steps[-1].text == "\nAdmitted."
+        admitted_start = steps[1].ast.range.start
+        admitted_start = Position(admitted_start.line, admitted_start.character)
 
-        proof_file.delete_step(len(proof_file.steps) - 2)
-        assert len(proof_file.steps) == 3
+        # Add [reflexivity.]
+        proof_file.add_step(1, texts[1])
+        assert len(proof_file.proofs) == 1
+        steps = proof_file.proofs[0].steps
+        assert len(steps) == 3
+        assert steps[1].text == texts[1]
+        assert len(proof_file.open_proofs) == 0
+        refl_end = steps[1].ast.range.end
+        refl_end = Position(refl_end.line, refl_end.character)
+        # [Admitted.] AST changes
+        assert steps[2].ast.range.start.line == admitted_start.line + 1
+        assert steps[2].ast.range.start.character == refl_end.character + 1
+
+        # Add [Print plus.] and [Check plus.]
+        proof_file.change_steps([CoqAddStep(texts[2], 2), CoqAddStep(texts[0], 1)])
+        assert len(proof_file.proofs) == 1
+        steps = proof_file.proofs[0].steps
+        assert len(steps) == 5
+        assert steps[1].text == texts[0]
+        assert steps[3].text == texts[2]
+        assert len(proof_file.open_proofs) == 0
+        print_end = steps[3].ast.range.end
+        print_end = Position(print_end.line, print_end.character)
+        check_end = steps[1].ast.range.end
+        check_end = Position(check_end.line, check_end.character)
+        # [reflexivity.] AST changes
+        assert steps[2].ast.range.end.line == refl_end.line + 1
+        # [Admitted.] AST changes
+        assert steps[4].ast.range.start.line == admitted_start.line + 3
+        assert steps[4].ast.range.start.character == print_end.character + 1
+
+        # Delete [Proof.] and [Admitted.]
+        proof_file.change_steps([CoqDeleteStep(1), CoqDeleteStep(4)])
         assert len(proof_file.proofs) == 0
         assert len(proof_file.open_proofs) == 1
-        assert len(proof_file.open_proofs[0].steps) == 1
+        steps = proof_file.open_proofs[0].steps
+        assert len(steps) == 3
+        # [Check plus.] AST changes
+        assert steps[0].ast.range.end.line == check_end.line - 1
+        assert steps[0].ast.range.start.character == lemma_end.character + 1
+        # [reflexivity.] AST changes
+        assert steps[1].ast.range.end.line == refl_end.line
+        # [Print plus.] AST changes
+        assert steps[2].ast.range.end.line == print_end.line - 1
+        assert steps[2].ast.range.start.character == refl_end.character + 1
 
-        # Delete Proof.
+        # Delete [reflexivity.]
+        proof_file.delete_step(2)
+        # Delete [Check plus.]
         proof_file.delete_step(1)
-        assert len(proof_file.open_proofs[0].steps) == 0
+        assert len(proof_file.proofs) == 0
+        assert len(proof_file.open_proofs) == 1
+        steps = proof_file.open_proofs[0].steps
+        assert len(steps) == 1
+        # [Print plus.] AST changes
+        assert steps[0].ast.range.end.line == print_end.line - 3
+        assert steps[0].ast.range.start.character == lemma_end.character + 1
 
         # Delete Lemma statement
         proof_file.delete_step(0)
+        assert len(proof_file.proofs) == 0
         assert len(proof_file.open_proofs) == 0
 
 

@@ -662,7 +662,7 @@ class ProofFile(CoqFile):
         # The step was not processed yet
         if self.steps_taken <= previous_step_index + 1:
             return
-        
+
         # At most, we only need to update 1 proof, so we execute the steps
         # in CoqFile which is faster. For ProofFile, we only update AuxFile,
         # leaving the remaining proofs as is.

@@ -1,5 +1,5 @@
 import sys
-import time
+import threading
 import subprocess
 
 from coqpyt.lsp.structs import *
@@ -93,10 +93,10 @@ class CoqLspClient(LspClient):
         )
         self.initialized()
         # Used to check if didOpen and didChange already finished
-        self.__completed_operation = False
+        self.__completed_operation = threading.Event()
 
     def __handle_publish_diagnostics(self, params: Dict):
-        self.__completed_operation = True
+        self.__completed_operation.set()
 
     def __handle_file_progress(self, params: Dict):
         coqFileProgressKind = CoqFileProgressParams.parse(params)
@@ -107,14 +107,11 @@ class CoqLspClient(LspClient):
             self.file_progress[uri].append(coqFileProgressKind)
 
     def __wait_for_operation(self):
-        timeout = self.lsp_endpoint.timeout
-        while not self.__completed_operation and timeout > 0:
-            if self.lsp_endpoint.shutdown_flag:
-                raise ResponseError(ErrorCodes.ServerQuit, "Server quit")
-            time.sleep(0.1)
-            timeout -= 0.1
-
-        if timeout <= 0:
+        timeout = not self.__completed_operation.wait(self.lsp_endpoint.timeout)
+        self.__completed_operation.clear()
+        if self.lsp_endpoint.shutdown_flag:
+            raise ResponseError(ErrorCodes.ServerQuit, "Server quit")
+        if timeout:
             self.shutdown()
             self.exit()
             raise ResponseError(ErrorCodes.ServerTimeout, "Server timeout")
@@ -125,7 +122,6 @@ class CoqLspClient(LspClient):
         Args:
             textDocument (TextDocumentItem): Text document to open
         """
-        self.__completed_operation = False
         self.lsp_endpoint.diagnostics[textDocument.uri] = []
         super().didOpen(textDocument)
         self.__wait_for_operation()
@@ -141,7 +137,6 @@ class CoqLspClient(LspClient):
             textDocument (VersionedTextDocumentIdentifier): Text document changed.
             contentChanges (list[TextDocumentContentChangeEvent]): Changes made.
         """
-        self.__completed_operation = False
         self.lsp_endpoint.diagnostics[textDocument.uri] = []
         super().didChange(textDocument, contentChanges)
         self.__wait_for_operation()

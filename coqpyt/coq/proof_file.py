@@ -693,9 +693,12 @@ class ProofFile(CoqFile):
                     self.__aux_file.truncate(self.curr_step.text)
 
         optional = self.__find_step(self.steps[previous_step_index].ast.range)
+
+        # We need to calculate this here because the _add_step 
+        # will possibly change the steps_taken
+        processed = self.steps_taken > previous_step_index + 1
         self._make_change(self._add_step, previous_step_index, step_text)
-        # The step was not processed yet
-        if self.steps_taken <= previous_step_index + 1:
+        if not processed:
             return
 
         # At most, we only need to update 1 proof, so we execute the steps
@@ -752,9 +755,12 @@ class ProofFile(CoqFile):
         # Must get them before the step is deleted
         goals_after_step = self.__goals(step.ast.range.end)
         optional = self.__find_step(step.ast.range)
+
+        # We need to calculate this here because the _delete_step 
+        # will possibly change the steps_taken
+        processed = self.steps_taken > step_index
         self._make_change(self._delete_step, step_index)
-        # The step was not processed yet
-        if self.steps_taken <= step_index:
+        if not processed:
             return
 
         # Handles case where Qed is deleted

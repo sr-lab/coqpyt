@@ -141,6 +141,9 @@ class CoqFile(object):
     def __init_steps(self, text: str, ast: List[RangedSpan]):
         lines = text.split("\n")
         self.steps: List[Step] = []
+        # NOTE: We remove the last step if it is an empty step
+        if ast[-1].span == None:
+            ast = ast[:-1]
         for i, curr_ast in enumerate(ast):
             self.steps.append(self.__init_step(lines, i, curr_ast, ast[i - 1]))
 

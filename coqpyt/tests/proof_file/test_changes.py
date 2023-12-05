@@ -231,6 +231,15 @@ class TestProofSimpleFileChanges(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_simple_file.v")
 
+    def test_end_of_file(self):
+        steps = len(self.proof_file.steps)
+
+        for _ in range(5):
+            self.proof_file.add_step(self.proof_file.steps_taken - 1, "\nPrint plus.")
+            assert len(self.proof_file.steps) == steps + 1
+            self.proof_file.delete_step(self.proof_file.steps_taken)
+            assert len(self.proof_file.steps) == steps
+
     def test_simple_file_changes(self):
         proof_file = self.proof_file
         proof_file.change_steps(
@@ -244,7 +253,10 @@ class TestProofSimpleFileChanges(SetupProofFile):
                 CoqAddStep("\nAdmitted.", 2),
             ]
         )
-        assert len(proof_file.steps) == 5
+        # The last step is added in the end of the file
+        proof_file.exec(1)
+
+        assert len(proof_file.steps) == 4
         assert len(proof_file.proofs) == 2
 
         steps = [
@@ -380,6 +392,8 @@ class TestProofChangeEmptyProof(SetupProofFile):
 
         # Add [Admitted.]
         proof_file.add_step(1, texts[3])
+        # Step was added to the end of the file
+        proof_file.exec(1)
         assert len(proof_file.proofs) == 1
         steps = proof_file.proofs[0].steps
         assert len(steps) == 2
@@ -458,8 +472,6 @@ class TestProofChangeNestedProofs(SetupProofFile):
 
     def test_change_nested_proofs(self):
         proof_file = self.proof_file
-        # Take back last (empty) step
-        proof_file.exec(-1)
 
         # Close proofs in file
         proof_file.add_step(proof_file.steps_taken - 1, "\nQed.")
@@ -487,8 +499,6 @@ class TestProofChangeNestedProofs(SetupProofFile):
         proof_file.delete_step(proof_file.steps_taken + 1)
         proof_file.delete_step(proof_file.steps_taken)
 
-        # Take last (empty) step
-        proof_file.exec(1)
         assert len(proof_file.proofs) == 2
         assert len(proof_file.open_proofs) == 2
         assert proof_file.steps_taken == len(proof_file.steps)
@@ -534,6 +544,9 @@ class TestProofChangeObligation(SetupProofFile):
             ("idx", "pred (S n)"),
         ]
 
+        # Steps were added to the end of the file
+        proof_file.run()
+
         # Check the proofs
         assert len(proof_file.proofs) == 4
         assert len(proof_file.open_proofs) == 0
@@ -553,7 +566,7 @@ class TestProofChangeObligation(SetupProofFile):
 
         # Delete new Program and last Next Obligation proof
         for i in range(3):
-            proof_file.delete_step(proof_file.steps_taken - 2)
+            proof_file.delete_step(proof_file.steps_taken - 1)
         proof_file.delete_step(10)
 
         # Check the proofs

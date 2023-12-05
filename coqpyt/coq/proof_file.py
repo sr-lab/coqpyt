@@ -452,10 +452,6 @@ class ProofFile(CoqFile):
     def __check_proof_step(
         self, step: Step, goals: Optional[GoalAnswer], undo: bool = False
     ):
-        # Last step of the file
-        if step.text.strip() == "":
-            return
-
         if self.__is_proof_term(step):
             self.__handle_proof_term(step, undo=undo)
         # Avoids Tactics, Notations, Inductive...
@@ -470,35 +466,22 @@ class ProofFile(CoqFile):
             "VernacBeginSection",
         ]
 
-    def __forward_step(self, goals: Optional[GoalAnswer]):
-        self.__aux_file.append(self.prev_step.text)
+    def __step(self, step: Step, goals: Optional[GoalAnswer], undo: bool):
+        file_change = self.__aux_file.truncate if undo else self.__aux_file.append
+        file_change(step.text)
         # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
-        if self.__is_end_proof(self.prev_step):
-            self.__handle_end_proof(self.prev_step, goals=goals)
+        if self.__is_end_proof(step):
+            self.__handle_end_proof(step, goals=None if undo else goals, undo=undo)
             return
         # Ignore segment delimiters because it affects Program handling
-        if self.__is_segment_delimiter(self.prev_step):
-            return
-        # Check if Program definition or proof step
-        is_program = self.__check_program(self.current_goals)
-        if not is_program and self.in_proof:
-            self.__check_proof_step(self.prev_step, goals)
-
-    def __backward_step(self, goals: Optional[GoalAnswer]):
-        self.__aux_file.truncate(self.curr_step.text)
-        # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
-        if self.__is_end_proof(self.curr_step):
-            self.__handle_end_proof(self.curr_step, undo=True)
-            return
-        # Ignore segment delimiters because it affects Program handling
-        if self.__is_segment_delimiter(self.curr_step):
+        if self.__is_segment_delimiter(step):
             return
         # Check if Program definition or proof step
         is_program = self.__check_program(
-            self.current_goals, prev_goals=goals, undo=True
+            self.current_goals, prev_goals=goals if undo else None, undo=undo
         )
-        if not is_program and len(self.open_proofs) > 0:
-            self.__check_proof_step(self.curr_step, goals, undo=True)
+        if not is_program and len(self.open_proofs) > 0 if undo else self.in_proof:
+            self.__check_proof_step(step, goals, undo=undo)
 
     def __find_step(self, range: Range) -> Optional[Tuple[ProofTerm, int, int]]:
         for p, proof in enumerate(self.__proofs):
@@ -663,7 +646,7 @@ class ProofFile(CoqFile):
             nsteps * sign,
             len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
-        step = self.__forward_step if sign == 1 else self.__backward_step
+        step = lambda: self.prev_step if sign == 1 else self.curr_step
 
         for _ in range(nsteps):
             goals = self.current_goals
@@ -673,7 +656,7 @@ class ProofFile(CoqFile):
             self._step(sign)
             if in_module_type or self.context.in_module_type:
                 continue
-            step(goals)
+            self.__step(step(), goals, sign == -1)
 
             import_step = self.prev_step if sign == 1 else self.curr_step
             if self.context.expr(import_step)[0] in ["VernacRequire", "VernacImport"]:

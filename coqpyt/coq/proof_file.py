@@ -518,7 +518,7 @@ class ProofFile(CoqFile):
     def __update_libraries(self):
         libraries = _AuxFile.get_libraries(self.__aux_file)
         # New libraries
-        new_libraries = set(libraries) - set(self.context.libraries.keys())
+        new_libraries = [l for l in libraries if l not in self.context.libraries.keys()]
         last_line = len(self.__aux_file.read().split("\n")) - 1
         for library in new_libraries:
             self.__aux_file.append(f"\nLocate Library {library}.")
@@ -535,7 +535,7 @@ class ProofFile(CoqFile):
             self.context.add_library(library, library_terms)
 
         # Deleted libraries
-        for library in set(self.context.libraries.keys()) - set(libraries):
+        for library in [l for l in self.context.libraries.keys() if l not in libraries]:
             self.context.remove_library(library)
 
     def __find_open_proof_index(self, step: Step) -> int:

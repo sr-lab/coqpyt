@@ -3,6 +3,7 @@ import hashlib
 import tempfile
 import shutil
 import uuid
+import threading
 from typing import Optional, Tuple, List, Dict
 
 from coqpyt.lsp.structs import (
@@ -27,6 +28,7 @@ _ProofTerm: Tuple[Term, List[Term], List[ProofStep], Optional[Term]]
 
 class _AuxFile(object):
     __CACHE: Dict[Tuple[str, str], FileContext] = {}
+    __CACHE_LOCK = threading.Lock()
 
     def __init__(
         self,
@@ -167,12 +169,16 @@ class _AuxFile(object):
         with open(library_file, "r") as f:
             hash = hashlib.md5(f.read().encode("utf-8")).hexdigest()
         if (library_file, hash) in _AuxFile.__CACHE:
+            _AuxFile.__CACHE_LOCK.acquire()
             aux_context = _AuxFile.__CACHE[(library_file, hash)]
+            _AuxFile.__CACHE_LOCK.release()
         else:
             coq_file = CoqFile(library_file, library=library_name, timeout=timeout)
             coq_file.run()
             aux_context = coq_file.context
+            _AuxFile.__CACHE_LOCK.acquire()
             _AuxFile.__CACHE[(library_file, hash)] = aux_context
+            _AuxFile.__CACHE_LOCK.release()
             coq_file.close()
 
         # FIXME: we ignore the usage of "Local" from imported files to

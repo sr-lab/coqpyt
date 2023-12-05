@@ -351,26 +351,39 @@ class ProofFile(CoqFile):
         text = self.context.last_term.text
         raise RuntimeError(f"Unknown obligation command with tag number {tag}: {text}")
 
-    def __check_program(self):
-        goals = self.current_goals
-        if len(goals.program) == 0:
-            return
-        id = self.context.append_module_prefix(goals.program[-1][0][1])
-        if id in self.__program_context:
-            return
-        self.__program_context[id] = (
-            self.context.last_term,
-            self.__step_context(self.prev_step),
-        )
+    def __check_program(
+        self,
+        goals: Optional[GoalAnswer],
+        prev_goals: Optional[GoalAnswer] = None,
+        undo: bool = False,
+    ) -> bool:
+        last_prog = lambda g: g.program[-1][0][1]
+        prefix = lambda id: self.context.append_module_prefix(id)
+        if not undo:
+            if len(goals.program) == 0:
+                return False
+            id = prefix(last_prog(goals))
+            if id in self.__program_context:
+                return False
+            context = self.__step_context(self.prev_step)
+            self.__program_context[id] = (self.context.last_term, context)
+        else:
+            if len(prev_goals.program) == 0 or (
+                len(goals.program) > 0 and last_prog(prev_goals) == last_prog(goals)
+            ):
+                return False
+            del self.__program_context[prefix(last_prog(prev_goals))]
+        return True
 
     def __handle_end_proof(
         self,
         step: Step,
-        goals: Optional[GoalAnswer],
+        goals: Optional[GoalAnswer] = None,
         index: Optional[int] = None,
         open_index: Optional[int] = None,
+        undo: bool = False,
     ):
-        if goals is None:
+        if undo:
             index = -1 if index is None else index
             open_index = len(self.__open_proofs) if open_index is None else open_index
             proof = self.__proofs.pop(index)
@@ -384,17 +397,19 @@ class ProofFile(CoqFile):
             open_proof[2].append(ProofStep(step, goals, []))
             self.__proofs.insert(index, ProofTerm(*open_proof))
 
-    def __handle_proof_step(self, step: Step, goals: Optional[GoalAnswer]):
-        if goals is None:
+    def __handle_proof_step(
+        self, step: Step, goals: Optional[GoalAnswer] = None, undo: bool = False
+    ):
+        if undo:
             self.__open_proofs[-1][2].pop()
         else:
             context = self.__step_context(step)
             self.__open_proofs[-1][2].append(ProofStep(step, goals, context))
 
     def __handle_proof_term(
-        self, step: Step, goals: Optional[GoalAnswer], index: Optional[int] = None
+        self, step: Step, index: Optional[int] = None, undo: bool = False
     ):
-        if goals is None:
+        if undo:
             index = -1 if index is None else index
             self.__open_proofs.pop(index)
         else:
@@ -428,30 +443,56 @@ class ProofFile(CoqFile):
     def __is_end_proof(self, step: Step):
         return self.context.expr(step)[0] in ["VernacEndProof", "VernacExactProof"]
 
-    def __check_proof_step(self, step: Step, goals: Optional[GoalAnswer] = None):
+    def __check_proof_step(
+        self, step: Step, goals: Optional[GoalAnswer], undo: bool = False
+    ):
         # Last step of the file
         if step.text.strip() == "":
             return
 
-        # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
-        if self.__is_end_proof(step):
-            self.__handle_end_proof(step, goals)
-        elif self.__is_proof_term(step):
-            self.__handle_proof_term(step, goals)
+        if self.__is_proof_term(step):
+            self.__handle_proof_term(step, undo=undo)
         # Avoids Tactics, Notations, Inductive...
         elif self.context.term_type(step) == TermType.OTHER:
-            self.__handle_proof_step(step, goals)
+            self.__handle_proof_step(step, goals=goals, undo=undo)
 
-    def __forward_step(self, goals: GoalAnswer):
+    def __is_segment_delimiter(self, step: Step):
+        return self.context.expr(step)[0] in [
+            "VernacEndSegment",
+            "VernacDefineModule",
+            "VernacDeclareModuleType",
+            "VernacBeginSection",
+        ]
+
+    def __forward_step(self, goals: Optional[GoalAnswer]):
         self.__aux_file.append(self.prev_step.text)
-        self.__check_program()
-        if self.in_proof or self.__is_end_proof(self.prev_step):
+        # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
+        if self.__is_end_proof(self.prev_step):
+            self.__handle_end_proof(self.prev_step, goals=goals)
+            return
+        # Ignore segment delimiters because it affects Program handling
+        if self.__is_segment_delimiter(self.prev_step):
+            return
+        # Check if Program definition or proof step
+        is_program = self.__check_program(self.current_goals)
+        if not is_program and self.in_proof:
             self.__check_proof_step(self.prev_step, goals)
 
-    def __backward_step(self):
+    def __backward_step(self, goals: Optional[GoalAnswer]):
         self.__aux_file.truncate(self.curr_step.text)
-        if len(self.open_proofs) > 0 or self.__is_end_proof(self.curr_step):
-            self.__check_proof_step(self.curr_step)
+        # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
+        if self.__is_end_proof(self.curr_step):
+            self.__handle_end_proof(self.curr_step, undo=True)
+            return
+        # Ignore segment delimiters because it affects Program handling
+        if self.__is_segment_delimiter(self.curr_step):
+            return
+        # Check if Program definition or proof step
+        is_program = self.__check_program(
+            self.current_goals, prev_goals=goals, undo=True
+        )
+        if not is_program and len(self.open_proofs) > 0:
+            self.__check_proof_step(self.curr_step, goals, undo=True)
 
     def __find_step(self, range: Range) -> Optional[Tuple[ProofTerm, int, int]]:
         for p, proof in enumerate(self.__proofs):
@@ -526,6 +567,7 @@ class ProofFile(CoqFile):
             return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
         except Exception as e:
             self.__handle_exception(e)
+            self.__aux_file.close()
             raise e
 
     def __in_proof(self, goals: Optional[GoalAnswer]):
@@ -615,15 +657,10 @@ class ProofFile(CoqFile):
             nsteps * sign,
             len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
-        step = self.__forward_step if sign == 1 else lambda _: self.__backward_step()
+        step = self.__forward_step if sign == 1 else self.__backward_step
 
         for _ in range(nsteps):
-            try:
-                goals = self.current_goals if sign == 1 else None
-            except Exception as e:
-                self.__aux_file.close()
-                raise e
-
+            goals = self.current_goals
             # HACK: We ignore steps inside a Module Type since they can't
             # be used outside and should be overriden.
             in_module_type = self.context.in_module_type
@@ -632,15 +669,8 @@ class ProofFile(CoqFile):
                 continue
             step(goals)
 
-            if (
-                sign == 1
-                and self.context.expr(self.prev_step)[0]
-                in ["VernacRequire", "VernacImport"]
-            ) or (
-                sign == -1
-                and self.context.expr(self.curr_step)[0]
-                in ["VernacRequire", "VernacImport"]
-            ):
+            import_step = self.prev_step if sign == 1 else self.curr_step
+            if self.context.expr(import_step)[0] in ["VernacRequire", "VernacImport"]:
                 self.__update_libraries()
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
@@ -658,7 +688,6 @@ class ProofFile(CoqFile):
 
         optional = self.__find_step(self.steps[previous_step_index].ast.range)
         self._make_change(self._add_step, previous_step_index, step_text)
-
         # The step was not processed yet
         if self.steps_taken <= previous_step_index + 1:
             return
@@ -670,22 +699,30 @@ class ProofFile(CoqFile):
         local_exec(-n_steps)  # Backtrack until added step
         self.steps_taken -= 1  # Ignore added step while backtracking
         local_exec(1)  # Execute added step, updating last_term
+        step = self.prev_step  # It is the last taken step
 
-        step = self.steps[previous_step_index + 1]
-        # Allows to add open proofs
-        if self.__is_proof_term(step):
-            # This is not outside of the ifs for performance reasons
-            goals = self.__goals(step.ast.range.end)
-            if self.__in_proof(goals):
-                index = self.__find_open_proof_index(step)
-                self.__handle_proof_term(step, goals, index=index)
         # Handles case where Qed is added
-        elif self.__is_end_proof(step):
+        if self.__is_end_proof(step):
             # This is not outside of the ifs for performance reasons
             goals = self.__goals(step.ast.range.end)
             index = self.__find_proof_index(step)
             open_index = self.__find_open_proof_index(step) - 1
-            self.__handle_end_proof(step, goals, index=index, open_index=open_index)
+            self.__handle_end_proof(
+                step, goals=goals, index=index, open_index=open_index
+            )
+        # Ignore segment delimiters because it affects Program handling
+        elif self.__is_segment_delimiter(step):
+            pass
+        # Check if Program definition
+        elif self.__check_program(self.current_goals):
+            pass
+        # Allows to add open proofs
+        elif self.__is_proof_term(step):
+            # This is not outside of the ifs for performance reasons
+            goals = self.__goals(step.ast.range.end)
+            if self.__in_proof(goals):
+                index = self.__find_open_proof_index(step)
+                self.__handle_proof_term(step, index=index)
         # Regular proof steps
         elif optional is not None:
             proof, _, prev = optional
@@ -699,25 +736,40 @@ class ProofFile(CoqFile):
         local_exec(n_steps)  # Execute until starting point
 
     def delete_step(self, step_index: int) -> None:
-        step = self.steps[step_index]
-        optional = self.__find_step(step.ast.range)
+        if step_index == 0:
+            prev_step_end = Position(0, 0)
+        else:
+            prev_step_end = self.steps[step_index - 1].ast.range.end
 
+        step = self.steps[step_index]
+        # Goals needed for Program check.
+        # Must get them before the step is deleted
+        goals_after_step = self.__goals(step.ast.range.end)
+        optional = self.__find_step(step.ast.range)
         self._make_change(self._delete_step, step_index)
         # The step was not processed yet
         if self.steps_taken <= step_index:
             return
 
         # Handles case where Qed is deleted
-        elif self.__is_end_proof(step):
+        if self.__is_end_proof(step):
             index = self.__find_proof_index(step) - 1
             open_index = self.__find_open_proof_index(step)
-            self.__handle_end_proof(step, None, index=index, open_index=open_index)
+            self.__handle_end_proof(step, index=index, open_index=open_index, undo=True)
+        # Ignore segment delimiters because it affects Program handling
+        elif self.__is_segment_delimiter(step):
+            return
+        # Check if Program definition
+        elif self.__check_program(
+            self.__goals(prev_step_end), prev_goals=goals_after_step, undo=True
+        ):
+            return
         # Handle regular proof steps
         elif optional is not None:
             proof, proof_index, i = optional
             if i == -1:
                 # The proof was deleted
-                self.__handle_proof_term(step, None, index=proof_index)
+                self.__handle_proof_term(step, index=proof_index, undo=True)
             else:
                 proof.steps.pop(i)
                 for e in range(i, len(proof.steps)):

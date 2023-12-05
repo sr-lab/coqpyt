@@ -136,6 +136,11 @@ class FileContext:
             if len(self.__terms[name]) == 0:
                 del self.__terms[name]
 
+        # Terms that are not part of the accessible context (e.g. obligations),
+        # but are still registered in last_terms.
+        if name == "":
+            return
+
         if term.type == TermType.NOTATION:
             remove_term(name)
             return

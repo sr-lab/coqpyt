@@ -204,6 +204,9 @@ class TestProofObligation(SetupProofFile):
         self.setup("test_obligation.v")
 
     def test_obligation(self):
+        # Rollback whole file (except slow import)
+        self.proof_file.exec(-self.proof_file.steps_taken + 1)
+        self.proof_file.run()
         proofs = self.proof_file.proofs
         assert len(proofs) == 11
 
@@ -214,7 +217,11 @@ class TestProofObligation(SetupProofFile):
                 [],
             ),
             ("Notation dec := sumbool_of_bool.", TermType.NOTATION, []),
-            ("Notation leb := Nat.leb (only parsing).", TermType.NOTATION, []),
+            (
+                "Fixpoint leb n m : bool := match n, m with | 0, _ => true | _, 0 => false | S n', S m' => leb n' m' end.",
+                TermType.FIXPOINT,
+                [],
+            ),
             ("Notation pred := Nat.pred (only parsing).", TermType.NOTATION, []),
             (
                 'Notation "{ x : A | P }" := (sig (A:=A) (fun x => P)) : type_scope.',
@@ -258,7 +265,7 @@ class TestProofObligation(SetupProofFile):
                 proof.program.text
                 == "Program Definition "
                 + programs[i][0]
-                + " (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else "
+                + " (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else "
                 + programs[i][1]
                 + "."
             )

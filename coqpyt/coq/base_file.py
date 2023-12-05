@@ -250,8 +250,8 @@ class CoqFile(object):
             lines[step.ast.range.end.line] = end_line
 
         # Delete lines between first and last line
-        for i in range(prev_step_end.line + 1, step.ast.range.end.line):
-            del lines[i]
+        for _ in range(step.ast.range.end.line - prev_step_end.line - 1):
+            del lines[prev_step_end.line + 1]
         text = "".join(lines)
 
         with open(self._path, "w") as f:
@@ -328,6 +328,7 @@ class CoqFile(object):
         self.steps = previous_steps
 
     def _delete_step(self, step_index: int) -> None:
+        deleted_text = self.steps[step_index].text
         self.__delete_step_text(step_index)
 
         # Modify the previous steps instead of creating new ones
@@ -337,7 +338,7 @@ class CoqFile(object):
         self.__update_steps()
 
         if not self.is_valid:
-            raise InvalidDeleteException(self.steps[step_index].text)
+            raise InvalidDeleteException(deleted_text)
 
         # We will remove the step from the previous steps
         deleted_step = previous_steps.pop(step_index)

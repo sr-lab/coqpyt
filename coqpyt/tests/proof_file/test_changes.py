@@ -15,9 +15,8 @@ class TestProofValidFile(SetupProofFile):
         proof_file = self.proof_file
         proof_file.delete_step(6)
 
-        test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml", 2)
+        test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml")
         test_proofs["proofs"][0]["steps"].pop(1)
-        test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
         for i, step in enumerate(test_proofs["proofs"][0]["steps"]):
             if i != 0:
                 step["goals"]["position"]["line"] -= 1
@@ -28,8 +27,7 @@ class TestProofValidFile(SetupProofFile):
 
         proof_file.add_step(5, "\n      intros n.")
 
-        test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml", 3)
-        test_proofs["proofs"][0]["steps"][0]["goals"]["version"] = 1
+        test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml")
         check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
 
         # Check if context is changed correctly
@@ -51,10 +49,9 @@ class TestProofValidFile(SetupProofFile):
                 }
             ],
         }
-        add_step_defaults(step, 4)
+        add_step_defaults(step)
         test_proofs["proofs"][0]["steps"].insert(3, step)
         for i, step in enumerate(test_proofs["proofs"][0]["steps"][4:]):
-            step["goals"]["version"] = 4
             step["goals"]["position"]["line"] += 1
         check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
 
@@ -96,7 +93,7 @@ class TestProofValidFile(SetupProofFile):
             ]
         )
 
-        test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml", 2)
+        test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml")
         step = {
             "text": "\n      Print minus.",
             "goals": {
@@ -114,7 +111,7 @@ class TestProofValidFile(SetupProofFile):
                 }
             ],
         }
-        add_step_defaults(step, 2)
+        add_step_defaults(step)
         test_proofs["proofs"][0]["steps"].insert(3, step)
         for step in test_proofs["proofs"][0]["steps"][4:]:
             step["goals"]["position"]["line"] += 1
@@ -495,3 +492,83 @@ class TestProofChangeNestedProofs(SetupProofFile):
         assert len(proof_file.proofs) == 2
         assert len(proof_file.open_proofs) == 2
         assert proof_file.steps_taken == len(proof_file.steps)
+
+
+class TestProofChangeObligation(SetupProofFile):
+    def setup_method(self, method):
+        self.setup("test_obligation.v")
+
+    def test_change_obligation(self):
+        proof_file = self.proof_file
+
+        # Delete unwanted steps
+        proof_file.change_steps([CoqDeleteStep(2) for _ in range(30)])
+        proof_file.change_steps([CoqDeleteStep(16), CoqDeleteStep(2)])
+        proof_file.change_steps([CoqDeleteStep(12) for _ in range(3)])
+
+        # Add a Program definition in the middle of a proof
+        program = (
+            "\nProgram Definition idx (n : nat) : { x : nat | x = n } :="
+            + "\n  if dec (Nat.leb n 0) then 0%nat"
+            + "\n  else pred (S n)."
+        )
+        proof_file.add_step(9, program)
+
+        # Add a proof for each obligation of the new Program
+        proof = ["\nNext Obligation.", "\n  dummy_tactic n e.", "\nQed."]
+        for i, step in enumerate(proof):
+            proof_file.add_step(12 + i, step)
+        for i, step in enumerate(proof):
+            proof_file.add_step(15 + i, step)
+
+        texts = [
+            "Obligation 1 of id with reflexivity.",
+            "Obligation 1 of id : type.",
+            "Next Obligation.",
+            "Next Obligation.",
+        ]
+        programs = [
+            ("id", "pred (S n)"),
+            ("id", "S (pred n)"),
+            ("id", "S (pred n)"),
+            ("idx", "pred (S n)"),
+        ]
+
+        # Check the proofs
+        assert len(proof_file.proofs) == 4
+        assert len(proof_file.open_proofs) == 0
+        for i, proof in enumerate(proof_file.proofs):
+            assert proof.text == texts[i]
+            assert proof.program is not None
+            assert (
+                proof.program.text
+                == "Program Definition "
+                + programs[i][0]
+                + " (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else "
+                + programs[i][1]
+                + "."
+            )
+            assert len(proof.steps) == 2
+            assert proof.steps[0].text == "\n  dummy_tactic n e."
+
+        # Delete new Program and last Next Obligation proof
+        for i in range(3):
+            proof_file.delete_step(proof_file.steps_taken - 2)
+        proof_file.delete_step(10)
+
+        # Check the proofs
+        assert len(proof_file.proofs) == 3
+        assert len(proof_file.open_proofs) == 0
+        for i, proof in enumerate(proof_file.proofs):
+            assert proof.text == texts[i]
+            assert proof.program is not None
+            assert (
+                proof.program.text
+                == "Program Definition "
+                + programs[i][0]
+                + " (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else "
+                + programs[i][1]
+                + "."
+            )
+            assert len(proof.steps) == 2
+            assert proof.steps[0].text == "\n  dummy_tactic n e."

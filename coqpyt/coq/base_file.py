@@ -72,7 +72,7 @@ class CoqFile(object):
             self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
             ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(uri)).spans
         except Exception as e:
-            self.__handle_exception(e)
+            self._handle_exception(e)
             raise e
 
         self.steps_taken: int = 0
@@ -104,7 +104,7 @@ class CoqFile(object):
         shutil.copyfile(file_path, new_path)
         self._path = new_path
 
-    def __handle_exception(self, e):
+    def _handle_exception(self, e):
         if not isinstance(e, ResponseError) or e.code not in [
             ErrorCodes.ServerQuit.value,
             ErrorCodes.ServerTimeout.value,
@@ -196,7 +196,7 @@ class CoqFile(object):
             )
             ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(uri)).spans
         except Exception as e:
-            self.__handle_exception(e)
+            self._handle_exception(e)
             raise e
         self.__init_steps(text, ast)
         self.__validate()
@@ -553,7 +553,7 @@ class CoqFile(object):
         try:
             self.coq_lsp_client.save_vo(TextDocumentIdentifier(uri))
         except Exception as e:
-            self.__handle_exception(e)
+            self._handle_exception(e)
             raise e
 
     def close(self):

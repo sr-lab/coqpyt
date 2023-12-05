@@ -66,7 +66,7 @@ class _AuxFile(object):
         self.path = new_path
         self.version = 1
 
-    def __handle_exception(self, e):
+    def _handle_exception(self, e):
         if not isinstance(e, ResponseError) or e.code not in [
             ErrorCodes.ServerQuit.value,
             ErrorCodes.ServerTimeout.value,
@@ -142,7 +142,7 @@ class _AuxFile(object):
         try:
             self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, self.read()))
         except Exception as e:
-            self.__handle_exception(e)
+            self._handle_exception(e)
             raise e
 
     def didChange(self):
@@ -154,7 +154,7 @@ class _AuxFile(object):
                 [TextDocumentContentChangeEvent(None, None, self.read())],
             )
         except Exception as e:
-            self.__handle_exception(e)
+            self._handle_exception(e)
             raise e
 
     def close(self):
@@ -279,6 +279,13 @@ class ProofFile(CoqFile):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
+
+    def _handle_exception(self, e):
+        try:
+            super()._handle_exception(e)
+        except Exception as e:
+            self.__aux_file.close()
+            raise e
 
     def __locate(self, search, line):
         nots = self.__aux_file.get_diagnostics("Locate", f'"{search}"', line).split(
@@ -555,8 +562,7 @@ class ProofFile(CoqFile):
         try:
             return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
         except Exception as e:
-            self.__handle_exception(e)
-            self.__aux_file.close()
+            self._handle_exception(e)
             raise e
 
     def __in_proof(self, goals: Optional[GoalAnswer]):

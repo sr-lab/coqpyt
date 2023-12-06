@@ -369,7 +369,9 @@ class ProofFile(CoqFile):
         step: Step,
         undo: bool = False,
     ) -> bool:
-        if not step.short_text.startswith("Program"):
+        if not step.short_text.startswith(
+            ("Program", "Local Program", "Global Program")
+        ):
             return False
         goals = self.__goals(step.ast.range.end)
 

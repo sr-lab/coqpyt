@@ -4,7 +4,7 @@ import tempfile
 import shutil
 import uuid
 import threading
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, Union, List, Dict
 
 from coqpyt.lsp.structs import (
     TextDocumentItem,
@@ -370,7 +370,7 @@ class ProofFile(CoqFile):
         undo: bool = False,
     ) -> bool:
         if not step.short_text.startswith("Program"):
-            return
+            return False
         goals = self.__goals(step.ast.range.end)
 
         last_prog = lambda g: g.program[-1][0][1]
@@ -669,32 +669,38 @@ class ProofFile(CoqFile):
         return self.steps[slice[1 - last] : slice[last]]
 
     def add_step(self, previous_step_index: int, step_text: str):
-        def local_exec(n_steps):
-            sign = 1 if n_steps > 0 else -1
-            for _ in range(n_steps * sign):
-                self._step(sign)
-                if sign == 1:
-                    self.__aux_file.append(self.prev_step.text)
-                else:
-                    self.__aux_file.truncate(self.curr_step.text)
-
-        optional = self.__find_step(self.steps[previous_step_index].ast.range)
-
         # We need to calculate this here because the _add_step
         # will possibly change the steps_taken
         processed = self.steps_taken > previous_step_index + 1
         self._make_change(self._add_step, previous_step_index, step_text)
-        if not processed:
-            return
+        if processed:
+            n_steps = self.steps_taken - previous_step_index - 2
+            self.__local_exec(-n_steps)  # Backtrack until added step
+            self.steps_taken -= 1  # Ignore added step while backtracking
+            self.__local_exec(1, program=False)  # Execute added step, updating last_term
+            self.__add_step(previous_step_index + 1)
+            self.__local_exec(n_steps)  # Execute until starting point
 
-        # At most, we only need to update 1 proof, so we execute the steps
-        # in CoqFile which is faster. For ProofFile, we only update AuxFile,
-        # leaving the remaining proofs as is.
-        n_steps = self.steps_taken - previous_step_index - 2
-        local_exec(-n_steps)  # Backtrack until added step
-        self.steps_taken -= 1  # Ignore added step while backtracking
-        local_exec(1)  # Execute added step, updating last_term
-        step = self.prev_step  # It is the last taken step
+    def __local_exec(self, n_steps, program=True):
+        sign = 1 if n_steps > 0 else -1
+        for _ in range(n_steps * sign):
+            # At most, we only need to update 1 proof, so we 
+            # execute the steps in CoqFile which is faster.
+            self._step(sign)
+            # For ProofFile, we only update AuxFile,
+            # leaving the remaining proofs as is.
+            if sign == 1:
+                self.__aux_file.append(self.prev_step.text)
+                if program:
+                    self.__check_program(self.prev_step)
+            else:
+                self.__aux_file.truncate(self.curr_step.text)
+                if program:
+                    self.__check_program(self.curr_step, undo=True)
+
+    def __add_step(self, index: int):
+        step = self.steps[index]
+        optional = self.__find_step(self.steps[index - 1].ast.range)
 
         # Handles case where Qed is added
         if self.__is_end_proof(step):
@@ -719,26 +725,25 @@ class ProofFile(CoqFile):
         # Regular proof steps
         elif optional is not None:
             proof, _, prev = optional
-            proof.steps.insert(prev + 1, self.__get_step(previous_step_index + 1))
+            proof.steps.insert(prev + 1, self.__get_step(index))
             # We should change the goals of all the steps in the same proof
             # after the one that was changed
             # NOTE: We assume the proofs and steps are in the order they are written
             for e in range(prev + 2, len(proof.steps)):
                 # The goals will be loaded if used (Lazy Loading)
                 proof.steps[e].goals = self.__goals
-        local_exec(n_steps)  # Execute until starting point
 
     def delete_step(self, step_index: int) -> None:
-        step = self.steps[step_index]
-        optional = self.__find_step(step.ast.range)
-
+        deleted = self.steps[step_index]
         # We need to calculate this here because the _delete_step
         # will possibly change the steps_taken
         processed = self.steps_taken > step_index
         self._make_change(self._delete_step, step_index)
-        if not processed:
-            return
+        if processed:
+            self.__delete_step(deleted)
 
+    def __delete_step(self, step: Step):
+        optional = self.__find_step(step.ast.range)
         # Handles case where Qed is deleted
         if self.__is_end_proof(step):
             index = self.__find_proof_index(step) - 1
@@ -763,19 +768,45 @@ class ProofFile(CoqFile):
                     proof.steps[e].goals = self.__goals
 
     def change_steps(self, changes: List[CoqChange]):
-        min_step = self.steps_taken
-        offset = self._get_steps_taken_offset(changes)
-
+        steps: List[Union[Step, CoqAddStep]] = self.steps[:]
+        adds: List[int] = [] # For Adds, store the index of the new Step
+        deletes: List[Step] = [] # For Deletes, store the deleted Step
+        initial_steps_taken = self.steps_taken
         for change in changes:
             if isinstance(change, CoqAddStep):
-                min_step = min(min_step, change.previous_step_index)
+                steps.insert(change.previous_step_index + 1, change)
+                if change.previous_step_index + 1 < initial_steps_taken:
+                    initial_steps_taken += 1
             elif isinstance(change, CoqDeleteStep):
-                min_step = min(min_step, change.step_index)
-        steps = self.steps_taken - min_step
+                step = steps.pop(change.step_index)
+                # Ignore CoqAddStep, only need to delete original Steps
+                if isinstance(step, Step):
+                    deletes.append(step)
+                if change.step_index < initial_steps_taken:
+                    initial_steps_taken -= 1
+        for i, step in enumerate(steps[:initial_steps_taken]):
+            if isinstance(step, CoqAddStep):
+                adds.append(i)
 
-        self.exec(-steps)
+        # Delete ProofSteps in ProofFile before Steps are deleted in CoqFile
+        for step in reversed(self.steps[:self.steps_taken]):
+            for delete in deletes:
+                if step.ast.range == delete.ast.range:
+                    self.__local_exec(-1, program=False)
+                    self.__delete_step(delete)
+                    break
+            else:
+                self.__local_exec(-1)
+        self.__local_exec(-self.steps_taken)
         super().change_steps(changes)
-        self.exec(steps + offset)
+        # Add ProofSteps to ProofFile after Steps are added to CoqFile
+        steps_taken = self.steps_taken
+        for add in adds:
+            n_steps = add + 1 - steps_taken
+            self.__local_exec(n_steps, program=False)
+            self.__add_step(add)
+            steps_taken += n_steps
+        self.__local_exec(initial_steps_taken - steps_taken)
 
     def close(self):
         super().close()

@@ -562,7 +562,7 @@ class ProofFile(CoqFile):
         sign = -1 if undo else 1
         step = lambda: self.curr_step if undo else self.prev_step
         change = self.__aux_file.truncate if undo else self.__aux_file.append
-        
+
         for _ in range(n_steps * sign):
             # HACK: We ignore steps inside a Module Type since they can't
             # be used outside and should be overriden.

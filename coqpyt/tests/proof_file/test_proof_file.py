@@ -386,3 +386,14 @@ class TestProofSection(SetupProofFile):
         assert len(self.proof_file.proofs) == 1
         assert self.proof_file.proofs[0].text == "Let ignored : nat."
         assert len(self.proof_file.context.local_terms) == 0
+
+
+class TestModuleInline(SetupProofFile):
+    def setup_method(self, method):
+        self.setup("test_module_inline.v")
+
+    def test_module_import(self):
+        self.proof_file.exec(-self.proof_file.steps_taken)
+        self.proof_file.run()
+        assert self.proof_file.context.curr_modules == []
+        assert not self.proof_file.context.in_module_type

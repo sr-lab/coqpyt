@@ -377,9 +377,9 @@ class FileContext:
         # Keep track of current segments
         if expr[0] == "VernacEndSegment":
             self.__segments.go_back()
-        elif expr[0] == "VernacDefineModule":
+        elif expr[0] == "VernacDefineModule" and len(expr[-1]) == 0:
             self.__segments.push(expr[2]["v"][1], SegmentType.MODULE)
-        elif expr[0] == "VernacDeclareModuleType":
+        elif expr[0] == "VernacDeclareModuleType" and len(expr[-1]) == 0:
             self.__segments.push(expr[1]["v"][1], SegmentType.MODULE_TYPE)
         elif expr[0] == "VernacBeginSection":
             self.__segments.push(expr[1]["v"][1], SegmentType.SECTION)
@@ -400,9 +400,9 @@ class FileContext:
         # Keep track of current segments
         if expr[0] == "VernacEndSegment":
             self.__segments.go_forward(expr[1]["v"][1])
-        elif expr[0] == "VernacDefineModule":
+        elif expr[0] == "VernacDefineModule" and len(expr[-1]) == 0:
             self.__segments.pop()
-        elif expr[0] == "VernacDeclareModuleType":
+        elif expr[0] == "VernacDeclareModuleType" and len(expr[-1]) == 0:
             self.__segments.pop()
         elif expr[0] == "VernacBeginSection":
             self.__segments.pop()

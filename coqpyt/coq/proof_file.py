@@ -558,21 +558,26 @@ class ProofFile(CoqFile):
         return len(self.__proofs)
 
     def __local_exec(self, n_steps, program=True):
-        sign = 1 if n_steps > 0 else -1
+        undo = n_steps < 0
+        sign = -1 if undo else 1
+        step = lambda: self.curr_step if undo else self.prev_step
+        change = self.__aux_file.truncate if undo else self.__aux_file.append
+        
         for _ in range(n_steps * sign):
+            # HACK: We ignore steps inside a Module Type since they can't
+            # be used outside and should be overriden.
+            in_module_type = self.context.in_module_type
             # At most, we only need to update 1 proof, so we
             # execute the steps in CoqFile which is faster.
             self._step(sign)
+            if in_module_type or self.context.in_module_type:
+                continue
+
             # For ProofFile, we only update AuxFile and the
             # Program context, leaving other proofs as is.
-            if sign == 1:
-                self.__aux_file.append(self.prev_step.text)
-                if program:
-                    self.__check_program(self.prev_step)
-            else:
-                self.__aux_file.truncate(self.curr_step.text)
-                if program:
-                    self.__check_program(self.curr_step, undo=True)
+            change(step().text)
+            if program:
+                self.__check_program(step(), undo=undo)
 
     def __add_step(self, index: int):
         step = self.steps[index]

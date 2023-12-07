@@ -2,6 +2,7 @@ import os
 import shutil
 import uuid
 import tempfile
+from copy import deepcopy
 from typing import Optional, List
 
 from coqpyt.lsp.structs import (
@@ -212,17 +213,16 @@ class CoqFile(object):
         if not self.is_valid:
             raise InvalidFileException(self.path)
 
-        previous_steps = self.steps
+        self.__set_backup_steps()
         old_steps_taken = self.steps_taken
         old_diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics
-        lines = self.__read().split("\n")
-        old_text = "\n".join(lines)
+        old_text = self.__read()
 
         try:
             change_function(*args)
         except InvalidChangeException as e:
             # Rollback changes
-            self.steps = previous_steps
+            self.steps = self.__backup_steps
             self.steps_taken = old_steps_taken
             self.coq_lsp_client.lsp_endpoint.diagnostics = old_diagnostics
             self.is_valid = True
@@ -323,29 +323,41 @@ class CoqFile(object):
 
         return added_step
 
-    def __copy_steps(self, previous_steps: List[Step]):
-        for i, step in enumerate(previous_steps):
-            step.text, step.ast = self.steps[i].text, self.steps[i].ast
-            step.diagnostics = self.steps[i].diagnostics
-            step.short_text = self.steps[i].short_text
-        self.steps = previous_steps
+    def __copy_steps(self):
+        for i, step in enumerate(self.steps):
+            index = self.__index_tracker[i]
+            if index is None:  # Newly added steps
+                continue
+
+            backup = self.__backup_steps[index]
+            backup.text, backup.ast = step.text, step.ast
+            backup.diagnostics = step.diagnostics
+            backup.short_text = step.short_text
+            self.steps[i] = backup
+
+    def __set_backup_steps(self):
+        self.__backup_steps = self.steps[:]
+        self.__index_tracker: List[Optional[int]] = []
+        for i, step in enumerate(self.__backup_steps):
+            self.steps[i] = deepcopy(step)
+            self.__index_tracker.append(i)
 
     def _delete_step(self, step_index: int) -> None:
-        deleted_text = self.steps[step_index].text
+        deleted_step = self.steps[step_index]
+        deleted_text = deleted_step.text
         self.__delete_step_text(step_index)
 
         # Modify the previous steps instead of creating new ones
         # This is important to preserve their references
         # For instance, in the ProofFile
-        previous_steps = self.steps
         self.__update_steps()
 
         if not self.is_valid:
             raise InvalidDeleteException(deleted_text)
 
         # We will remove the step from the previous steps
-        deleted_step = previous_steps.pop(step_index)
-        self.__copy_steps(previous_steps)
+        self.__index_tracker.pop(step_index)
+        self.__copy_steps()
 
         if self.steps_taken > step_index:
             self.steps_taken -= 1
@@ -361,18 +373,18 @@ class CoqFile(object):
         # Modify the previous steps instead of creating new ones
         # This is important to preserve their references
         # For instance, in the ProofFile
-        previous_steps = self.steps
+        previous_steps_size = len(self.steps)
         step_index = previous_step_index + 1
         self.__update_steps()
 
         # NOTE: We check if exactly 1 step was added, because the text might contain
         # two steps or something that might lead to similar unwanted behaviour.
-        if len(self.steps) != len(previous_steps) + 1 or not self.is_valid:
+        if len(self.steps) != previous_steps_size + 1 or not self.is_valid:
             raise InvalidAddException(step_text)
 
-        # We will add the new step to the previous_steps
-        previous_steps.insert(step_index, self.steps[step_index])
-        self.__copy_steps(previous_steps)
+        # We will add the new step to the previous steps
+        self.__index_tracker.insert(step_index, None)
+        self.__copy_steps()
 
         if self.steps_taken > step_index:
             self.steps_taken += 1
@@ -401,7 +413,7 @@ class CoqFile(object):
     def __change_steps(self, changes: List[CoqChange]):
         previous_steps_takens = self.steps_taken
         offset_steps, offset_steps_taken = 0, self._get_steps_taken_offset(changes)
-        previous_steps, previous_steps_size = self.steps, len(self.steps)
+        previous_steps_size = len(self.steps)
         CoqFile.exec(self, -self.steps_taken)
 
         for change in changes:
@@ -411,11 +423,13 @@ class CoqFile(object):
                     change.previous_step_index, change.step_text
                 )
                 self.steps.insert(change.previous_step_index + 1, step)
+                self.__index_tracker.insert(change.previous_step_index + 1, None)
                 offset_steps += 1
             elif isinstance(change, CoqDeleteStep):
                 self.__delete_step_text(change.step_index)
                 self.__delete_update_ast(change.step_index)
                 self.steps.pop(change.step_index)
+                self.__index_tracker.pop(change.step_index)
                 offset_steps -= 1
             else:
                 raise NotImplementedError(f"Unknown change: {change}")
@@ -426,7 +440,7 @@ class CoqFile(object):
         if len(self.steps) != previous_steps_size + offset_steps or not self.is_valid:
             raise InvalidChangeException()
 
-        self.__copy_steps(previous_steps)
+        self.__copy_steps()
         CoqFile.exec(self, previous_steps_takens + offset_steps_taken)
 
     @property

@@ -787,9 +787,7 @@ class ProofFile(CoqFile):
             n_steps = self.steps_taken - previous_step_index - 2
             self.__local_exec(-n_steps)  # Backtrack until added step
             self.steps_taken -= 1  # Ignore added step while backtracking
-            self.__local_exec(
-                1, program=False
-            )  # Execute added step, updating last_term
+            self.__local_exec(1, program=False)  # Execute added step
             self.__add_step(previous_step_index + 1)
             self.__local_exec(n_steps)  # Execute until starting point
 
@@ -815,18 +813,19 @@ class ProofFile(CoqFile):
             else:
                 self.__local_exec(-1)
 
-        n_steps = 0 if len(adds) == 0 else self.steps_taken - max(0, adds[0])
+        n_steps = 0 if len(adds) == 0 else max(0, self.steps_taken - adds[0])
         self.__local_exec(-n_steps)  # Step back until first Add
-        super().change_steps(changes)  # Apply (faster) changes in CoqFile
+        try:
+            super().change_steps(changes)  # Apply (faster) changes in CoqFile
+        except InvalidChangeException as e:
+            self.__local_exec(n_steps)  # Reset pointer
+            raise e
 
         # Add ProofSteps to ProofFile after Steps are added to CoqFile
-        steps_taken = self.steps_taken
         for add in adds:
-            n_steps = add + 1 - steps_taken
-            self.__local_exec(n_steps, program=False)
+            self.__local_exec(add + 1 - self.steps_taken, program=False)
             self.__add_step(add)
-            steps_taken += n_steps
-        self.__local_exec(new_steps_taken - steps_taken)
+        self.__local_exec(new_steps_taken - self.steps_taken)
 
     def close(self):
         super().close()

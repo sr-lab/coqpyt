@@ -1,7 +1,7 @@
 import re
 import subprocess
 from packaging import version
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple, Union
 
 from coqpyt.coq.exceptions import NotationNotFoundException
 from coqpyt.coq.structs import SegmentType, SegmentStack, Step, TermType, Term
@@ -15,13 +15,11 @@ class FileContext:
         coqtop: str = "coqtop",
         terms: Optional[Dict[str, Term]] = None,
     ):
-        self.path = path
-        self.module = [] if module is None else module
+        self.libraries: Dict[str, Dict[str, Term]] = {}
+        self.__path = path
+        self.__module = [] if module is None else module
         self.__init_coq_version(coqtop)
-        self.terms = {} if terms is None else terms
-        self.last_term: Optional[Term] = None
-        self.__segments = SegmentStack()
-        self.__anonymous_id: Optional[int] = None
+        self.__init_context(terms)
 
     def __init_coq_version(self, coqtop):
         output = subprocess.check_output(f"{coqtop} -v", shell=True)
@@ -35,6 +33,15 @@ class FileContext:
 
         self.__expr = lambda e: e if outdated else e[1]
         self.__where_notation_key = "decl_ntn" if outdated else "ntn_decl"
+
+    def __init_context(self, terms: Optional[Dict[str, Term]] = None):
+        # NOTE: We use a stack for each term because of the following case:
+        # 1) File A imports a file B with term C
+        # 2) File A defines a new term C
+        self.__terms: Dict[str, List[Term]] = {} if terms is None else terms
+        self.__last_terms: List[Tuple[str, Term]] = []
+        self.__segments = SegmentStack()
+        self.__anonymous_id: Optional[int] = None
 
     def __add_terms(self, step: Step, expr: List):
         term_type = FileContext.__term_type(expr)
@@ -55,8 +62,8 @@ class FileContext:
                 # NOTE: We update the last term so as to obtain proofs even for
                 # section-local terms. This is safe, because the attribute is
                 # meant to be overwritten every time a new term is found.
-                self.last_term = Term(
-                    step, term_type, self.path, self.__segments.modules[:]
+                self.__last_terms[-1].append(
+                    ("", Term(step, term_type, self.__path, self.__segments.modules[:]))
                 )
                 return
 
@@ -91,8 +98,8 @@ class FileContext:
                 prop = FileContext.get_ident(expr[2][2])
                 self.__add_term(prop, step, term_type)
         elif term_type == TermType.OBLIGATION:
-            self.last_term = Term(
-                step, term_type, self.path, self.__segments.modules[:]
+            self.__last_terms[-1].append(
+                ("", Term(step, term_type, self.__path, self.__segments.modules[:]))
             )
         else:
             names = FileContext.__get_names(expr)
@@ -102,19 +109,49 @@ class FileContext:
         self.__handle_where_notations(step, expr, term_type)
 
     def __add_term(self, name: str, step: Step, term_type: TermType):
+        def check_and_add_term(name, term):
+            if name not in self.__terms:
+                self.__terms[name] = []
+            self.__terms[name].append(term)
+
         modules = self.__segments.modules[:]
-        term = Term(step, term_type, self.path, modules)
-        self.last_term = term
+        term = Term(step, term_type, self.__path, modules)
+        self.__last_terms[-1].append((name, term))
         if term.type == TermType.NOTATION:
-            self.terms[name] = term
+            check_and_add_term(name, term)
             return
 
-        self.terms[".".join(modules + [name])] = term
+        # The modules inside the file are handled by the get_term method
+        # so we don't have to worry about them here.
+        check_and_add_term(".".join(modules + [name]), term)
 
         curr_module = ""
-        for module in reversed(self.module):
+        for module in reversed(self.__module):
             curr_module = module + "." + curr_module
-            self.terms[curr_module + name] = term
+            check_and_add_term(curr_module + name, term)
+
+    def __remove_term(self, name: str, term: Term):
+        def remove_term(name):
+            self.__terms[name].pop()
+            if len(self.__terms[name]) == 0:
+                del self.__terms[name]
+
+        # Terms that are not part of the accessible context (e.g. obligations),
+        # but are still registered in last_terms.
+        if name == "":
+            return
+
+        if term.type == TermType.NOTATION:
+            remove_term(name)
+            return
+
+        modules = self.__segments.modules[:]
+        remove_term(".".join(modules + [name]))
+
+        curr_module = ""
+        for module in reversed(self.__module):
+            curr_module = module + "." + curr_module
+            remove_term(curr_module + name)
 
     # Simultaneous definition of terms and notations (where clause)
     # https://coq.inria.fr/refman/user-extensions/syntax-extensions.html#simultaneous-definition-of-terms-and-notations
@@ -280,8 +317,19 @@ class FileContext:
             List[Term]: The executed terms defined in the current file.
         """
         return list(
-            filter(lambda term: term.file_path == self.path, self.terms.values())
+            filter(lambda term: term.file_path == self.__path, self.terms.values())
         )
+
+    @property
+    def terms(self) -> Dict[str, Term]:
+        """
+        Returns:
+            Dict[str, Term]: All terms defined in the current file.
+        """
+        defined_terms = {}
+        for name, terms in self.__terms.items():
+            defined_terms[name] = terms[-1]
+        return defined_terms
 
     @property
     def in_module_type(self) -> bool:
@@ -291,6 +339,25 @@ class FileContext:
         """
         return len(self.__segments.module_types) > 0
 
+    @property
+    def last_term(self) -> Optional[Term]:
+        """
+        Returns:
+            Optional[Term]: The last term defined in the current file.
+        """
+        for terms in self.__last_terms[::-1]:
+            if len(terms) > 0:
+                return terms[-1][1]
+        return None
+
+    @property
+    def curr_modules(self) -> List[str]:
+        """
+        Returns:
+            List[str]: The current module path.
+        """
+        return self.__segments.modules[:]
+
     def process_step(self, step: Step):
         """Extracts the identifiers from a step and updates the context with
         new terms defined by the step.
@@ -299,6 +366,7 @@ class FileContext:
             step (Step): The step to be processed.
         """
         expr = self.expr(step)
+        self.__last_terms.append([])
         if (
             expr == [None]
             or expr[0] == "VernacProof"
@@ -308,10 +376,10 @@ class FileContext:
 
         # Keep track of current segments
         if expr[0] == "VernacEndSegment":
-            self.__segments.pop()
-        elif expr[0] == "VernacDefineModule":
+            self.__segments.go_back()
+        elif expr[0] == "VernacDefineModule" and len(expr[-1]) == 0:
             self.__segments.push(expr[2]["v"][1], SegmentType.MODULE)
-        elif expr[0] == "VernacDeclareModuleType":
+        elif expr[0] == "VernacDeclareModuleType" and len(expr[-1]) == 0:
             self.__segments.push(expr[1]["v"][1], SegmentType.MODULE_TYPE)
         elif expr[0] == "VernacBeginSection":
             self.__segments.push(expr[1]["v"][1], SegmentType.SECTION)
@@ -319,6 +387,28 @@ class FileContext:
         # and should be overriden.
         elif not self.in_module_type:
             self.__add_terms(step, expr)
+
+    def undo_step(self, step: Step):
+        """Removes the terms defined by a step from the context.
+
+        Args:
+            step (Step): The step to be reverted.
+        """
+        expr = self.expr(step)
+        terms = self.__last_terms.pop()
+
+        # Keep track of current segments
+        if expr[0] == "VernacEndSegment":
+            self.__segments.go_forward(expr[1]["v"][1])
+        elif expr[0] == "VernacDefineModule" and len(expr[-1]) == 0:
+            self.__segments.pop()
+        elif expr[0] == "VernacDeclareModuleType" and len(expr[-1]) == 0:
+            self.__segments.pop()
+        elif expr[0] == "VernacBeginSection":
+            self.__segments.pop()
+
+        for name, term in terms:
+            self.__remove_term(name, term)
 
     def expr(self, step: Step) -> List:
         """
@@ -348,13 +438,46 @@ class FileContext:
         """
         return FileContext.__term_type(self.expr(step))
 
-    def update(self, terms: Dict[str, Term] = {}):
+    def update(self, context: Union["FileContext", Dict[str, Term]] = {}):
         """Updates the context with new terms.
 
         Args:
             terms (Dict[str, Term]): The new terms to be added.
         """
-        self.terms.update(terms)
+        if isinstance(context, FileContext):
+            terms = context.terms
+            for library in context.libraries:
+                self.add_library(library, context.libraries[library])
+        else:
+            terms = context
+
+        for name, term in terms.items():
+            if name not in self.__terms:
+                self.__terms[name] = []
+            self.__terms[name].append(term)
+
+    def add_library(self, name: str, terms: Dict[str, Term]):
+        """Adds a library to the context.
+
+        Args:
+            name (str): The name of the library.
+            terms (List[Term]): The terms defined by the library.
+        """
+        self.libraries[name] = terms
+        self.update(terms)
+
+    def remove_library(self, name: str):
+        """Removes a library from the context.
+
+        Args:
+            name (str): The name of the library.
+        """
+        if name in self.libraries:
+            for term_name, term in self.libraries[name].items():
+                self.__remove_term(term_name, term)
+            del self.libraries[name]
+        else:
+            raise RuntimeError(f"Library {name} not found.")
 
     def append_module_prefix(self, name: str) -> str:
         """Attaches the current module path to the start of a name.
@@ -378,8 +501,8 @@ class FileContext:
         """
         for i in range(len(self.__segments.modules), -1, -1):
             curr_name = ".".join(self.__segments.modules[:i] + [name])
-            if curr_name in self.terms:
-                return self.terms[curr_name]
+            if curr_name in self.__terms:
+                return self.__terms[curr_name][-1]
         return None
 
     def get_notation(self, notation: str, scope: str) -> Term:
@@ -411,20 +534,24 @@ class FileContext:
 
         # Search notations
         unscoped = None
-        for term in self.terms.keys():
+        for term in self.__terms.keys():
             if re.match(regex, term):
-                return self.terms[term]
+                return self.__terms[term][-1]
             if re.match(regex, term.split(":")[0].strip()):
                 unscoped = term
         # In case the stored id contains the scope but no scope is provided
         if unscoped is not None:
-            return self.terms[unscoped]
+            return self.__terms[unscoped][-1]
 
         # Search Infix
         if re.match("^_ ([^ ]*) _$", notation):
             op = notation[2:-2]
             key = FileContext.__get_notation_key(op, scope)
-            if key in self.terms:
-                return self.terms[key]
+            if key in self.__terms:
+                return self.__terms[key][-1]
 
         raise NotationNotFoundException(notation_id)
+
+    def reset(self):
+        """Resets the context to its initial state."""
+        self.__init_context()

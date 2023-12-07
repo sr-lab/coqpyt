@@ -22,12 +22,6 @@ with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
         ),
     )
 
-    # Enter proof
-    coq_file.exec(nsteps=4)
-    print("In proof:", coq_file.in_proof)
-    # Get current goals
-    print(coq_file.current_goals)
-
     # Save compiled file
     coq_file.save_vo()
     print("Compiled file exists:", os.path.exists("examples/readme.vo"))
@@ -41,6 +35,13 @@ with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
 
 # Open Proof file
 with ProofFile(os.path.join(os.getcwd(), "examples/readme.v")) as proof_file:
+    # Enter proof
+    proof_file.exec(nsteps=4)
+    print("In proof:", proof_file.in_proof)
+    # Get current goals
+    print(proof_file.current_goals)
+
+    # Run remaining file
     proof_file.run()
     # Number of proofs in the file
     print("Number of proofs:", len(proof_file.proofs))

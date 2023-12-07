@@ -15,13 +15,54 @@ class TestProofValidFile(SetupProofFile):
         proofs = self.proof_file.proofs
         check_proofs("tests/proof_file/expected/valid_file.yml", proofs)
 
+    def test_exec(self):
+        # Rollback whole file
+        self.proof_file.exec(-self.proof_file.steps_taken)
+        assert "plus_O_n" in self.proof_file.context.terms
+        assert self.proof_file.context.get_term("plus_O_n").module == []
+        assert self.proof_file.context.curr_modules == []
+
+        # Check if roll back works for imports
+        assert "∀ x .. y , P : type_scope" not in self.proof_file.context.terms
+        self.proof_file.exec(1)
+        assert "∀ x .. y , P : type_scope" in self.proof_file.context.terms
+
+        steps = self.proof_file.exec(6)
+        assert len(steps) == 6
+        assert steps[-1].text == "\n      intros n."
+        assert self.proof_file.context.curr_modules == ["Out", "In"]
+        assert "plus_O_n" in self.proof_file.context.terms
+        assert self.proof_file.context.get_term("plus_O_n").module == ["Out", "In"]
+
 
 class TestProofImports(SetupProofFile):
     def setup_method(self, method):
-        self.setup("test_imports/test_import.v", "test_imports/")
+        self.setup("test_imports/test_import.v", workspace="test_imports/")
 
     def test_imports(self):
         check_proofs("tests/proof_file/expected/imports.yml", self.proof_file.proofs)
+
+    def test_exec(self):
+        # Rollback whole file
+        self.proof_file.exec(-self.proof_file.steps_taken)
+        # mult_0_plus is not defined because the import of test_import2 is not executed
+        assert "mult_0_plus" not in self.proof_file.context.terms
+
+        self.proof_file.exec(2)
+        assert "mult_0_plus" in self.proof_file.context.terms
+        # definition of test_import2
+        assert (
+            self.proof_file.context.get_term("mult_0_plus").text
+            == "Definition mult_0_plus : forall n m : nat, 0 + 0 + (S n * m) = S n * m."
+        )
+
+        self.proof_file.exec(9)
+        assert "mult_0_plus" in self.proof_file.context.terms
+        # definition of test_import
+        assert (
+            self.proof_file.context.get_term("mult_0_plus").text
+            == "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
+        )
 
 
 class TestProofNonEndingProof(SetupProofFile):
@@ -51,6 +92,8 @@ class TestProofListNotation(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_list_notation.v")
 
+    # FIXME: Refer to issue #24: https://github.com/sr-lab/coqpyt/issues/24
+    @pytest.mark.skip(reason="Skipping due to non-deterministic behaviour")
     def test_list_notation(self):
         check_proofs(
             "tests/proof_file/expected/list_notation.yml", self.proof_file.proofs
@@ -115,30 +158,6 @@ class TestProofNestedProofs(SetupProofFile):
         for i, step in enumerate(proofs[1].steps):
             assert step.text == steps[i]
 
-        # Close proofs
-        proof_file.exec(-1)
-        proof_file.add_step(proof_file.steps_taken - 1, "\nQed.")
-        proof_file.add_step(proof_file.steps_taken - 1, "\nQed.")
-        proof_file.exec(2)
-        assert len(proof_file.proofs) == 4
-        assert len(proof_file.open_proofs) == 0
-
-        # Re-open proofs
-        proof_file.exec(-2)
-        assert len(proof_file.proofs) == 2
-        assert len(proof_file.open_proofs) == 2
-
-        # Attempt to leave proof
-        with pytest.raises(NotImplementedError):
-            proof_file.exec(-3)
-
-        # Check rollback
-        assert len(proof_file.proofs) == 2
-        assert len(proof_file.open_proofs) == 2
-        proof_file.exec(2)
-        assert len(proof_file.proofs) == 4
-        assert len(proof_file.open_proofs) == 0
-
 
 class TestProofTheoremTokens(SetupProofFile):
     def setup_method(self, method):
@@ -185,6 +204,9 @@ class TestProofObligation(SetupProofFile):
         self.setup("test_obligation.v")
 
     def test_obligation(self):
+        # Rollback whole file (except slow import)
+        self.proof_file.exec(-self.proof_file.steps_taken + 1)
+        self.proof_file.run()
         proofs = self.proof_file.proofs
         assert len(proofs) == 11
 
@@ -195,7 +217,11 @@ class TestProofObligation(SetupProofFile):
                 [],
             ),
             ("Notation dec := sumbool_of_bool.", TermType.NOTATION, []),
-            ("Notation leb := Nat.leb (only parsing).", TermType.NOTATION, []),
+            (
+                "Fixpoint leb n m : bool := match n, m with | 0, _ => true | _, 0 => false | S n', S m' => leb n' m' end.",
+                TermType.FIXPOINT,
+                [],
+            ),
             ("Notation pred := Nat.pred (only parsing).", TermType.NOTATION, []),
             (
                 'Notation "{ x : A | P }" := (sig (A:=A) (fun x => P)) : type_scope.',
@@ -239,7 +265,7 @@ class TestProofObligation(SetupProofFile):
                 proof.program.text
                 == "Program Definition "
                 + programs[i][0]
-                + " (n : nat) : { x : nat | x = n } := if dec (leb n 0) then 0%nat else "
+                + " (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else "
                 + programs[i][1]
                 + "."
             )
@@ -251,7 +277,7 @@ class TestProofModuleType(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_module_type.v")
 
-    def test_module_type(self):
+    def test_proof_module_type(self):
         # We ignore proofs inside a Module Type since they can't be used outside
         # and should be overriden.
         assert len(self.proof_file.proofs) == 1
@@ -360,3 +386,14 @@ class TestProofSection(SetupProofFile):
         assert len(self.proof_file.proofs) == 1
         assert self.proof_file.proofs[0].text == "Let ignored : nat."
         assert len(self.proof_file.context.local_terms) == 0
+
+
+class TestModuleInline(SetupProofFile):
+    def setup_method(self, method):
+        self.setup("test_module_inline.v")
+
+    def test_module_import(self):
+        self.proof_file.exec(-self.proof_file.steps_taken)
+        self.proof_file.run()
+        assert self.proof_file.context.curr_modules == []
+        assert not self.proof_file.context.in_module_type

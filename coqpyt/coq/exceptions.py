@@ -2,20 +2,20 @@ class InvalidChangeException(Exception):
     pass
 
 
-class InvalidStepException(InvalidChangeException):
+class InvalidAddException(InvalidChangeException):
     def __init__(self, step: str):
         self.step: str = step
 
     def __str__(self):
-        return "The step {} is not valid.".format(self.step)
+        return "Adding the step {} is not valid.".format(repr(self.step))
 
 
 class InvalidDeleteException(InvalidChangeException):
-    def __init__(self, step_to_delete: str):
-        self.step_to_delete: str = step_to_delete
+    def __init__(self, step: str):
+        self.step: str = step
 
     def __str__(self):
-        return "Deleting the step {} is not valid.".format(self.delete)
+        return "Deleting the step {} is not valid.".format(repr(self.step))
 
 
 class InvalidFileException(Exception):

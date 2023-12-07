@@ -15,18 +15,29 @@ from coqpyt.coq.lsp.structs import *
 
 class SetupProofFile(ABC):
     def setup(self, file_path, workspace=None):
-        new_path = os.path.join(
-            tempfile.gettempdir(), "test" + str(uuid.uuid4()).replace("-", "") + ".v"
-        )
-        shutil.copyfile(os.path.join("tests/resources", file_path), new_path)
-        self.file_path = new_path
         if workspace is not None:
-            self.workspace = os.path.join(os.getcwd(), "tests/resources", workspace)
-            subprocess.run(f"cd {workspace} && make", shell=True, capture_output=True)
+            self.workspace = os.path.join(
+                tempfile.gettempdir(), "test" + str(uuid.uuid4()).replace("-", "")
+            )
+            shutil.copytree(os.path.join("tests/resources", workspace), self.workspace)
+            run = subprocess.run(
+                f"cd {self.workspace} && make", shell=True, capture_output=True
+            )
+            assert run.returncode == 0
+            self.file_path = os.path.join(self.workspace, os.path.basename(file_path))
         else:
             self.workspace = None
+            new_path = os.path.join(
+                tempfile.gettempdir(),
+                "test" + str(uuid.uuid4()).replace("-", "") + ".v",
+            )
+            shutil.copyfile(os.path.join("tests/resources", file_path), new_path)
+            self.file_path = new_path
+
         uri = "file://" + self.file_path
-        self.proof_file = ProofFile(self.file_path, timeout=60, workspace=workspace)
+        self.proof_file = ProofFile(
+            self.file_path, timeout=60, workspace=self.workspace
+        )
         self.proof_file.run()
         self.versionId = VersionedTextDocumentIdentifier(uri, 1)
 
@@ -77,7 +88,6 @@ def check_step(test_step: Dict[str, Any], step: ProofStep):
     assert test_step["text"] == step.text
     goals = test_step["goals"]
 
-    assert goals["version"] == step.goals.textDocument.version
     assert goals["position"]["line"] == step.goals.position.line
     assert goals["position"]["character"] == step.goals.position.character
     assert len(goals["messages"]) == len(step.goals.messages)
@@ -141,7 +151,7 @@ def check_proofs(yaml_file: str, proofs: List[ProofTerm]):
         check_proof(test_proof, proofs[i])
 
 
-def add_step_defaults(step, default_version=1):
+def add_step_defaults(step):
     if "goals" not in step:
         step["goals"] = {}
     if "messages" not in step["goals"]:
@@ -156,18 +166,16 @@ def add_step_defaults(step, default_version=1):
         step["goals"]["goals"]["shelf"] = []
     if "given_up" not in step["goals"]["goals"]:
         step["goals"]["goals"]["given_up"] = []
-    if "version" not in step["goals"]:
-        step["goals"]["version"] = default_version
     if "context" not in step:
         step["context"] = []
 
 
-def get_test_proofs(yaml_file: str, default_version=1):
+def get_test_proofs(yaml_file: str):
     with open(yaml_file, "r") as f:
         test_proofs = yaml.safe_load(f)
     for test_proof in test_proofs["proofs"]:
         if "context" not in test_proof:
             test_proof["context"] = []
         for step in test_proof["steps"]:
-            add_step_defaults(step, default_version)
+            add_step_defaults(step)
     return test_proofs

@@ -29,7 +29,7 @@ from coqpyt.coq.proof_file import ProofFile
 
 Create a CoqFile object, execute the file and extract the generated context.
 
-<!-- embedme examples/readme.py#L7-L40 -->
+<!-- embedme examples/readme.py#L7-L34 -->
 ```py
 # Open Coq file
 with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
@@ -69,7 +69,7 @@ with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
 
 Create a ProofFile object (a CoqFile instance) and interact with the proofs.
 
-<!-- embedme examples/readme.py#L42-L72 -->
+<!-- embedme examples/readme.py#L36-L73 -->
 ```py
 # Open Proof file
 with ProofFile(os.path.join(os.getcwd(), "examples/readme.v")) as proof_file:

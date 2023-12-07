@@ -13,7 +13,7 @@ from coqpyt.lsp.structs import (
     ErrorCodes,
     Diagnostic,
 )
-from coqpyt.coq.lsp.structs import Position, GoalAnswer, RangedSpan
+from coqpyt.coq.lsp.structs import Position, RangedSpan, Range
 from coqpyt.coq.lsp.client import CoqLspClient
 from coqpyt.coq.exceptions import *
 from coqpyt.coq.changes import *
@@ -63,16 +63,16 @@ class CoqFile(object):
         if workspace is not None:
             uri = f"file://{workspace}"
         else:
-            uri = f"file://{self.__path}"
+            uri = f"file://{self._path}"
         self.coq_lsp_client = CoqLspClient(uri, timeout=timeout, coq_lsp=coq_lsp)
-        uri = f"file://{self.__path}"
+        uri = f"file://{self._path}"
         text = self.__read()
 
         try:
             self.coq_lsp_client.didOpen(TextDocumentItem(uri, "coq", 1, text))
             ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(uri)).spans
         except Exception as e:
-            self.__handle_exception(e)
+            self._handle_exception(e)
             raise e
 
         self.steps_taken: int = 0
@@ -80,8 +80,6 @@ class CoqFile(object):
         self.__validate()
         self.context = FileContext(self.path, module=self.file_module, coqtop=coqtop)
         self.version = 1
-        self.__last_end_pos: Optional[Position] = None
-        self.__current_goals = None
 
     def __enter__(self):
         return self
@@ -94,7 +92,7 @@ class CoqFile(object):
         self.__from_lib = self.file_module[:2] == ["Coq", "Init"]
         self.path = file_path
         if not self.__from_lib:
-            self.__path = file_path
+            self._path = file_path
             return
 
         # Coq LSP cannot open files from Coq library, so we need to work with
@@ -104,9 +102,9 @@ class CoqFile(object):
             temp_dir, "coq_" + str(uuid.uuid4()).replace("-", "") + ".v"
         )
         shutil.copyfile(file_path, new_path)
-        self.__path = new_path
+        self._path = new_path
 
-    def __handle_exception(self, e):
+    def _handle_exception(self, e):
         if not isinstance(e, ResponseError) or e.code not in [
             ErrorCodes.ServerQuit.value,
             ErrorCodes.ServerTimeout.value,
@@ -114,7 +112,7 @@ class CoqFile(object):
             self.coq_lsp_client.shutdown()
             self.coq_lsp_client.exit()
         if self.__from_lib:
-            os.remove(self.__path)
+            os.remove(self._path)
 
     def __init_step(
         self,
@@ -143,11 +141,14 @@ class CoqFile(object):
     def __init_steps(self, text: str, ast: List[RangedSpan]):
         lines = text.split("\n")
         self.steps: List[Step] = []
+        # NOTE: We remove the last step if it is an empty step
+        if ast[-1].span == None:
+            ast = ast[:-1]
         for i, curr_ast in enumerate(ast):
             self.steps.append(self.__init_step(lines, i, curr_ast, ast[i - 1]))
 
     def __validate(self):
-        uri = f"file://{self.__path}"
+        uri = f"file://{self._path}"
         self.is_valid = True
         if uri not in self.coq_lsp_client.lsp_endpoint.diagnostics:
             return
@@ -184,36 +185,6 @@ class CoqFile(object):
         with open(self.path, "r") as f:
             return f.read()
 
-    def _goals(self, end_pos: Position):
-        uri = f"file://{self.__path}"
-        try:
-            return self.coq_lsp_client.proof_goals(TextDocumentIdentifier(uri), end_pos)
-        except Exception as e:
-            self.__handle_exception(e)
-            raise e
-
-    def _can_close_proof(self, goals: Optional[GoalAnswer]):
-        def empty_stack(stack):
-            # e.g. [([], [])]
-            for tuple in stack:
-                if len(tuple[0]) > 0 or len(tuple[1]) > 0:
-                    return False
-            return True
-
-        goals = goals.goals
-        if goals is None:
-            return False
-
-        return (
-            len(goals.goals) == 0
-            and empty_stack(goals.stack)
-            and len(goals.shelf) == 0
-            and goals.bullet is None
-        )
-
-    def __in_proof(self, goals: Optional[GoalAnswer]):
-        return goals is not None and goals.goals is not None
-
     def __update_steps(self):
         uri = f"file://{self.path}"
         text = self.__read()
@@ -225,23 +196,22 @@ class CoqFile(object):
             )
             ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(uri)).spans
         except Exception as e:
-            self.__handle_exception(e)
+            self._handle_exception(e)
             raise e
         self.__init_steps(text, ast)
         self.__validate()
 
     def _step(self, sign):
-        self.steps_taken += sign
-        # FIXME: for now we ignore the terms in the context when going backwards
-        # on the file
         if sign == 1:
-            self.context.process_step(self.prev_step)
-        elif not self.in_proof:
-            raise NotImplementedError(
-                "Going backwards outside of a proof is not implemented yet"
-            )
+            self.context.process_step(self.curr_step)
+        else:
+            self.context.undo_step(self.prev_step)
+        self.steps_taken += sign
 
     def _make_change(self, change_function, *args):
+        if not self.is_valid:
+            raise InvalidFileException(self.path)
+
         previous_steps = self.steps
         old_steps_taken = self.steps_taken
         old_diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics
@@ -260,86 +230,133 @@ class CoqFile(object):
                 f.write(old_text)
             raise e
 
-    def _delete_step(
-        self,
-        step_index: int,
-        in_proof: bool = False,
-        validate_file: bool = True,
-    ) -> None:
-        if not in_proof and not self.__in_proof(
-            self._goals(self.steps[step_index - 1].ast.range.end)
-        ):
-            raise NotImplementedError(
-                "Deleting steps outside of a proof is not implemented yet"
-            )
-
-        with open(self.__path, "r") as f:
+    def __delete_step_text(self, step_index: int):
+        with open(self._path, "r") as f:
             lines = f.readlines()
 
-        with open(self.path, "w") as f:
-            step = self.steps[step_index]
-            prev_step = self.steps[step_index - 1]
-            start_line = lines[prev_step.ast.range.end.line]
-            end_line = lines[step.ast.range.end.line]
+        step = self.steps[step_index]
+        if step_index != 0:
+            prev_step_end = self.steps[step_index - 1].ast.range.end
+        else:
+            prev_step_end = Position(0, 0)
 
-            start_line = start_line[: prev_step.ast.range.end.character]
-            end_line = end_line[step.ast.range.end.character :]
+        start_line = lines[prev_step_end.line]
+        end_line = lines[step.ast.range.end.line]
 
-            if prev_step.ast.range.end.line == step.ast.range.end.line:
-                lines[prev_step.ast.range.end.line] = start_line + end_line
-            else:
-                lines[prev_step.ast.range.end.line] = start_line
-                lines[step.ast.range.end.line] = end_line
-            text = "".join(lines)
+        start_line = start_line[: prev_step_end.character]
+        end_line = end_line[step.ast.range.end.character :]
+
+        if prev_step_end.line == step.ast.range.end.line:
+            lines[prev_step_end.line] = start_line + end_line
+        else:
+            lines[prev_step_end.line] = start_line
+            lines[step.ast.range.end.line] = end_line
+
+        # Delete lines between first and last line
+        for _ in range(step.ast.range.end.line - prev_step_end.line - 1):
+            del lines[prev_step_end.line + 1]
+        text = "".join(lines)
+
+        with open(self._path, "w") as f:
             f.write(text)
+
+    def __add_step_text(self, previous_step_index: int, step_text: str):
+        with open(self._path, "r") as f:
+            lines = f.readlines()
+
+        previous_step = self.steps[previous_step_index]
+        end_line = lines[previous_step.ast.range.end.line]
+        end_line = (
+            end_line[: previous_step.ast.range.end.character]
+            + step_text
+            + end_line[previous_step.ast.range.end.character :]
+        )
+        lines[previous_step.ast.range.end.line] = end_line
+
+        text = "".join(lines)
+
+        with open(self._path, "w") as f:
+            f.write(text)
+
+    def __delete_update_ast(self, step_index: int):
+        deleted_step = self.steps[step_index]
+        if step_index != 0:
+            prev_step_end = self.steps[step_index - 1].ast.range.end
+        else:
+            prev_step_end = Position(0, 0)
+
+        deleted_lines = deleted_step.text.count("\n")
+        last_line_chars = deleted_step.ast.range.end.character
+        if deleted_step.ast.range.start.line == prev_step_end.line:
+            last_line_chars -= prev_step_end.character
+
+        for step in self.steps[step_index:]:
+            step.ast.range.start.line -= deleted_lines
+            step.ast.range.end.line -= deleted_lines
+
+            if step.ast.range.start.line == deleted_step.ast.range.end.line:
+                step.ast.range.start.character -= last_line_chars
+            if step.ast.range.end.line == deleted_step.ast.range.end.line:
+                step.ast.range.end.character -= last_line_chars
+
+    def __add_update_ast(self, previous_step_index: int, step_text: str) -> Step:
+        prev_step_end = self.steps[previous_step_index].ast.range.end
+        start = Position(prev_step_end.line, prev_step_end.character)
+
+        added_lines = step_text.count("\n")
+        end_char = last_line_chars = len(step_text.split("\n")[-1])
+        if added_lines == 0:
+            end_char += start.character
+        end = Position(start.line + added_lines, end_char)
+
+        # We will create a placeholder step that will be replaced later
+        added_step = Step(step_text, step_text, RangedSpan(Range(start, end), None))
+
+        for step in self.steps[previous_step_index + 1 :]:
+            step.ast.range.start.line += added_lines
+            step.ast.range.end.line += added_lines
+
+            if step.ast.range.start.line == added_step.ast.range.end.line:
+                step.ast.range.start.character += last_line_chars
+            if step.ast.range.end.line == added_step.ast.range.end.line:
+                step.ast.range.end.character += last_line_chars
+
+        return added_step
+
+    def __copy_steps(self, previous_steps: List[Step]):
+        for i, step in enumerate(previous_steps):
+            step.text, step.ast = self.steps[i].text, self.steps[i].ast
+            step.diagnostics = self.steps[i].diagnostics
+            step.short_text = self.steps[i].short_text
+        self.steps = previous_steps
+
+    def _delete_step(self, step_index: int) -> None:
+        deleted_text = self.steps[step_index].text
+        self.__delete_step_text(step_index)
 
         # Modify the previous steps instead of creating new ones
         # This is important to preserve their references
         # For instance, in the ProofFile
         previous_steps = self.steps
         self.__update_steps()
-        if validate_file and (
-            # We will remove the step from the previous steps
-            len(self.steps) != len(previous_steps) - 1
-            or not self.is_valid
-        ):
-            raise InvalidDeleteException(self.steps[step_index].text)
 
-        previous_steps.pop(step_index)
-        for i, step in enumerate(previous_steps):
-            step.text, step.ast = self.steps[i].text, self.steps[i].ast
-            step.diagnostics = self.steps[i].diagnostics
-        self.steps = previous_steps
+        if not self.is_valid:
+            raise InvalidDeleteException(deleted_text)
 
-    def _add_step(
-        self,
-        previous_step_index: int,
-        step_text: str,
-        in_proof: bool = False,
-        validate_file: bool = True,
-    ) -> None:
-        if validate_file and not self.is_valid:
-            raise InvalidFileException(self.path)
+        # We will remove the step from the previous steps
+        deleted_step = previous_steps.pop(step_index)
+        self.__copy_steps(previous_steps)
 
-        if not in_proof and not self.__in_proof(
-            self._goals(self.steps[previous_step_index].ast.range.end)
-        ):
-            raise NotImplementedError(
-                "Deleting steps outside of a proof is not implemented yet"
-            )
+        if self.steps_taken > step_index:
+            self.steps_taken -= 1
+            n_steps = self.steps_taken - step_index
+            # We don't use self to avoid calling method of ProofFile
+            CoqFile.exec(self, -n_steps)
+            self.context.undo_step(deleted_step)
+            CoqFile.exec(self, n_steps)
 
-        with open(self.__path, "r") as f:
-            lines = f.read().split("\n")
-
-        with open(self.path, "w") as f:
-            previous_step = self.steps[previous_step_index]
-            end_line = previous_step.ast.range.end.line
-            end_char = previous_step.ast.range.end.character
-            lines[end_line] = (
-                lines[end_line][:end_char] + step_text + lines[end_line][end_char + 1 :]
-            )
-            text = "\n".join(lines)
-            f.write(text)
+    def _add_step(self, previous_step_index: int, step_text: str) -> None:
+        self.__add_step_text(previous_step_index, step_text)
 
         # Modify the previous steps instead of creating new ones
         # This is important to preserve their references
@@ -347,43 +364,70 @@ class CoqFile(object):
         previous_steps = self.steps
         step_index = previous_step_index + 1
         self.__update_steps()
-        if validate_file and (
-            # We will add the new step to the previous_steps
-            len(self.steps) != len(previous_steps) + 1
-            or self.steps[step_index].ast.span is None
-            or not self.is_valid
-        ):
-            raise InvalidStepException(step_text)
 
+        # NOTE: We check if exactly 1 step was added, because the text might contain
+        # two steps or something that might lead to similar unwanted behaviour.
+        if len(self.steps) != len(previous_steps) + 1 or not self.is_valid:
+            raise InvalidAddException(step_text)
+
+        # We will add the new step to the previous_steps
         previous_steps.insert(step_index, self.steps[step_index])
-        for i, step in enumerate(previous_steps):
-            step.text, step.ast = self.steps[i].text, self.steps[i].ast
-            step.diagnostics = self.steps[i].diagnostics
-        self.steps = previous_steps
+        self.__copy_steps(previous_steps)
 
-        if self.steps_taken - 1 > previous_step_index:
+        if self.steps_taken > step_index:
             self.steps_taken += 1
+            n_steps = self.steps_taken - step_index
+            CoqFile.exec(self, -n_steps + 1)
+            # Ignore step when going back
+            self.steps_taken -= 1
+            CoqFile.exec(self, n_steps)
 
-    def _change_steps(self, changes: List[CoqChange]):
-        offset_steps = 0
-        previous_steps_size = len(self.steps)
+    def _get_steps_taken_offset(self, changes: List[CoqChange]):
+        offset = 0
+        steps_taken = self.steps_taken
 
-        for i, change in enumerate(changes):
+        for change in changes:
             if isinstance(change, CoqAddStep):
-                self._add_step(
-                    change.previous_step_index,
-                    change.step_text,
-                    validate_file=False,
+                if change.previous_step_index + 1 < steps_taken:
+                    offset += 1
+                    steps_taken += 1
+            elif isinstance(change, CoqDeleteStep):
+                if change.step_index < steps_taken:
+                    offset -= 1
+                    steps_taken -= 1
+
+        return offset
+
+    def __change_steps(self, changes: List[CoqChange]):
+        previous_steps_takens = self.steps_taken
+        offset_steps, offset_steps_taken = 0, self._get_steps_taken_offset(changes)
+        previous_steps, previous_steps_size = self.steps, len(self.steps)
+        CoqFile.exec(self, -self.steps_taken)
+
+        for change in changes:
+            if isinstance(change, CoqAddStep):
+                self.__add_step_text(change.previous_step_index, change.step_text)
+                step = self.__add_update_ast(
+                    change.previous_step_index, change.step_text
                 )
+                self.steps.insert(change.previous_step_index + 1, step)
                 offset_steps += 1
             elif isinstance(change, CoqDeleteStep):
-                self._delete_step(change.step_index, validate_file=False)
+                self.__delete_step_text(change.step_index)
+                self.__delete_update_ast(change.step_index)
+                self.steps.pop(change.step_index)
                 offset_steps -= 1
             else:
                 raise NotImplementedError(f"Unknown change: {change}")
 
+        self.__update_steps()
+        # NOTE: We check the expected offset, because a given step text might contain
+        # two steps or something that might lead to similar unwanted behaviour.
         if len(self.steps) != previous_steps_size + offset_steps or not self.is_valid:
             raise InvalidChangeException()
+
+        self.__copy_steps(previous_steps)
+        CoqFile.exec(self, previous_steps_takens + offset_steps_taken)
 
     @property
     def curr_step(self):
@@ -419,47 +463,13 @@ class CoqFile(object):
         return self.steps_taken == len(self.steps)
 
     @property
-    def current_goals(self) -> Optional[GoalAnswer]:
-        """Get goals in current position.
-
-        Returns:
-            Optional[GoalAnswer]: Goals in the current position if there are goals.
-        """
-        if self.steps_taken == len(self.steps):
-            end_pos = self.prev_step.ast.range.end
-        else:
-            end_pos = self.curr_step.ast.range.start
-
-        if end_pos != self.__last_end_pos:
-            self.__current_goals = self._goals(end_pos)
-            self.__last_end_pos = end_pos
-
-        return self.__current_goals
-
-    @property
-    def in_proof(self) -> bool:
-        """
-        Returns:
-            bool: True if the current step is inside a proof.
-        """
-        return self.__in_proof(self.current_goals)
-
-    @property
-    def can_close_proof(self):
-        """
-        Returns:
-            bool: True if the next step can be a [Qed].
-        """
-        return self._can_close_proof(self.current_goals)
-
-    @property
     def diagnostics(self) -> List[Diagnostic]:
         """
         Returns:
             List[Diagnostic]: The diagnostics of the file.
                 Includes all messages given by Coq.
         """
-        uri = f"file://{self.__path}"
+        uri = f"file://{self._path}"
         return self.coq_lsp_client.lsp_endpoint.diagnostics[uri]
 
     def exec(self, nsteps=1) -> List[Step]:
@@ -478,13 +488,8 @@ class CoqFile(object):
             len(self.steps) - self.steps_taken if sign > 0 else self.steps_taken,
         )
 
-        for i in range(nsteps):
-            try:
-                self._step(sign)
-            except NotImplementedError as e:
-                self.steps_taken -= sign  # Take back the faulty step
-                self.exec(nsteps=-sign * i)  # Re-take the steps in inverse order
-                raise e
+        for _ in range(nsteps):
+            self._step(sign)
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
         return self.steps[slice[1 - last] : slice[last]]
@@ -498,14 +503,15 @@ class CoqFile(object):
         return self.exec(len(self.steps) - self.steps_taken)
 
     def delete_step(self, step_index: int) -> None:
-        """Deletes a step from the file. The step must be inside a proof.
-        This function will change the original file.
+        """Deletes a step from the file. This function will change the original file.
+        If an exception is thrown the file will not be changed.
 
         Args:
             step_index (int): The index of the step to remove.
 
         Raises:
-            NotImplementedError: If the step is outside a proof.
+            InvalidFileException: If the file being changed is not valid.
+            InvalidDeleteException: If the file is invalid after deleting the step.
         """
         self._make_change(self._delete_step, step_index)
 
@@ -514,36 +520,40 @@ class CoqFile(object):
         previous_step_index: int,
         step_text: str,
     ) -> None:
-        """Adds a step to the file. The step must be inside a proof.
-        This function will change the original file. If an exception is thrown
-        the file will not be changed.
+        """Adds a step to the file. This function will change the original file.
+        If an exception is thrown the file will not be changed.
 
         Args:
             previous_step_index (int): The index of the previous step of the new step.
             step_text (str): The text of the step to add.
 
         Raises:
-            NotImplementedError: If the step added is not on a proof.
             InvalidFileException: If the file being changed is not valid.
-            InvalidStepException: If the step added is not valid.
+            InvalidAddException: If the file is invalid after adding the step.
         """
         self._make_change(self._add_step, previous_step_index, step_text)
 
     def change_steps(self, changes: List[CoqChange]):
-        """Changes the steps of the Coq file transactionally.
+        """Changes the steps of the original Coq file transactionally.
+        If an exception is thrown the file will not be changed.
 
         Args:
             changes (List[CoqChange]): The changes to be applied to the Coq file.
+
+        Raises:
+            InvalidFileException: If the file being changed is not valid.
+            InvalidChangeException: If the file is invalid after applying the changes.
+            NotImplementedError: If the changes contain a CoqChange that is not a CoqAddStep or CoqDeleteStep.
         """
-        self._make_change(self._change_steps, changes)
+        self._make_change(self.__change_steps, changes)
 
     def save_vo(self):
         """Compiles the vo file for this Coq file."""
-        uri = f"file://{self.__path}"
+        uri = f"file://{self._path}"
         try:
             self.coq_lsp_client.save_vo(TextDocumentIdentifier(uri))
         except Exception as e:
-            self.__handle_exception(e)
+            self._handle_exception(e)
             raise e
 
     def close(self):
@@ -551,4 +561,4 @@ class CoqFile(object):
         self.coq_lsp_client.shutdown()
         self.coq_lsp_client.exit()
         if self.__from_lib:
-            os.remove(self.__path)
+            os.remove(self._path)

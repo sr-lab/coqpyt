@@ -612,6 +612,9 @@ class ProofFile(CoqFile):
             for e in range(prev + 2, len(proof.steps)):
                 # The goals will be loaded if used (Lazy Loading)
                 proof.steps[e].goals = self.__goals
+            if prev + 1 < self.steps_taken:
+                # This will force current_goals to refresh if used
+                self.__last_end_pos = None
 
     def __delete_step(self, step: Step):
         optional = self.__find_step(step.ast.range)
@@ -637,6 +640,9 @@ class ProofFile(CoqFile):
                 for e in range(i, len(proof.steps)):
                     # The goals will be loaded if used (Lazy Loading)
                     proof.steps[e].goals = self.__goals
+                if i <= self.steps_taken:
+                    # This will force current_goals to refresh if used
+                    self.__last_end_pos = None
 
     def __get_changes_data(
         self, changes: List[CoqChange]

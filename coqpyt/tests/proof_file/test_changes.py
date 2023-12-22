@@ -121,15 +121,15 @@ class TestProofValidFile(SetupProofFile):
         proof_file.change_steps([CoqAddStep("\n    Print plus.", 26)])
         assert proof_file.steps[27].text == "\n    Print plus."
 
-        # # Add step to end of proof
+        # Add step to end of proof
         proof_file.change_steps([CoqAddStep("\n    Print plus.", 31)])
         assert proof_file.steps[32].text == "\n    Print plus."
 
-        # # Delete step in beginning of proof
+        # Delete step in beginning of proof
         proof_file.change_steps([CoqDeleteStep(27)])
         assert proof_file.steps[27].text == "\n      intros n."
 
-        # # Delete step in end of proof
+        # Delete step in end of proof
         proof_file.change_steps([CoqDeleteStep(41)])
         assert proof_file.steps[41].text == "\n    Admitted."
 
@@ -585,3 +585,28 @@ class TestProofChangeObligation(SetupProofFile):
             )
             assert len(proof.steps) == 2
             assert proof.steps[0].text == "\n  dummy_tactic n e."
+
+
+class TestProofChangeGoals(SetupProofFile):
+    def setup_method(self, method):
+        self.setup("test_change_goals.v")
+
+    def test_change_goals(self):
+        proof_file = self.proof_file
+
+        # Step back to see result of [\ninduction n.]
+        proof_file.exec(-1)
+        # [\ninduction n.] maintains open goals
+        assert len(proof_file.current_goals.goals.goals) > 0
+
+        # Replace [\ninduction n.] with equally sized step
+        proof_file.change_steps(
+            [
+                CoqAddStep("\nreflexivity.", 1),
+                CoqDeleteStep(3),
+            ]
+        )
+
+        # [\nreflexivity.] leaves no open goals
+        # Must check if the goals were properly updated
+        assert len(proof_file.current_goals.goals.goals) == 0

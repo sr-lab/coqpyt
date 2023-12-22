@@ -652,11 +652,11 @@ class ProofFile(CoqFile):
                     new_steps_taken += 1
             elif isinstance(change, CoqDeleteStep):
                 step = steps.pop(change.step_index)
-                # Ignore CoqAddStep, only need to delete original Steps
-                if isinstance(step, Step):
-                    deletes.append(step)
                 if change.step_index < new_steps_taken:
                     new_steps_taken -= 1
+                    # Ignore CoqAddStep, only need to delete original Steps
+                    if isinstance(step, Step):
+                        deletes.append(step)
         # Get Add indices in final steps
         # Ignore additions after the pointer
         for i, step in enumerate(steps[:new_steps_taken]):
@@ -803,14 +803,14 @@ class ProofFile(CoqFile):
         adds, deletes, new_steps_taken = self.__get_changes_data(changes)
 
         # Delete ProofSteps in ProofFile before Steps are deleted in CoqFile
-        for step in reversed(self.steps[: self.steps_taken]):
+        last_step = self.steps_taken - 1
+        for i in range(last_step, -1, -1):
             for delete in deletes:
-                if step.ast.range == delete.ast.range:
+                if self.steps[i].ast.range == delete.ast.range:
+                    self.__local_exec(i - last_step)
                     self.__local_exec(-1, program=False)
                     self.__delete_step(delete)
-                    break
-            else:
-                self.__local_exec(-1)
+                    last_step = i - 1
 
         n_steps = 0 if len(adds) == 0 else max(0, self.steps_taken - adds[0])
         self.__local_exec(-n_steps)  # Step back until first Add

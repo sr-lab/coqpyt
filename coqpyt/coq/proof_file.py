@@ -274,7 +274,7 @@ class ProofFile(CoqFile):
         try:
             # We need to update the context already defined in the CoqFile
             self.context.update(
-                _AuxFile.get_coq_context(self.timeout, workspace=self.context)
+                _AuxFile.get_coq_context(self.timeout, workspace=self.workspace)
             )
         except Exception as e:
             self.close()

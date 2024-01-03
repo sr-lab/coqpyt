@@ -278,3 +278,12 @@ def test_derive(setup, teardown):
             coq_file.context.terms[key].text
             == f"Derive {keywords[i]} {key} with (forall n m:nat, Le (S n) m) Sort Prop."
         )
+
+
+def test_space_in_path():
+    # This test exists because coq-lsp encodes spaces in paths as %20
+    # This causes the diagnostics to be saved in a different path than the one
+    # considered by CoqPyt. This was fixed by unquoting the path given
+    # by coq-lsp.
+    with CoqFile("tests/resources/test test/test_error.v") as coq_file:
+        assert not coq_file.is_valid

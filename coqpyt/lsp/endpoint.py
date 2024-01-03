@@ -2,6 +2,7 @@ from __future__ import print_function
 import threading
 import logging
 from typing import List, Dict
+from urllib.parse import unquote
 
 from coqpyt.lsp import structs
 
@@ -62,6 +63,7 @@ class LspEndpoint(threading.Thread):
                             logging.debug("received message:", params)
                             if "diagnostics" in params:
                                 for diagnostic in params["diagnostics"]:
+                                    params["uri"] = unquote(params["uri"])
                                     if params["uri"] not in self.diagnostics:
                                         self.diagnostics[params["uri"]] = []
                                     self.diagnostics[params["uri"]].append(

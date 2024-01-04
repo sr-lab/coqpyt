@@ -520,6 +520,7 @@ class FileContext:
         """
         def get_regex(notation_id):
             regex = f"{re.escape(notation_id)}".split("\\ ")
+            regex = [sub for sub in regex if sub != ""]
             for i, sub in enumerate(regex):
                 if sub == "_":
                     # We match the wildcard with the description from here:
@@ -530,7 +531,9 @@ class FileContext:
                 else:
                     # Handle '_'
                     regex[i] = f"({sub}|('{sub}'))"
-            regex = "^" + "\\ ".join(regex) + "$"
+            # The */+ allows to have any amount of spaces between the words
+            # because it does not matter for the notation
+            regex = "^\\ *" + "\\ +".join(regex) + "\\ *$"
             return regex
 
         notation_id = FileContext.__get_notation_key(notation, scope)

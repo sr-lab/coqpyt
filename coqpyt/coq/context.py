@@ -537,7 +537,8 @@ class FileContext:
         for term in self.__terms.keys():
             if re.match(regex, term):
                 return self.__terms[term][-1]
-            if re.match(regex, term.split(":")[0].strip()):
+            # We can't use split because : may be used in the notation
+            if re.match(regex, term.rsplit(":", 1)[0].strip()):
                 unscoped = term
         # In case the stored id contains the scope but no scope is provided
         if unscoped is not None:

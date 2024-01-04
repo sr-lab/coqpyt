@@ -71,12 +71,12 @@ class FileContext:
             # FIXME: Handle this case
             return
         elif expr[0] == "VernacNotation":
-            name = text.split('"')[1].strip()
+            name = re.split("Notation |Infix ", text)[1].split('"')[1].strip()
             if text[:-1].split(":")[-1].endswith("_scope"):
                 name += " : " + text[:-1].split(":")[-1].strip()
             self.__add_term(name, step, TermType.NOTATION)
         elif expr[0] == "VernacSyntacticDefinition":
-            name = text.split(" ")[1]
+            name = text.split("Notation ")[1].split(" ")[0]
             if text[:-1].split(":")[-1].endswith("_scope"):
                 name += " : " + text[:-1].split(":")[-1].strip()
             self.__add_term(name, step, TermType.NOTATION)

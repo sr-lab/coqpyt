@@ -162,10 +162,16 @@ class _AuxFile(object):
     @staticmethod
     @lru_cache(maxsize=128)
     def __load_library(
-        library_name: str, library_file: str, library_hash: str, timeout: int
+        library_name: str,
+        library_file: str,
+        library_hash: str,
+        timeout: int,
+        workspace: Optional[str] = None,
     ):
         # NOTE: the library_hash attribute is only used for the LRU cache
-        coq_file = CoqFile(library_file, library=library_name, timeout=timeout)
+        coq_file = CoqFile(
+            library_file, workspace=workspace, library=library_name, timeout=timeout
+        )
         coq_file.run()
         context = coq_file.context
         coq_file.close()
@@ -173,12 +179,15 @@ class _AuxFile(object):
 
     @staticmethod
     def get_library(
-        library_name: str, library_file: str, timeout: int
+        library_name: str,
+        library_file: str,
+        timeout: int,
+        workspace: Optional[str] = None,
     ) -> Dict[str, Term]:
         with open(library_file, "r") as f:
             library_hash = hashlib.md5(f.read().encode("utf-8")).hexdigest()
         aux_context = _AuxFile.__load_library(
-            library_name, library_file, library_hash, timeout
+            library_name, library_file, library_hash, timeout, workspace=workspace
         )
         # FIXME: we ignore the usage of "Local" from imported files to
         # simplify the implementation. However, they can be used:
@@ -203,7 +212,7 @@ class _AuxFile(object):
         return list(map(lambda line: line.strip(), libraries.split("\n")[1:-1]))
 
     @staticmethod
-    def get_coq_context(timeout: int) -> FileContext:
+    def get_coq_context(timeout: int, workspace: Optional[str] = None) -> FileContext:
         temp_path = os.path.join(
             tempfile.gettempdir(), "aux_" + str(uuid.uuid4()).replace("-", "") + ".v"
         )
@@ -220,7 +229,9 @@ class _AuxFile(object):
                 v_file = aux_file.get_diagnostics(
                     "Locate Library", library, i + 1
                 ).split()[-1][:-1]
-                terms = _AuxFile.get_library(library, v_file, timeout)
+                terms = _AuxFile.get_library(
+                    library, v_file, timeout, workspace=workspace
+                )
                 context.add_library(library, terms)
 
         return context
@@ -262,7 +273,9 @@ class ProofFile(CoqFile):
 
         try:
             # We need to update the context already defined in the CoqFile
-            self.context.update(_AuxFile.get_coq_context(self.timeout))
+            self.context.update(
+                _AuxFile.get_coq_context(self.timeout, workspace=self.workspace)
+            )
         except Exception as e:
             self.close()
             raise e
@@ -537,7 +550,9 @@ class ProofFile(CoqFile):
             library_file = self.__aux_file.get_diagnostics(
                 "Locate Library", library, last_line + i + 1
             ).split()[-1][:-1]
-            library_terms = _AuxFile.get_library(library, library_file, self.timeout)
+            library_terms = _AuxFile.get_library(
+                library, library_file, self.timeout, workspace=self.workspace
+            )
             self.context.add_library(library, library_terms)
 
         # Deleted libraries

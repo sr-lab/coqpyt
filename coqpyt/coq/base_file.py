@@ -81,6 +81,7 @@ class CoqFile(object):
         self.__validate()
         self.context = FileContext(self.path, module=self.file_module, coqtop=coqtop)
         self.version = 1
+        self.workspace = workspace
 
     def __enter__(self):
         return self

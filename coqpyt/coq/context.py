@@ -518,30 +518,46 @@ class FileContext:
         Returns:
             Term: Term that corresponds to the notation.
         """
+
+        def get_regex(notation_id):
+            regex = f"{re.escape(notation_id)}".split("\\ ")
+            regex = [sub for sub in regex if sub != ""]
+            for i, sub in enumerate(regex):
+                if sub == "_":
+                    # We match the wildcard with the description from here:
+                    # https://coq.inria.fr/distrib/current/refman/language/core/basic.html#grammar-token-ident
+                    # Coq accepts more characters, but no one should need more than these...
+                    chars = "A-Za-zÀ-ÖØ-öø-ˁˆ-ˑˠ-ˤˬˮͰ-ʹͶͷͺ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-Ֆՙա-և"
+                    regex[i] = f"([{chars}][{chars}0-9_']*|_[{chars}0-9_']+)"
+                else:
+                    # Handle '_'
+                    regex[i] = f"({sub}|('{sub}'))"
+            # The */+ allows to have any amount of spaces between the words
+            # because it does not matter for the notation
+            regex = "^\\ *" + "\\ +".join(regex) + "\\ *$"
+            return regex
+
         notation_id = FileContext.__get_notation_key(notation, scope)
-        regex = f"{re.escape(notation_id)}".split("\\ ")
-        for i, sub in enumerate(regex):
-            if sub == "_":
-                # We match the wildcard with the description from here:
-                # https://coq.inria.fr/distrib/current/refman/language/core/basic.html#grammar-token-ident
-                # Coq accepts more characters, but no one should need more than these...
-                chars = "A-Za-zÀ-ÖØ-öø-ˁˆ-ˑˠ-ˤˬˮͰ-ʹͶͷͺ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-Ֆՙա-և"
-                regex[i] = f"([{chars}][{chars}0-9_']*|_[{chars}0-9_']+)"
-            else:
-                # Handle '_'
-                regex[i] = f"({sub}|('{sub}'))"
-        regex = "^" + "\\ ".join(regex) + "$"
+        regex = get_regex(notation_id)
+        unscoped_regex = get_regex(notation)
 
         # Search notations
-        unscoped = None
+        match_unscoped, match_unscoped_regex = None, None
         for term in self.__terms.keys():
             if re.match(regex, term):
                 return self.__terms[term][-1]
-            if re.match(regex, term.split(":")[0].strip()):
-                unscoped = term
-        # In case the stored id contains the scope but no scope is provided
-        if unscoped is not None:
-            return self.__terms[unscoped][-1]
+            if re.match(unscoped_regex, term):
+                match_unscoped_regex = term
+            # We can't use split because : may be used in the notation
+            if re.match(regex, term.rsplit(":", 1)[0].strip()):
+                match_unscoped = term
+
+        # In case the stored id does not contain the scope and no scope matched/was provided
+        if match_unscoped_regex is not None:
+            return self.__terms[match_unscoped_regex][-1]
+        # In case the stored id contains the scope and no scope matched/was provided
+        elif match_unscoped is not None:
+            return self.__terms[match_unscoped][-1]
 
         # Search Infix
         if re.match("^_ ([^ ]*) _$", notation):

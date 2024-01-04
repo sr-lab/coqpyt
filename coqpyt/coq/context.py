@@ -518,6 +518,7 @@ class FileContext:
         Returns:
             Term: Term that corresponds to the notation.
         """
+
         def get_regex(notation_id):
             regex = f"{re.escape(notation_id)}".split("\\ ")
             regex = [sub for sub in regex if sub != ""]

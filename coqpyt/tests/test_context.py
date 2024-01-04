@@ -17,12 +17,10 @@ def test_notation_colon_problem():
 def test_notation_unscoped():
     context = FileContext("mock.v")
     mock_context = {
-        "x : y": Term(
-            Step("XXX", "YYY", None), TermType.NOTATION, "mock.v", []
-        ),
+        "x : y": Term(Step("XXX", "YYY", None), TermType.NOTATION, "mock.v", []),
         "z : y : test_scope": Term(
             Step("ZZZ", "WWW", None), TermType.NOTATION, "mock.v", []
-        )
+        ),
     }
     context.update(mock_context)
 

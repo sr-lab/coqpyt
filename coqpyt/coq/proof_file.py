@@ -381,26 +381,24 @@ class ProofFile(CoqFile):
         step: Step,
         undo: bool = False,
     ) -> bool:
-        if not step.short_text.startswith(
-            ("Program", "Local Program", "Global Program")
-        ):
-            return False
-        goals = self.__goals(step.ast.range.end)
-
-        last_prog = lambda g: g.program[-1][0][1]
-        prefix = lambda id: self.context.append_module_prefix(id)
-        if not undo:
-            if len(goals.program) == 0:
-                return False
-            id = prefix(last_prog(goals))
-            if id in self.__program_context:
-                return False
-            context = self.__step_context(self.prev_step)
-            self.__program_context[id] = (self.context.last_term, context)
+        for attr in self.context.attrs(step):
+            # Program commands must have this attribute
+            if attr["v"][0] == "program":
+                break
         else:
-            if len(goals.program) == 0:
-                return False
-            del self.__program_context[prefix(last_prog(goals))]
+            return False
+
+        if not undo:
+            for program in self.__goals(step.ast.range.end).program:
+                id = self.context.append_module_prefix(program[0][1])
+                # The new program is not recorded in the context yet
+                if id not in self.__program_context:
+                    context = self.__step_context(self.prev_step)
+                    self.__program_context[id] = (self.context.last_term, context)
+        else:
+            # Dicts are ordered in Python3, so we simply remove the last added program
+            last_added = list(self.__program_context.keys())[-1]
+            del self.__program_context[last_added]
         return True
 
     def __handle_end_proof(

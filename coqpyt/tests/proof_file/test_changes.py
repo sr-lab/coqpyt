@@ -538,10 +538,10 @@ class TestProofChangeObligation(SetupProofFile):
             "Next Obligation.",
         ]
         programs = [
-            ("id", "pred (S n)"),
-            ("id", "S (pred n)"),
-            ("id", "S (pred n)"),
-            ("idx", "pred (S n)"),
+            ("#[program]", "id", "pred (S n)"),
+            ("Program", "id", "S (pred n)"),
+            ("Program", "id", "S (pred n)"),
+            ("Program", "idx", "pred (S n)"),
         ]
 
         # Steps were added to the end of the file
@@ -555,10 +555,11 @@ class TestProofChangeObligation(SetupProofFile):
             assert proof.program is not None
             assert (
                 proof.program.text
-                == "Program Definition "
-                + programs[i][0]
-                + " (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else "
+                == programs[i][0]
+                + " Definition "
                 + programs[i][1]
+                + " (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else "
+                + programs[i][2]
                 + "."
             )
             assert len(proof.steps) == 2
@@ -577,10 +578,11 @@ class TestProofChangeObligation(SetupProofFile):
             assert proof.program is not None
             assert (
                 proof.program.text
-                == "Program Definition "
-                + programs[i][0]
-                + " (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else "
+                == programs[i][0]
+                + " Definition "
                 + programs[i][1]
+                + " (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else "
+                + programs[i][2]
                 + "."
             )
             assert len(proof.steps) == 2

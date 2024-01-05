@@ -428,6 +428,24 @@ class FileContext:
             return self.__expr(step.ast.span["v"]["expr"])
         return [None]
 
+    def attrs(self, step: Step) -> List:
+        """
+        Args:
+            step (Step): The step to be processed.
+
+        Returns:
+            List: 'attrs' field from the AST of a step.
+        """
+        if (
+            step.ast.span is not None
+            and isinstance(step.ast.span, dict)
+            and "v" in step.ast.span
+            and isinstance(step.ast.span["v"], dict)
+            and "attrs" in step.ast.span["v"]
+        ):
+            return step.ast.span["v"]["attrs"]
+        return []
+
     def term_type(self, step: Step) -> TermType:
         """
         Args:

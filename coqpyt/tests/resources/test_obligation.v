@@ -4,29 +4,31 @@ Ltac dummy_tactic n e := destruct n; try reflexivity; inversion e.
 
 Module TestObligations.
 
-Program Definition id1 (n : nat) : { x : nat | x = n } :=
+Global Program Definition id4 (n : nat) : { x : nat | x = n } :=
   if dec (Nat.leb n 0) then 0%nat
   else S (pred n).
-Program Definition id2 (n : nat) : { x : nat | x = n } :=
+Local Program Definition id3 (n : nat) : { x : nat | x = n } :=
   if dec (Nat.leb n 0) then 0%nat
   else S (pred n).
-Program Definition id3 (n : nat) : { x : nat | x = n } :=
+#[global, program]
+Definition id2 (n : nat) : { x : nat | x = n } :=
   if dec (Nat.leb n 0) then 0%nat
   else S (pred n).
-Program Definition id4 (n : nat) : { x : nat | x = n } :=
+#[local, program]
+Definition id1 (n : nat) : { x : nat | x = n } :=
   if dec (Nat.leb n 0) then 0%nat
   else S (pred n).
 
-Obligation 2 of id1.
+Obligation 2 of id2.
   dummy_tactic n e.
 Qed.
-Next Obligation of id1.
+Next Obligation of id2.
   dummy_tactic n e.
 Qed.
-Obligation 2 of id2 : type with reflexivity.
+Obligation 2 of id3 : type with reflexivity.
   dummy_tactic n e.
 Qed.
-Next Obligation of id2 with reflexivity.
+Next Obligation of id3 with reflexivity.
   dummy_tactic n e.
 Qed.
 Next Obligation.
@@ -51,7 +53,8 @@ Program Definition id (n : nat) : { x : nat | x = n } :=
   else S (pred n).
 
 Module In.
-Program Definition id (n : nat) : { x : nat | x = n } :=
+#[program]
+Definition id (n : nat) : { x : nat | x = n } :=
   if dec (Nat.leb n 0) then 0%nat
   else pred (S n).
 Obligation 1 of id with reflexivity.

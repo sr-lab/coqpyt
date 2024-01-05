@@ -231,10 +231,10 @@ class TestProofObligation(SetupProofFile):
             ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
         ]
         texts = [
-            "Obligation 2 of id1.",
-            "Next Obligation of id1.",
-            "Obligation 2 of id2 : type with reflexivity.",
-            "Next Obligation of id2 with reflexivity.",
+            "Obligation 2 of id2.",
+            "Next Obligation of id2.",
+            "Obligation 2 of id3 : type with reflexivity.",
+            "Next Obligation of id3 with reflexivity.",
             "Next Obligation.",
             "Next Obligation with reflexivity.",
             "Obligation 1.",
@@ -244,17 +244,17 @@ class TestProofObligation(SetupProofFile):
             "Obligation 2 : type.",
         ]
         programs = [
-            ("id1", "S (pred n)"),
-            ("id1", "S (pred n)"),
-            ("id2", "S (pred n)"),
-            ("id2", "S (pred n)"),
-            ("id3", "S (pred n)"),
-            ("id3", "S (pred n)"),
-            ("id4", "S (pred n)"),
-            ("id4", "S (pred n)"),
-            ("id", "pred (S n)"),
-            ("id", "S (pred n)"),
-            ("id", "S (pred n)"),
+            ("#[global, program]", "id2", "S (pred n)"),
+            ("#[global, program]", "id2", "S (pred n)"),
+            ("Local Program", "id3", "S (pred n)"),
+            ("Local Program", "id3", "S (pred n)"),
+            ("#[local, program]", "id1", "S (pred n)"),
+            ("#[local, program]", "id1", "S (pred n)"),
+            ("Global Program", "id4", "S (pred n)"),
+            ("Global Program", "id4", "S (pred n)"),
+            ("#[program]", "id", "pred (S n)"),
+            ("Program", "id", "S (pred n)"),
+            ("Program", "id", "S (pred n)"),
         ]
 
         for i, proof in enumerate(proofs):
@@ -263,10 +263,11 @@ class TestProofObligation(SetupProofFile):
             assert proof.program is not None
             assert (
                 proof.program.text
-                == "Program Definition "
-                + programs[i][0]
-                + " (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else "
+                == programs[i][0]
+                + " Definition "
                 + programs[i][1]
+                + " (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else "
+                + programs[i][2]
                 + "."
             )
             assert len(proof.steps) == 2

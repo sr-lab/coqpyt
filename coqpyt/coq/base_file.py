@@ -439,6 +439,7 @@ class CoqFile(object):
         # NOTE: We check the expected offset, because a given step text might contain
         # two steps or something that might lead to similar unwanted behaviour.
         if len(self.steps) != previous_steps_size + offset_steps or not self.is_valid:
+            CoqFile.exec(self, previous_steps_takens + offset_steps_taken)
             raise InvalidChangeException()
 
         self.__copy_steps()

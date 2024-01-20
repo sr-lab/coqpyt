@@ -23,9 +23,6 @@ from coqpyt.coq.context import FileContext
 from coqpyt.coq.base_file import CoqFile
 
 
-_ProofTerm: Tuple[Term, List[Term], List[ProofStep], Optional[Term]]
-
-
 class _AuxFile(object):
     def __init__(
         self,
@@ -282,7 +279,7 @@ class ProofFile(CoqFile):
 
         self.__program_context: Dict[str, Tuple[Term, List[Term]]] = {}
         self.__proofs: List[ProofTerm] = []
-        self.__open_proofs: List[_ProofTerm] = []
+        self.__open_proofs: List[ProofTerm] = []
         self.__last_end_pos: Optional[Position] = None
         self.__current_goals = None
 
@@ -412,24 +409,23 @@ class ProofFile(CoqFile):
             index = -1 if index is None else index
             open_index = len(self.__open_proofs) if open_index is None else open_index
             proof = self.__proofs.pop(index)
-            self.__open_proofs.insert(
-                open_index, (proof, proof.context, proof.steps[:-1], proof.program)
-            )
+            proof.steps.pop()
+            self.__open_proofs.insert(open_index, proof)
         else:
             index = len(self.__proofs) if index is None else index
             open_index = -1 if open_index is None else open_index
             open_proof = self.__open_proofs.pop(open_index)
             # The goals will be loaded if used (Lazy Loading)
-            open_proof[2].append(ProofStep(step, self.__goals, []))
-            self.__proofs.insert(index, ProofTerm(*open_proof))
+            open_proof.steps.append(ProofStep(step, self.__goals, []))
+            self.__proofs.insert(index, open_proof)
 
     def __handle_proof_step(self, step: Step, undo: bool = False):
         if undo:
-            self.__open_proofs[-1][2].pop()
+            self.__open_proofs[-1].steps.pop()
         else:
             context = self.__step_context(step)
             # The goals will be loaded if used (Lazy Loading)
-            self.__open_proofs[-1][2].append(ProofStep(step, self.__goals, context))
+            self.__open_proofs[-1].steps.append(ProofStep(step, self.__goals, context))
 
     def __handle_proof_term(
         self, step: Step, index: Optional[int] = None, undo: bool = False
@@ -446,7 +442,7 @@ class ProofFile(CoqFile):
             else:
                 statement_context = self.__step_context(step)
             self.__open_proofs.insert(
-                index, (proof_term, statement_context, [], program)
+                index, ProofTerm(proof_term, statement_context, [], program)
             )
 
     def __is_proof_term(self, step: Step):
@@ -510,16 +506,20 @@ class ProofFile(CoqFile):
                     return (proof, p, i)
 
         for p, proof in enumerate(self.__open_proofs):
-            if proof[0].ast.range == range:
-                # NOTE: This works because the change of the structures inside
-                # will reflect on the open proof (e.g. list)
-                return (ProofTerm(*proof), p, -1)
+            if proof.step.ast.range == range:
+                return (proof, p, -1)
 
-            for i, proof_step in enumerate(proof[2]):
+            for i, proof_step in enumerate(proof.steps):
                 if proof_step.ast.range == range:
-                    return (ProofTerm(*proof), p, i)
+                    return (proof, p, i)
 
         return None
+
+    def __find_step_index(self, range: Range) -> int:
+        for i, step in enumerate(self.steps):
+            if step.ast.range == range:
+                return i
+        raise ValueError("Could not find the step")
 
     def __get_step(self, step_index):
         self.__aux_file.write("")
@@ -559,7 +559,7 @@ class ProofFile(CoqFile):
 
     def __find_open_proof_index(self, step: Step) -> int:
         for i, proof in enumerate(self.__open_proofs):
-            if proof[0].step.ast.range > step.ast.range:
+            if proof.step.ast.range > step.ast.range:
                 return i
         return len(self.__open_proofs)
 
@@ -713,6 +713,14 @@ class ProofFile(CoqFile):
             and goals.bullet is None
         )
 
+    def __is_proven(self, proof: ProofTerm) -> bool:
+        if len(proof.steps) == 0:
+            return False
+        return (
+            self.__is_end_proof(proof.steps[-1].step)
+            and "Admitted" not in proof.steps[-1].step.short_text
+        )
+
     @property
     def proofs(self) -> List[ProofTerm]:
         """Gets all the closed proofs in the file and their corresponding steps.
@@ -735,7 +743,7 @@ class ProofFile(CoqFile):
                 order they are opened on the file. The steps include the
                 context used for each step and the goals in that step.
         """
-        return [ProofTerm(*proof) for proof in self.__open_proofs]
+        return self.__open_proofs
 
     @property
     def current_goals(self) -> Optional[GoalAnswer]:
@@ -795,6 +803,79 @@ class ProofFile(CoqFile):
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
         return self.steps[slice[1 - last] : slice[last]]
+
+    def next_unproven_proof(self) -> Optional[ProofTerm]:
+        """Gets the next unproven proof.
+
+        Returns:
+            Optional[ProofTerm]: The next unproven proof or None if there are no
+                unproven proofs.
+        """
+        for proof in self.proofs:
+            if not self.__is_proven(proof):
+                return proof
+
+        if len(self.open_proofs) > 0:
+            return self.open_proofs[0]
+
+        return None
+
+    def append_step(self, proof: ProofTerm, step_text: str):
+        """Appends a step to a proof. This function will change the original file.
+        If an exception is thrown the file will not be changed.
+
+        Args:
+            proof (ProofTerm): The proof of the file to which the step is added.
+            step_text (str): The text of the step to add.
+
+        Raises:
+            InvalidFileException: If the file being changed is not valid.
+            InvalidAddException: If the file is invalid after adding the step.
+        """
+        step_index = self.__find_step_index(proof.ast.range)
+        self.add_step(step_index + len(proof.steps), step_text)
+        if self.steps_taken == step_index + len(proof.steps) + 1:
+            self.exec(1)
+
+    def pop_step(self, proof: ProofTerm):
+        """Removes the last step from a proof. This function will change the original file.
+        If an exception is thrown the file will not be changed.
+
+        Args:
+            proof (ProofTerm): The proof of the file from which the step is removed.
+
+        Raises:
+            InvalidFileException: If the file being changed is not valid.
+            InvalidAddException: If the file is invalid after removing the step.
+        """
+        step_index = self.__find_step_index(proof.ast.range)
+        self.delete_step(step_index + len(proof.steps))
+
+    def change_proof(self, proof: ProofTerm, proof_changes: List[CoqChangeProof]):
+        """Changes the steps of a proof transactionally.
+        If an exception is thrown the file will not be changed.
+
+        Args:
+            changes (List[CoqChangeProof]): The changes to be applied to the proof.
+
+        Raises:
+            InvalidFileException: If the file being changed is not valid.
+            InvalidChangeException: If the file is invalid after applying the changes.
+            NotImplementedError: If the changes contain an unknown CoqChangeProof.
+        """
+        step_index = self.__find_step_index(proof.ast.range)
+        changes: List[CoqChange] = []
+        offset = len(proof.steps)
+
+        for change in proof_changes:
+            if isinstance(change, CoqProofPop):
+                changes.append(CoqDeleteStep(step_index + offset))
+                offset -= 1
+            elif isinstance(change, CoqProofAppend):
+                changes.append(CoqAddStep(change.step_text, step_index + offset))
+                offset += 1
+
+        self.change_steps(changes)
 
     def add_step(self, previous_step_index: int, step_text: str):
         # We need to calculate this here because the _add_step

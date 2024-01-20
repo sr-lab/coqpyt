@@ -14,3 +14,17 @@ class CoqAddStep(CoqChange):
 @dataclass
 class CoqDeleteStep(CoqChange):
     step_index: int
+
+
+class CoqChangeProof:
+    pass
+
+
+@dataclass
+class CoqProofAppend(CoqChangeProof):
+    step_text: str
+
+
+@dataclass
+class CoqProofPop(CoqChangeProof):
+    pass

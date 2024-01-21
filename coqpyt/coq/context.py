@@ -42,6 +42,12 @@ class FileContext:
         self.__last_terms: List[Tuple[str, Term]] = []
         self.__segments = SegmentStack()
         self.__anonymous_id: Optional[int] = None
+    
+    def __repr__(self) -> str:
+        res = ""
+        for name, terms in self.__terms.items():
+            res += f"{name}: {repr(terms[-1])}\n"
+        return res
 
     def __add_terms(self, step: Step, expr: List):
         term_type = FileContext.__term_type(expr)

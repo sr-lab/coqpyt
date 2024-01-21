@@ -253,7 +253,7 @@ class ProofFile(CoqFile):
         """Creates a ProofFile.
 
         Args:
-            file_path (str): Absolute path of the Coq file.
+            file_path (str): Path of the Coq file.
             library (Optional[str], optional): The library of the file. Defaults to None.
             timeout (int, optional): Timeout used in coq-lsp. Defaults to 2.
             workspace(Optional[str], optional): Absolute path for the workspace.
@@ -264,6 +264,8 @@ class ProofFile(CoqFile):
                 imported by coq-lsp. This is NOT passed as a parameter to coq-lsp, it is
                 simply used to check the Coq version in use. Defaults to "coqtop".
         """
+        if not os.path.isabs(file_path):
+            file_path = os.path.abspath(file_path)
         super().__init__(file_path, library, timeout, workspace, coq_lsp, coqtop)
         self.__aux_file = _AuxFile(file_path, timeout=self.timeout, workspace=workspace)
         self.__aux_file.didOpen()

@@ -81,6 +81,9 @@ class Step(object):
         self.ast = ast
         self.diagnostics: List[Diagnostic] = []
 
+    def __repr__(self) -> str:
+        return self.text
+
 
 class Term:
     def __init__(
@@ -111,6 +114,9 @@ class Term:
 
     def __hash__(self) -> int:
         return hash(self.text)
+    
+    def __repr__(self) -> str:
+        return self.text
 
     @property
     def text(self) -> str:
@@ -131,6 +137,9 @@ class ProofStep:
         self.step = step
         self._goals = goals
         self.context = context
+
+    def __repr__(self) -> str:
+        return repr(self.step)
 
     @property
     def goals(self) -> GoalAnswer:

@@ -54,6 +54,34 @@ class GoalConfig(object):
         self.given_up = given_up
         self.bullet = bullet
 
+    def __repr__(self) -> str:
+        bold = lambda text: "\033[1m\033[93m" + text + "\033[0m"
+        if len(self.goals) > 0:
+            res = bold("Goals:\n")
+            for goal in self.goals:
+                res += "\n" + "-" * 50 + "\n" + repr(goal) + "\n" + "-" * 50
+        else:
+            res = "No more goals."
+
+        if any(map(lambda stack: len(stack[0]) > 0 or len(stack[1]) > 0, self.stack)):
+            res += bold("\n\nStack:")
+            for stack in self.stack:
+                for goal in stack[0] + stack[1]:
+                    res += "\n" + "-" * 50 + "\n" + repr(goal) + "\n" + "-" * 50
+
+        if len(self.shelf) > 0:
+            res += bold("\n\nShelf:")
+            for goal in self.shelf:
+                res += "\n" + "-" * 50 + "\n" + repr(goal) + "\n" + "-" * 50
+
+        if len(self.given_up) > 0:
+            res += bold("\n\nGiven up:")
+            for goal in self.given_up:
+                res += "\n" + "-" * 50 + "\n" + repr(goal) + "\n" + "-" * 50
+
+        res += bold("\n\nBullet: ") + repr(self.bullet)
+        return res
+
     @staticmethod
     def parse(goal_config: Dict) -> Optional["GoalConfig"]:
         parse_goals = lambda goals: [Goal.parse(goal) for goal in goals]
@@ -90,21 +118,20 @@ class GoalAnswer(object):
         self.program = program
 
     def __repr__(self):
-        def recursive_vars(obj):
-            if obj is None or isinstance(obj, int) or isinstance(obj, str):
-                return obj
-            elif isinstance(obj, (list, tuple)):
-                res = []
-                for v in obj:
-                    res.append(recursive_vars(v))
-                return res
-            else:
-                res = dict(vars(obj))
-                for key, v in res.items():
-                    res[key] = recursive_vars(v)
-                return res
+        res = "\n"
 
-        return str(recursive_vars(self))
+        if len(self.messages) > 0:
+            res += "Messages:\n"
+            for message in self.messages:
+                res += f"{message.level}: {message.text}\n"
+
+        if self.goals is not None:
+            res += repr(self.goals)
+
+        if self.error is not None:
+            res += "\nError: " + repr(self.error)
+
+        return res
 
     @staticmethod
     def parse(goal_answer) -> Optional["GoalAnswer"]:

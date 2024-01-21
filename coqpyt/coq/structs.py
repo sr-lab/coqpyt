@@ -114,7 +114,7 @@ class Term:
 
     def __hash__(self) -> int:
         return hash(self.text)
-    
+
     def __repr__(self) -> str:
         return self.text
 

@@ -521,7 +521,7 @@ class ProofFile(CoqFile):
         for i, step in enumerate(self.steps):
             if step.ast.range == range:
                 return i
-        raise ValueError("Could not find the step")
+        raise RuntimeError("There is no step on range: " + repr(range))
 
     def __get_step(self, step_index):
         self.__aux_file.write("")
@@ -746,6 +746,21 @@ class ProofFile(CoqFile):
                 context used for each step and the goals in that step.
         """
         return self.__open_proofs
+    
+    @property
+    def unproven_proofs(self) -> List[ProofTerm]:
+        """Gets all the the open proofs and admitted proofs.
+
+        Returns:
+            List[ProofTerm]: All the unproven proofs
+        """
+        unproven = []
+
+        for proof in self.proofs:
+            if not self.__is_proven(proof):
+                unproven.append(proof)
+
+        return unproven + self.open_proofs
 
     @property
     def current_goals(self) -> Optional[GoalAnswer]:
@@ -805,22 +820,6 @@ class ProofFile(CoqFile):
 
         last, slice = sign == 1, (initial_steps_taken, self.steps_taken)
         return self.steps[slice[1 - last] : slice[last]]
-
-    def next_unproven_proof(self) -> Optional[ProofTerm]:
-        """Gets the next unproven proof.
-
-        Returns:
-            Optional[ProofTerm]: The next unproven proof or None if there are no
-                unproven proofs.
-        """
-        for proof in self.proofs:
-            if not self.__is_proven(proof):
-                return proof
-
-        if len(self.open_proofs) > 0:
-            return self.open_proofs[0]
-
-        return None
 
     def append_step(self, proof: ProofTerm, step_text: str):
         """Appends a step to a proof. This function will change the original file.

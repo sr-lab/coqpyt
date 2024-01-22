@@ -156,18 +156,17 @@ class TestProofValidFile(SetupProofFile):
         assert len(self.proof_file.proofs) == proofs - 1
 
     def test_proof_changes(self):
-        unproven = self.proof_file.next_unproven_proof()
-        assert unproven is not None
+        unproven = self.proof_file.unproven_proofs
+        assert len(unproven) == 1
         assert (
-            unproven.text
+            unproven[0].text
             == "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
         )
 
         self.proof_file.change_proof(
-            unproven, [CoqProofPop(), CoqProofAppend("\nQed.")]
+            unproven[0], [CoqProofPop(), CoqProofAppend("\nQed.")]
         )
-        unproven = self.proof_file.next_unproven_proof()
-        assert unproven is None
+        assert self.proof_file.unproven_proofs == []
 
 
 class TestAddOpenProof(SetupProofFile):
@@ -241,16 +240,13 @@ class TestOpenClosedProof(SetupProofFile):
         )
 
     def test_close_qed(self):
-        unproven = self.proof_file.next_unproven_proof()
-        assert unproven is not None
-        self.proof_file.append_step(unproven, "\nQed.")
+        unproven = self.proof_file.unproven_proofs
+        assert len(unproven) == 2
+        for proof in unproven:
+            self.proof_file.append_step(proof, "\nQed.")
 
-        unproven = self.proof_file.next_unproven_proof()
-        assert unproven is not None
-        self.proof_file.append_step(unproven, "\nQed.")
-
-        unproven = self.proof_file.next_unproven_proof()
-        assert unproven is None
+        unproven = self.proof_file.unproven_proofs
+        assert unproven == []
 
 
 class TestProofSimpleFileChanges(SetupProofFile):
@@ -304,13 +300,13 @@ class TestProofSimpleFileChanges(SetupProofFile):
         self.proof_file.pop_step(proven)
         self.proof_file.pop_step(proven)
 
-        unproven = self.proof_file.next_unproven_proof()
-        assert unproven is not None
-        self.proof_file.append_step(unproven, " reflexivity.")
-        self.proof_file.append_step(unproven, " Qed.")
+        unproven = self.proof_file.unproven_proofs
+        assert len(unproven) == 1
+        self.proof_file.append_step(unproven[0], " reflexivity.")
+        self.proof_file.append_step(unproven[0], " Qed.")
 
-        unproven = self.proof_file.next_unproven_proof()
-        assert unproven is None
+        unproven = self.proof_file.unproven_proofs
+        assert unproven == []
 
 
 class TestProofChangeWithNotation(SetupProofFile):

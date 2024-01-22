@@ -189,7 +189,7 @@ class CoqFile(object):
         with open(self.path, "r") as f:
             return f.read()
 
-    def __update_steps(self):
+    def __refresh(self):
         uri = f"file://{self.path}"
         text = self.__read()
         try:
@@ -198,6 +198,15 @@ class CoqFile(object):
                 VersionedTextDocumentIdentifier(uri, self.version),
                 [TextDocumentContentChangeEvent(None, None, text)],
             )
+        except Exception as e:
+            self._handle_exception(e)
+            raise e
+
+    def __update_steps(self):
+        self.__refresh()
+        uri = f"file://{self.path}"
+        text = self.__read()
+        try:
             ast = self.coq_lsp_client.get_document(TextDocumentIdentifier(uri)).spans
         except Exception as e:
             self._handle_exception(e)
@@ -231,6 +240,7 @@ class CoqFile(object):
             self.is_valid = True
             with open(self.path, "w") as f:
                 f.write(old_text)
+            self.__refresh()
             raise e
 
     def __delete_step_text(self, step_index: int):

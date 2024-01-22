@@ -846,7 +846,7 @@ class ProofFile(CoqFile):
 
         Raises:
             InvalidFileException: If the file being changed is not valid.
-            InvalidAddException: If the file is invalid after removing the step.
+            InvalidDeleteException: If the file is invalid after removing the step.
         """
         step_index = self.__find_step_index(proof.ast.range)
         self.delete_step(step_index + len(proof.steps))

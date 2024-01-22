@@ -378,18 +378,11 @@ class ProofFile(CoqFile):
         text = self.context.last_term.text
         raise RuntimeError(f"Unknown obligation command with tag number {tag}: {text}")
 
-    def __check_program(
+    def __handle_program(
         self,
         step: Step,
         undo: bool = False,
     ) -> bool:
-        for attr in self.context.attrs(step):
-            # Program commands must have this attribute
-            if attr["v"][0] == "program":
-                break
-        else:
-            return False
-
         if not undo:
             for program in self.__goals(step.ast.range.end).program:
                 id = self.context.append_module_prefix(program[0][1])
@@ -397,11 +390,18 @@ class ProofFile(CoqFile):
                 if id not in self.__program_context:
                     context = self.__step_context(self.prev_step)
                     self.__program_context[id] = (self.context.last_term, context)
-        else:
-            # Dicts are ordered in Python3, so we simply remove the last added program
+        elif len(self.__program_context) > 0:
+            # Dicts are ordered in Python 3.7+, so we simply remove the last added program
             last_added = list(self.__program_context.keys())[-1]
             del self.__program_context[last_added]
-        return True
+
+    def __is_program(self, step: Step):
+        for attr in self.context.attrs(step):
+            # Program commands must have this attribute
+            if attr["v"][0] == "program":
+                return True
+        else:
+            return False
 
     def __handle_end_proof(
         self,
@@ -490,16 +490,17 @@ class ProofFile(CoqFile):
     def __step(self, step: Step, undo: bool):
         file_change = self.__aux_file.truncate if undo else self.__aux_file.append
         file_change(step.text)
-        # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
-        if self.__is_end_proof(step):
-            self.__handle_end_proof(step, undo=undo)
-            return
         # Ignore segment delimiters because it affects Program handling
         if self.__is_segment_delimiter(step):
             return
-        # Check if Program definition or proof step
-        is_program = self.__check_program(step, undo=undo)
-        if not is_program and len(self.open_proofs) > 0 if undo else self.in_proof:
+        # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
+        if self.__is_end_proof(step):
+            self.__handle_end_proof(step, undo=undo)
+        # Found Program definition
+        elif self.__is_program(step):
+            self.__handle_program(step, undo=undo)
+        # Check if proof step
+        elif len(self.open_proofs) > 0 if undo else self.in_proof:
             self.__check_proof_step(step, undo=undo)
 
     def __find_step(self, range: Range) -> Optional[Tuple[ProofTerm, int, int]]:
@@ -571,7 +572,7 @@ class ProofFile(CoqFile):
                 return i
         return len(self.__proofs)
 
-    def __local_exec(self, n_steps, program=True):
+    def __local_exec(self, n_steps=1):
         undo = n_steps < 0
         sign = -1 if undo else 1
         step = lambda: self.curr_step if undo else self.prev_step
@@ -590,13 +591,16 @@ class ProofFile(CoqFile):
             # For ProofFile, we only update AuxFile and the
             # Program context, leaving other proofs as is.
             change(step().text)
-            if program:
-                self.__check_program(step(), undo=undo)
+            if self.__is_program(step()):
+                self.__handle_program(step(), undo=undo)
 
     def __add_step(self, index: int):
         step = self.steps[index]
-        optional = self.__find_step(self.steps[index - 1].ast.range)
+        # Ignore segment delimiters because it affects Program handling
+        if self.__is_segment_delimiter(step):
+            pass
 
+        optional = self.__find_step(self.steps[index - 1].ast.range)
         # Handles case where Qed is added
         if self.__is_end_proof(step):
             # This is not outside of the ifs for performance reasons
@@ -604,12 +608,9 @@ class ProofFile(CoqFile):
             index = self.__find_proof_index(step)
             open_index = self.__find_open_proof_index(step) - 1
             self.__handle_end_proof(step, index=index, open_index=open_index)
-        # Ignore segment delimiters because it affects Program handling
-        elif self.__is_segment_delimiter(step):
-            pass
         # Check if Program definition
-        elif self.__check_program(step):
-            pass
+        elif self.__is_program(step):
+            self.__handle_program(step)
         # Allows to add open proofs
         elif self.__is_proof_term(step):
             # This is not outside of the ifs for performance reasons
@@ -632,18 +633,19 @@ class ProofFile(CoqFile):
                 self.__last_end_pos = None
 
     def __delete_step(self, step: Step):
+        # Ignore segment delimiters because it affects Program handling
+        if self.__is_segment_delimiter(step):
+            return
+
         optional = self.__find_step(step.ast.range)
         # Handles case where Qed is deleted
         if self.__is_end_proof(step):
             index = self.__find_proof_index(step) - 1
             open_index = self.__find_open_proof_index(step)
             self.__handle_end_proof(step, index=index, open_index=open_index, undo=True)
-        # Ignore segment delimiters because it affects Program handling
-        elif self.__is_segment_delimiter(step):
-            return
         # Check if Program definition
-        elif self.__check_program(step, undo=True):
-            return
+        elif self.__is_program(step):
+            self.__handle_program(step, undo=True)
         # Handle regular proof steps
         elif optional is not None:
             proof, proof_index, i = optional
@@ -661,10 +663,11 @@ class ProofFile(CoqFile):
 
     def __get_changes_data(
         self, changes: List[CoqChange]
-    ) -> Tuple[List[int], List[Step], int]:
+    ) -> Tuple[List[int], List[int], int]:
         steps: List[Union[Step, CoqAddStep]] = self.steps[:]
         adds: List[int] = []  # For Adds, store the index of the new Step
-        deletes: List[Step] = []  # For Deletes, store the deleted Step
+        deletes: List[int] = []  # For Deletes, store the index of the deleted Step
+        deleted_steps: List[Step] = []  # Keep the deleted Steps
         new_steps_taken: int = self.steps_taken
         for change in changes:
             if isinstance(change, CoqAddStep):
@@ -677,12 +680,18 @@ class ProofFile(CoqFile):
                     new_steps_taken -= 1
                     # Ignore CoqAddStep, only need to delete original Steps
                     if isinstance(step, Step):
-                        deletes.append(step)
+                        deleted_steps.append(step)
         # Get Add indices in final steps
         # Ignore additions after the pointer
         for i, step in enumerate(steps[:new_steps_taken]):
             if isinstance(step, CoqAddStep):
                 adds.append(i)
+        # Get Delete indices in initial steps
+        # Ignore deletions after the pointer
+        for i, step in enumerate(self.steps[: self.steps_taken]):
+            for step in deleted_steps:
+                if self.steps[i].ast.range == step.ast.range:
+                    deletes.append(i)
         return adds, deletes, new_steps_taken
 
     def __goals(self, end_pos: Position):
@@ -807,7 +816,7 @@ class ProofFile(CoqFile):
             n_steps = self.steps_taken - previous_step_index - 2
             self.__local_exec(-n_steps)  # Backtrack until added step
             self.steps_taken -= 1  # Ignore added step while backtracking
-            self.__local_exec(1, program=False)  # Execute added step
+            self.__local_exec()  # Execute added step
             self.__add_step(previous_step_index + 1)
             self.__local_exec(n_steps)  # Execute until starting point
 
@@ -822,28 +831,28 @@ class ProofFile(CoqFile):
 
     def change_steps(self, changes: List[CoqChange]):
         adds, deletes, new_steps_taken = self.__get_changes_data(changes)
+        old_steps_taken = self.steps_taken
+
+        nsteps = 0 if len(deletes) == 0 else max(0, self.steps_taken - deletes[0])
+        nsteps = nsteps if len(adds) == 0 else max(nsteps, self.steps_taken - adds[0])
+        self.__local_exec(-nsteps)  # Step back until first Add/Delete
 
         # Delete ProofSteps in ProofFile before Steps are deleted in CoqFile
-        last_step = self.steps_taken - 1
-        for i in range(last_step, -1, -1):
-            for delete in deletes:
-                if self.steps[i].ast.range == delete.ast.range:
-                    self.__local_exec(i - last_step)
-                    self.__local_exec(-1, program=False)
-                    self.__delete_step(delete)
-                    last_step = i - 1
-
-        n_steps = 0 if len(adds) == 0 else max(0, self.steps_taken - adds[0])
-        self.__local_exec(-n_steps)  # Step back until first Add
+        # NOTE: Traversed in reverse order to ensure that proof steps are deleted before
+        # the corresponding proof term. This is to avoid popping the proof term too early
+        for delete in reversed(deletes):
+            self.__delete_step(self.steps[delete])
         try:
             super().change_steps(changes)  # Apply (faster) changes in CoqFile
         except InvalidChangeException as e:
-            self.__local_exec(n_steps)  # Reset pointer
+            # Rollback deleted steps
+            for delete in deletes:
+                self.__add_step(delete)
+            self.__local_exec(old_steps_taken - self.steps_taken)
             raise e
 
         # Add ProofSteps to ProofFile after Steps are added to CoqFile
         for add in adds:
-            self.__local_exec(add + 1 - self.steps_taken, program=False)
             self.__add_step(add)
         self.__local_exec(new_steps_taken - self.steps_taken)
 

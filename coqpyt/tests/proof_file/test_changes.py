@@ -300,6 +300,10 @@ class TestProofInvalidChanges(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_invalid_changes.v")
         self.n_steps = len(self.proof_file.steps)
+        self.open_proofs = len(self.proof_file.open_proofs)
+        self.closed_proofs = len(self.proof_file.proofs)
+        self.open_steps = [len(proof.steps) for proof in self.proof_file.open_proofs]
+        self.closed_steps = [len(proof.steps) for proof in self.proof_file.proofs]
         self.diagnostics = self.proof_file.diagnostics
         with open(self.proof_file.path, "r") as f:
             self.text = f.read()
@@ -307,17 +311,24 @@ class TestProofInvalidChanges(SetupProofFile):
         for proof in self.proof_file.proofs:
             for step in proof.steps:
                 self.goals.append(step.goals)
+        self.proof_file.run()
 
-    def __check_rollback(self, new=0):
+    def __check_rollback(self):
         assert self.n_steps == len(self.proof_file.steps)
+        assert self.open_proofs == len(self.proof_file.open_proofs)
+        assert self.closed_proofs == len(self.proof_file.proofs)
+        for i in range(len(self.open_steps)):
+            assert self.open_steps[i] == len(self.proof_file.open_proofs[i].steps)
+        for i in range(len(self.closed_steps)):
+            assert self.closed_steps[i] == len(self.proof_file.proofs[i].steps)
         assert self.proof_file.is_valid
-        assert len(self.proof_file.diagnostics) == len(self.diagnostics) + new
+        assert len(self.proof_file.diagnostics) == len(self.diagnostics)
         with open(self.proof_file.path, "r") as f:
             assert self.text == f.read()
         i = 0
         for proof in self.proof_file.proofs:
             for step in proof.steps:
-                assert step.goals == self.goals[i]
+                assert repr(step.goals) == repr(self.goals[i])
                 i += 1
 
     def test_invalid_add(self):
@@ -325,25 +336,25 @@ class TestProofInvalidChanges(SetupProofFile):
         with pytest.raises(InvalidAddException):
             # Add a non-existing tactic
             self.proof_file.add_step(6, "\n    invalid_tactic.")
-        self.__check_rollback(new=1)
+        self.__check_rollback()
         with pytest.raises(InvalidAddException):
             # Add an existing tactic that fails
             self.proof_file.add_step(6, "\n    inversion 1.")
-        self.__check_rollback(new=1)
+        self.__check_rollback()
         with pytest.raises(InvalidAddException):
             # Add a tactic when there are no goals
             self.proof_file.add_step(7, "\n    reflexivity.")
-        self.__check_rollback(new=1)
+        self.__check_rollback()
         with pytest.raises(InvalidAddException):
             # Add a tactic with undefined tokens
             self.proof_file.add_step(6, "\n    invalid_tactic x $$$ y.")
-        self.__check_rollback(new=1)
+        self.__check_rollback()
 
         # File remains valid but not a valid step
         with pytest.raises(InvalidAddException):
             # Add two valid steps
             self.proof_file.add_step(6, "\n    Check A.x. Check A.x.")
-        self.__check_rollback(new=2)
+        self.__check_rollback()
         with pytest.raises(InvalidAddException):
             # Modify the previous step
             self.proof_file.add_step(6, "x.")
@@ -370,10 +381,16 @@ class TestProofInvalidChanges(SetupProofFile):
         with pytest.raises(InvalidDeleteException):
             # Delete proof term
             self.proof_file.delete_step(4)
-        self.__check_rollback(new=2)
+        self.__check_rollback()
         with pytest.raises(InvalidDeleteException):
             # Delete necessary proof step
             self.proof_file.delete_step(7)
+        self.__check_rollback()
+
+    def test_invalid_changes(self):
+        with pytest.raises(InvalidChangeException):
+            # Delete proof body
+            self.proof_file.change_steps([CoqDeleteStep(6) for _ in range(2)])
         self.__check_rollback()
 
 

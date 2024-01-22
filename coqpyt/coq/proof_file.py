@@ -746,7 +746,7 @@ class ProofFile(CoqFile):
                 context used for each step and the goals in that step.
         """
         return self.__open_proofs
-    
+
     @property
     def unproven_proofs(self) -> List[ProofTerm]:
         """Gets all the the open proofs and admitted proofs.

@@ -42,7 +42,7 @@ class FileContext:
         self.__last_terms: List[Tuple[str, Term]] = []
         self.__segments = SegmentStack()
         self.__anonymous_id: Optional[int] = None
-    
+
     def __repr__(self) -> str:
         res = ""
         for name, terms in self.__terms.items():

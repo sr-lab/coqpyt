@@ -155,6 +155,19 @@ class TestProofValidFile(SetupProofFile):
         assert self.proof_file.steps_taken == steps_taken - 7
         assert len(self.proof_file.proofs) == proofs - 1
 
+    def test_proof_changes(self):
+        unproven = self.proof_file.unproven_proofs
+        assert len(unproven) == 1
+        assert (
+            unproven[0].text
+            == "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
+        )
+
+        self.proof_file.change_proof(
+            unproven[0], [CoqProofPop(), CoqProofAppend("\nQed.")]
+        )
+        assert self.proof_file.unproven_proofs == []
+
 
 class TestAddOpenProof(SetupProofFile):
     def setup_method(self, method):
@@ -226,6 +239,15 @@ class TestOpenClosedProof(SetupProofFile):
             == "Theorem delete_qed4 : forall n:nat, 0 + n = n."
         )
 
+    def test_close_qed(self):
+        unproven = self.proof_file.unproven_proofs
+        assert len(unproven) == 2
+        for proof in unproven:
+            self.proof_file.append_step(proof, "\nQed.")
+
+        unproven = self.proof_file.unproven_proofs
+        assert unproven == []
+
 
 class TestProofSimpleFileChanges(SetupProofFile):
     def setup_method(self, method):
@@ -272,6 +294,19 @@ class TestProofSimpleFileChanges(SetupProofFile):
         assert proof_file.proofs[0].steps[0].text == steps[1]
         assert proof_file.proofs[1].text == steps[2].strip()
         assert proof_file.proofs[1].steps[0].text == steps[3]
+
+    def test_simple_file_proof_change(self):
+        proven = self.proof_file.proofs[-1]
+        self.proof_file.pop_step(proven)
+        self.proof_file.pop_step(proven)
+
+        unproven = self.proof_file.unproven_proofs
+        assert len(unproven) == 1
+        self.proof_file.append_step(unproven[0], " reflexivity.")
+        self.proof_file.append_step(unproven[0], " Qed.")
+
+        unproven = self.proof_file.unproven_proofs
+        assert unproven == []
 
 
 class TestProofChangeWithNotation(SetupProofFile):

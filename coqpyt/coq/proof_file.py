@@ -175,6 +175,12 @@ class _AuxFile(object):
         return context
 
     @staticmethod
+    def set_cache_size(size: Optional[int]):
+        _AuxFile._AuxFile__load_library = lru_cache(maxsize=size)(
+            _AuxFile.__load_library.__wrapped__,
+        )
+
+    @staticmethod
     def get_library(
         library_name: str,
         library_file: str,
@@ -731,6 +737,16 @@ class ProofFile(CoqFile):
             self.__is_end_proof(proof.steps[-1].step)
             and "Admitted" not in proof.steps[-1].step.short_text
         )
+
+    @staticmethod
+    def set_library_cache_size(size: Optional[int]):
+        """Sets the size of the cache used to store the libraries of the Coq files.
+
+        Args:
+            size (Optional[int]): The size of the cache. If None, the cache
+                will have no limit.
+        """
+        _AuxFile.set_cache_size(size)
 
     @property
     def proofs(self) -> List[ProofTerm]:

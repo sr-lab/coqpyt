@@ -737,7 +737,7 @@ class ProofFile(CoqFile):
             self.__is_end_proof(proof.steps[-1].step)
             and "Admitted" not in proof.steps[-1].step.short_text
         )
-    
+
     @staticmethod
     def set_library_cache_size(size: Optional[int] = None):
         _AuxFile.set_cache_size(size)

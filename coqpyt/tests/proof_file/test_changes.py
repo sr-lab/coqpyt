@@ -163,9 +163,7 @@ class TestProofValidFile(SetupProofFile):
             == "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
         )
 
-        self.proof_file.change_proof(
-            unproven[0], [CoqProofPop(), CoqProofAppend("\nQed.")]
-        )
+        self.proof_file.change_proof(unproven[0], [ProofPop(), ProofAppend("\nQed.")])
         assert self.proof_file.unproven_proofs == []
 
 

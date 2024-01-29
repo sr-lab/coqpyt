@@ -164,7 +164,7 @@ class TestProofValidFile(SetupProofFile):
         )
 
         self.proof_file.change_proof(
-            unproven[0], [CoqProofPop(), CoqProofAppend("\nQed.")]
+            unproven[0], [ProofPop(), ProofAppend("\nQed.")]
         )
         assert self.proof_file.unproven_proofs == []
 

@@ -877,27 +877,27 @@ class ProofFile(CoqFile):
         step_index = self.__find_step_index(proof.ast.range)
         self.delete_step(step_index + len(proof.steps))
 
-    def change_proof(self, proof: ProofTerm, proof_changes: List[CoqChangeProof]):
+    def change_proof(self, proof: ProofTerm, proof_changes: List[ProofChange]):
         """Changes the steps of a proof transactionally.
         If an exception is thrown the file will not be changed.
 
         Args:
-            changes (List[CoqChangeProof]): The changes to be applied to the proof.
+            changes (List[ProofChange]): The changes to be applied to the proof.
 
         Raises:
             InvalidFileException: If the file being changed is not valid.
             InvalidChangeException: If the file is invalid after applying the changes.
-            NotImplementedError: If the changes contain an unknown CoqChangeProof.
+            NotImplementedError: If the changes contain an unknown ProofChange.
         """
         step_index = self.__find_step_index(proof.ast.range)
         changes: List[CoqChange] = []
         offset = len(proof.steps)
 
         for change in proof_changes:
-            if isinstance(change, CoqProofPop):
+            if isinstance(change, ProofPop):
                 changes.append(CoqDeleteStep(step_index + offset))
                 offset -= 1
-            elif isinstance(change, CoqProofAppend):
+            elif isinstance(change, ProofAppend):
                 changes.append(CoqAddStep(change.step_text, step_index + offset))
                 offset += 1
 

@@ -16,15 +16,15 @@ class CoqDeleteStep(CoqChange):
     step_index: int
 
 
-class CoqChangeProof:
+class ProofChange:
     pass
 
 
 @dataclass
-class CoqProofAppend(CoqChangeProof):
+class ProofAppend(ProofChange):
     step_text: str
 
 
 @dataclass
-class CoqProofPop(CoqChangeProof):
+class ProofPop(ProofChange):
     pass

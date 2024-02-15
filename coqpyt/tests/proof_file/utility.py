@@ -184,12 +184,13 @@ def get_test_proofs(yaml_file: str, coq_version: Optional[str] = None):
     for test_proof in test_proofs["proofs"]:
         if "context" not in test_proof:
             test_proof["context"] = []
-        test_proof["context"] = list(
-            map(
-                lambda x: x if coq_version not in x else x[coq_version],
-                test_proof["context"],
+        if coq_version is not None:
+            test_proof["context"] = list(
+                map(
+                    lambda x: x if coq_version not in x else x[coq_version],
+                    test_proof["context"],
+                )
             )
-        )
         for step in test_proof["steps"]:
             add_step_defaults(step)
     return test_proofs

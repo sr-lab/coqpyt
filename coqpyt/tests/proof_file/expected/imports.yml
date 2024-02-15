@@ -167,8 +167,12 @@ proofs:
             line: 21
             character: 0
     context:
-      - text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
-        type: NOTATION
+      - "8.19.0":
+          text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 10, x binder, y binder, P at level 200, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
+          type: NOTATION
+        default:
+          text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
+          type: NOTATION
       - text: 'Notation "x = y" := (eq x y) : type_scope.'
         type: NOTATION
       - text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'

@@ -41,6 +41,9 @@ class SetupProofFile(ABC):
         self.proof_file.run()
         self.versionId = VersionedTextDocumentIdentifier(uri, 1)
 
+        output = subprocess.check_output(f"coqtop -v", shell=True)
+        self.coq_version = output.decode("utf-8").split("\n")[0].split()[-1]
+
     @abstractmethod
     def setup_method(self, method):
         pass
@@ -144,8 +147,10 @@ def check_proof(test_proof: Dict, proof: ProofTerm):
         check_step(step, proof.steps[j])
 
 
-def check_proofs(yaml_file: str, proofs: List[ProofTerm]):
-    test_proofs = get_test_proofs(yaml_file)
+def check_proofs(
+    yaml_file: str, proofs: List[ProofTerm], coq_version: Optional[str] = None
+):
+    test_proofs = get_test_proofs(yaml_file, coq_version)
     assert len(proofs) == len(test_proofs["proofs"])
     for i, test_proof in enumerate(test_proofs["proofs"]):
         check_proof(test_proof, proofs[i])
@@ -170,12 +175,23 @@ def add_step_defaults(step):
         step["context"] = []
 
 
-def get_test_proofs(yaml_file: str):
+def get_test_proofs(yaml_file: str, coq_version: Optional[str] = None):
     with open(yaml_file, "r") as f:
         test_proofs = yaml.safe_load(f)
     for test_proof in test_proofs["proofs"]:
         if "context" not in test_proof:
             test_proof["context"] = []
+        if coq_version is not None:
+            test_proof["context"] = list(
+                map(
+                    lambda x: x[coq_version]
+                    if coq_version in x
+                    else x["default"]
+                    if "default" in x
+                    else x,
+                    test_proof["context"],
+                )
+            )
         for step in test_proof["steps"]:
             add_step_defaults(step)
     return test_proofs

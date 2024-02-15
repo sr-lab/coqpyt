@@ -354,7 +354,7 @@ class ProofFile(CoqFile):
         # 3 - Obligation N
         # 4 - Next Obligation of id
         # 5 - Next Obligation
-        tag = expr[1][1]
+        tag = self.context.ext_index(expr[1])
         if tag in [0, 1, 4]:
             stack = expr[:0:-1]
             while len(stack) > 0:

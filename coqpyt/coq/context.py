@@ -24,15 +24,24 @@ class FileContext:
     def __init_coq_version(self, coqtop):
         output = subprocess.check_output(f"{coqtop} -v", shell=True)
         coq_version = output.decode("utf-8").split("\n")[0].split()[-1]
-        outdated = version.parse(coq_version) < version.parse("8.18")
 
-        # For version 8.18, we ignore the tags [VernacSynterp] and [VernacSynPure]
+        # For versions 8.18+, we ignore the tags [VernacSynterp] and [VernacSynPure]
         # and use the "ntn_decl" prefix when handling where notations
-        # For older versions, we only tested 8.17, so we provide no claims about
-        # versions prior to that.
+        post17 = version.parse(coq_version) > version.parse("8.17")
+        self.__expr = lambda e: e[1] if post17 else e
+        self.__where_notation_key = "ntn_decl" if post17 else "decl_ntn"
 
-        self.__expr = lambda e: e if outdated else e[1]
-        self.__where_notation_key = "decl_ntn" if outdated else "ntn_decl"
+        # For versions 8.19+, VernacExtend has a dictionary instead of a list in the
+        # AST, so we use "ext_plugin","ext_entry" and "ext_index" instead of indices
+        post18 = version.parse(coq_version) > version.parse("8.18")
+        self.__ext_plugin = lambda e: e["ext_plugin"] if post18 else None
+        self.__ext_entry = lambda e: e["ext_entry"] if post18 else e[0]
+        # FIXME: This should be made private once [__get_program_context] is extracted
+        # from ProofFile to here.
+        self.ext_index = lambda e: e["ext_index"] if post18 else e[1]
+
+        # We only tested versions 8.17/8.18/8.19, so we provide no claims about
+        # versions prior to that.
 
     def __init_context(self, terms: Optional[Dict[str, Term]] = None):
         # NOTE: We use a stack for each term because of the following case:
@@ -50,7 +59,7 @@ class FileContext:
         return res
 
     def __add_terms(self, step: Step, expr: List):
-        term_type = FileContext.__term_type(expr)
+        term_type = self.__term_type(expr)
         text = step.short_text
 
         # FIXME: Section-local terms are ignored. We do this to avoid
@@ -73,7 +82,7 @@ class FileContext:
                 )
                 return
 
-        if expr[0] == "VernacExtend" and expr[1][0] == "VernacTacticNotation":
+        if self.__is_extend(expr, "VernacTacticNotation"):
             # FIXME: Handle this case
             return
         elif expr[0] == "VernacNotation":
@@ -100,7 +109,7 @@ class FileContext:
         elif term_type == TermType.DERIVE:
             name = FileContext.get_ident(expr[2][0])
             self.__add_term(name, step, term_type)
-            if expr[1][0] == "Derive":
+            if self.__ext_entry(expr[1]) == "Derive":
                 prop = FileContext.get_ident(expr[2][2])
                 self.__add_term(prop, step, term_type)
         elif term_type == TermType.OBLIGATION:
@@ -198,6 +207,56 @@ class FileContext:
             )
             self.__add_term(name, step, TermType.NOTATION)
 
+    def __is_extend(
+        self, expr: List, entry: str | Tuple[str], exact: bool = True
+    ) -> bool:
+        if expr[0] != "VernacExtend":
+            return False
+        if exact:
+            return self.__ext_entry(expr[1]) == entry
+        return self.__ext_entry(expr[1]).startswith(entry)
+
+    def __term_type(self, expr: List) -> TermType:
+        if expr[0] == "VernacStartTheoremProof":
+            return getattr(TermType, expr[1][0].upper())
+        if expr[0] == "VernacDefinition":
+            return TermType.DEFINITION
+        if expr[0] in ["VernacNotation", "VernacSyntacticDefinition"]:
+            return TermType.NOTATION
+        if expr[0] == "VernacInductive" and expr[1][0] == "Class":
+            return TermType.CLASS
+        if expr[0] == "VernacInductive" and expr[1][0] in ["Record", "Structure"]:
+            return TermType.RECORD
+        if expr[0] == "VernacInductive" and expr[1][0] == "Variant":
+            return TermType.VARIANT
+        if expr[0] == "VernacInductive" and expr[1][0] == "CoInductive":
+            return TermType.COINDUCTIVE
+        if expr[0] == "VernacInductive":
+            return TermType.INDUCTIVE
+        if expr[0] == "VernacInstance":
+            return TermType.INSTANCE
+        if expr[0] == "VernacCoFixpoint":
+            return TermType.COFIXPOINT
+        if expr[0] == "VernacFixpoint":
+            return TermType.FIXPOINT
+        if expr[0] == "VernacScheme":
+            return TermType.SCHEME
+        if self.__is_extend(expr, "Obligations"):
+            return TermType.OBLIGATION
+        if self.__is_extend(expr, "VernacDeclareTacticDefinition"):
+            return TermType.TACTIC
+        if self.__is_extend(expr, "Function"):
+            return TermType.FUNCTION
+        if self.__is_extend(expr, "Derive", exact=False):
+            return TermType.DERIVE
+        if self.__is_extend(expr, "AddSetoid", exact=False):
+            return TermType.SETOID
+        if self.__is_extend(
+            expr, ("AddRelation", "AddParametricRelation"), exact=False
+        ):
+            return TermType.RELATION
+        return TermType.OTHER
+
     @staticmethod
     def __get_names(expr: List) -> List[str]:
         inductive = expr[0] == "VernacInductive"
@@ -269,48 +328,6 @@ class FileContext:
         return None
 
     @staticmethod
-    def __term_type(expr: List) -> TermType:
-        if expr[0] == "VernacStartTheoremProof":
-            return getattr(TermType, expr[1][0].upper())
-        if expr[0] == "VernacDefinition":
-            return TermType.DEFINITION
-        if expr[0] in ["VernacNotation", "VernacSyntacticDefinition"]:
-            return TermType.NOTATION
-        if expr[0] == "VernacExtend" and expr[1][0] == "Obligations":
-            return TermType.OBLIGATION
-        if expr[0] == "VernacInductive" and expr[1][0] == "Class":
-            return TermType.CLASS
-        if expr[0] == "VernacInductive" and expr[1][0] in ["Record", "Structure"]:
-            return TermType.RECORD
-        if expr[0] == "VernacInductive" and expr[1][0] == "Variant":
-            return TermType.VARIANT
-        if expr[0] == "VernacInductive" and expr[1][0] == "CoInductive":
-            return TermType.COINDUCTIVE
-        if expr[0] == "VernacInductive":
-            return TermType.INDUCTIVE
-        if expr[0] == "VernacInstance":
-            return TermType.INSTANCE
-        if expr[0] == "VernacCoFixpoint":
-            return TermType.COFIXPOINT
-        if expr[0] == "VernacFixpoint":
-            return TermType.FIXPOINT
-        if expr[0] == "VernacScheme":
-            return TermType.SCHEME
-        if expr[0] == "VernacExtend" and expr[1][0].startswith("Derive"):
-            return TermType.DERIVE
-        if expr[0] == "VernacExtend" and expr[1][0].startswith("AddSetoid"):
-            return TermType.SETOID
-        if expr[0] == "VernacExtend" and expr[1][0].startswith(
-            ("AddRelation", "AddParametricRelation")
-        ):
-            return TermType.RELATION
-        if expr[0] == "VernacExtend" and expr[1][0] == "VernacDeclareTacticDefinition":
-            return TermType.TACTIC
-        if expr[0] == "VernacExtend" and expr[1][0] == "Function":
-            return TermType.FUNCTION
-        return TermType.OTHER
-
-    @staticmethod
     def __get_notation_key(notation: str, scope: str) -> str:
         if scope != "" and scope is not None:
             notation += " : " + scope
@@ -376,7 +393,7 @@ class FileContext:
         if (
             expr == [None]
             or expr[0] == "VernacProof"
-            or (expr[0] == "VernacExtend" and expr[1][0] == "VernacSolve")
+            or self.__is_extend(expr, "VernacSolve")
         ):
             return
 
@@ -460,7 +477,7 @@ class FileContext:
         Returns:
             List: The term type of the step.
         """
-        return FileContext.__term_type(self.expr(step))
+        return self.__term_type(self.expr(step))
 
     def update(self, context: Union["FileContext", Dict[str, Term]] = {}):
         """Updates the context with new terms.

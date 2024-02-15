@@ -7,7 +7,6 @@ import yaml
 
 from abc import ABC, abstractmethod
 from typing import Tuple, List, Dict, Union, Any
-from packaging import version
 
 from coqpyt.coq.proof_file import ProofFile, ProofStep, ProofTerm
 from coqpyt.coq.structs import TermType, Term
@@ -43,9 +42,7 @@ class SetupProofFile(ABC):
         self.versionId = VersionedTextDocumentIdentifier(uri, 1)
 
         output = subprocess.check_output(f"coqtop -v", shell=True)
-        coq_version = output.decode("utf-8").split("\n")[0].split()[-1]
-        default = version.parse(coq_version) < version.parse("8.19")
-        self.coq_version = "default" if default else "8.19"
+        self.coq_version = output.decode("utf-8").split("\n")[0].split()[-1]
 
     @abstractmethod
     def setup_method(self, method):
@@ -187,7 +184,11 @@ def get_test_proofs(yaml_file: str, coq_version: Optional[str] = None):
         if coq_version is not None:
             test_proof["context"] = list(
                 map(
-                    lambda x: x if coq_version not in x else x[coq_version],
+                    lambda x: x[coq_version]
+                    if coq_version in x
+                    else x["default"]
+                    if "default" in x
+                    else x,
                     test_proof["context"],
                 )
             )

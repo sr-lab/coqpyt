@@ -27,9 +27,9 @@ class FileContext:
 
         # For versions 8.18+, we ignore the tags [VernacSynterp] and [VernacSynPure]
         # and use the "ntn_decl" prefix when handling where notations
-        pre18 = version.parse(coq_version) < version.parse("8.18")
-        self.__expr = lambda e: e if pre18 else e[1]
-        self.__where_notation_key = "decl_ntn" if pre18 else "ntn_decl"
+        post17 = version.parse(coq_version) > version.parse("8.17")
+        self.__expr = lambda e: e[1] if post17 else e
+        self.__where_notation_key = "ntn_decl" if post17 else "decl_ntn"
 
         # For versions 8.19+, VernacExtend has a dictionary instead of a list in the
         # AST, so we use "ext_plugin","ext_entry" and "ext_index" instead of indices

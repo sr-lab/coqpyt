@@ -150,7 +150,9 @@ def check_proof(test_proof: Dict, proof: ProofTerm):
         check_step(step, proof.steps[j])
 
 
-def check_proofs(yaml_file: str, proofs: List[ProofTerm], coq_version: Optional[str] = None):
+def check_proofs(
+    yaml_file: str, proofs: List[ProofTerm], coq_version: Optional[str] = None
+):
     test_proofs = get_test_proofs(yaml_file, coq_version)
     assert len(proofs) == len(test_proofs["proofs"])
     for i, test_proof in enumerate(test_proofs["proofs"]):

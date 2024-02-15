@@ -13,7 +13,11 @@ class TestProofValidFile(SetupProofFile):
 
     def test_valid_file(self):
         proofs = self.proof_file.proofs
-        check_proofs("tests/proof_file/expected/valid_file.yml", proofs)
+        check_proofs(
+            "tests/proof_file/expected/valid_file.yml",
+            proofs,
+            coq_version=self.coq_version,
+        )
 
     def test_exec(self):
         # Rollback whole file
@@ -40,7 +44,11 @@ class TestProofImports(SetupProofFile):
         self.setup("test_imports/test_import.v", workspace="test_imports/")
 
     def test_imports(self):
-        check_proofs("tests/proof_file/expected/imports.yml", self.proof_file.proofs)
+        check_proofs(
+            "tests/proof_file/expected/imports.yml",
+            self.proof_file.proofs,
+            coq_version=self.coq_version,
+        )
 
     def test_exec(self):
         # Rollback whole file

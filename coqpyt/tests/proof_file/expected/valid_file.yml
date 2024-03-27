@@ -198,7 +198,7 @@ proofs:
             line: 26
             character: 10
     context:
-      - "8.19.0":
+      - "8.19.x":
           text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 10, x binder, y binder, P at level 200, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
           type: NOTATION
         default:
@@ -364,7 +364,7 @@ proofs:
             line: 51
             character: 4
     context:
-      - "8.19.0":
+      - "8.19.x":
           text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 10, x binder, y binder, P at level 200, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
           type: NOTATION
         default:

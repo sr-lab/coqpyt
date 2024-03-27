@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -175,6 +176,20 @@ def add_step_defaults(step):
         step["context"] = []
 
 
+def get_context_by_version(context: List[Dict[str, Any]], coq_version: str):
+    res = []
+
+    for term in context:
+        for key in term:
+            if re.match(key.replace("x", "[0-9]+"), coq_version):
+                res.append(term[key])
+                break
+        else:
+            res.append(term["default"] if "default" in term else term)
+
+    return res
+
+
 def get_test_proofs(yaml_file: str, coq_version: Optional[str] = None):
     with open(yaml_file, "r") as f:
         test_proofs = yaml.safe_load(f)
@@ -182,15 +197,8 @@ def get_test_proofs(yaml_file: str, coq_version: Optional[str] = None):
         if "context" not in test_proof:
             test_proof["context"] = []
         if coq_version is not None:
-            test_proof["context"] = list(
-                map(
-                    lambda x: x[coq_version]
-                    if coq_version in x
-                    else x["default"]
-                    if "default" in x
-                    else x,
-                    test_proof["context"],
-                )
+            test_proof["context"] = get_context_by_version(
+                test_proof["context"], coq_version
             )
         for step in test_proof["steps"]:
             add_step_defaults(step)

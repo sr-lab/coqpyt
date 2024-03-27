@@ -167,7 +167,7 @@ proofs:
             line: 21
             character: 0
     context:
-      - "8.19.0":
+      - "8.19.x":
           text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 10, x binder, y binder, P at level 200, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
           type: NOTATION
         default:

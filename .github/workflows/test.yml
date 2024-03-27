@@ -13,6 +13,8 @@ jobs:
       matrix:
         ocaml-compiler:
           - "4.11"
+        coq-version:
+          - "8.19.1"
 
     steps:
     - name: Checkout
@@ -28,13 +30,24 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Restore opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          /home/runner/.opam
+        key: ${{ matrix.ocaml-compiler }}-${{ coq-version }}-opam
+
     - name: Set-up OCaml ${{ matrix.ocaml-compiler }}
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       uses: ocaml/setup-ocaml@v2
       with:
         ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
     - name: Install coq-lsp
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
+        opam pin add coq ${{ matrix.coq-version }}
         opam install coq-lsp
 
     - name: Install coqpyt
@@ -46,3 +59,11 @@ jobs:
         eval $(opam env)
         cd coqpyt
         pytest tests -s
+
+    - name: Save opam
+      id: cache-opam-save
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          /home/runner/.opam
+        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}

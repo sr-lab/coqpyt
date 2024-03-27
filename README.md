@@ -120,6 +120,10 @@ For major changes, please open an issue first to discuss what you would like to 
 
 Please make sure to update tests as appropriate.
 
+## Credits
+
+Special thanks to the developers of the [pylspclient](https://github.com/yeger00/pylspclient) project, which served as the initial template for CoqPyt. Additionally, we express our gratitude to Kyle Thompson (@rkthomps) for his precious feedback, which has greatly contributed to the refinement of CoqPyt.
+
 ## License
 
 [MIT](https://choosealicense.com/licenses/mit/)

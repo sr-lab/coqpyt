@@ -27,13 +27,13 @@ class FileContext:
 
         # For versions 8.18+, we ignore the tags [VernacSynterp] and [VernacSynPure]
         # and use the "ntn_decl" prefix when handling where notations
-        post17 = version.parse(coq_version) > version.parse("8.17")
+        post17 = version.parse(coq_version) >= version.parse("8.18")
         self.__expr = lambda e: e[1] if post17 else e
         self.__where_notation_key = "ntn_decl" if post17 else "decl_ntn"
 
         # For versions 8.19+, VernacExtend has a dictionary instead of a list in the
         # AST, so we use "ext_plugin","ext_entry" and "ext_index" instead of indices
-        post18 = version.parse(coq_version) > version.parse("8.18")
+        post18 = version.parse(coq_version) >= version.parse("8.19")
         self.__ext_plugin = lambda e: e["ext_plugin"] if post18 else None
         self.__ext_entry = lambda e: e["ext_entry"] if post18 else e[0]
         # FIXME: This should be made private once [__get_program_context] is extracted

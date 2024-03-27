@@ -35,7 +35,7 @@ jobs:
       uses: actions/cache/restore@v4
       with:
         path: |
-          /home/runner/.opam
+          /home/runner/work/coqpyt/coqpyt/_opam/
         key: ${{ matrix.ocaml-compiler }}-${{ matrix.coq-version }}-opam
 
     - name: Set-up OCaml ${{ matrix.ocaml-compiler }}
@@ -65,5 +65,5 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: |
-          /home/runner/.opam
+          /home/runner/work/coqpyt/coqpyt/_opam/
         key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}

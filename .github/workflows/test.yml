@@ -36,7 +36,7 @@ jobs:
       with:
         path: |
           /home/runner/.opam
-        key: ${{ matrix.ocaml-compiler }}-${{ coq-version }}-opam
+        key: ${{ matrix.ocaml-compiler }}-${{ matrix.coq-version }}-opam
 
     - name: Set-up OCaml ${{ matrix.ocaml-compiler }}
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'

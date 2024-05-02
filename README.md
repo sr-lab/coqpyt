@@ -122,7 +122,7 @@ Please make sure to update tests as appropriate.
 
 ## Credits
 
-Special thanks to the developers of the [pylspclient](https://github.com/yeger00/pylspclient) project, which served as the initial template for CoqPyt. Additionally, we express our gratitude to Kyle Thompson (@rkthomps) for his precious feedback, which has greatly contributed to the refinement of CoqPyt.
+Special thanks to the developers of the [pylspclient](https://github.com/yeger00/pylspclient) project, which served as the initial template for CoqPyt. Additionally, we express our gratitude to [Kyle Thompson](https://github.com/rkthomps/) for his precious feedback, which has greatly contributed to the refinement of CoqPyt.
 
 ## License
 

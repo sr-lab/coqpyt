@@ -1,4 +1,5 @@
 Require Import Coq.Unicode.Utf8.
+Require Import List.
 
 Ltac reduce_eq := simpl; reflexivity.
 
@@ -8,3 +9,11 @@ Proof.
     rewrite -> (plus_O_n (S n * m)).
     reflexivity.
 Qed.
+
+Lemma rev_append: forall {a} (l1 l2: list a),
+  rev (l1 ++ l2) = rev l2 ++ rev l1.
+Proof.
+intros a l1 l2. induction l1; intros. 
+  - simpl. rewrite app_nil_r. reflexivity.
+  - simpl. rewrite IHl1.
+Admitted.

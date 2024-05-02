@@ -1,4 +1,4 @@
-# CoqPyt
+![Logo](https://github.com/sr-lab/coqpyt/blob/main/images/logo.png?raw=true)
 
 Interact with Coq files and navigate through your proofs using our Python client for [coq-lsp](https://github.com/ejgallego/coq-lsp).
 
@@ -18,91 +18,46 @@ python -m pip install -e .
 
 ## Usage
 
+![UML](https://github.com/sr-lab/coqpyt/blob/main/images/uml.png?raw=true)
+
 Import classes from the ``coqpyt`` package.
 
-<!-- embedme examples/readme.py#L3-L5 -->
+<!-- embedme examples/readme.py#L3-L7 -->
 ```py
-from coqpyt.coq.structs import TermType
-from coqpyt.coq.base_file import CoqFile
-from coqpyt.coq.proof_file import ProofFile
 ```
+
+### Interaction with Coq
 
 Create a CoqFile object, execute the file and extract the generated context.
 
-<!-- embedme examples/readme.py#L7-L34 -->
+<!-- embedme examples/readme.py#L9-L36 -->
 ```py
-# Open Coq file
-with CoqFile(os.path.join(os.getcwd(), "examples/readme.v")) as coq_file:
-    coq_file.exec(nsteps=2)
-    # Get all terms defined until now
-    print("Number of terms:", len(coq_file.context.terms))
-    # Filter by Tactics
-    print(
-        "Number of tactics:",
-        len(
-            list(
-                filter(
-                    lambda term: term.type == TermType.TACTIC,
-                    coq_file.context.terms.values(),
-                )
-            )
-        ),
-    )
-
-    # Save compiled file
-    coq_file.save_vo()
-    print("Compiled file exists:", os.path.exists("examples/readme.vo"))
-    os.remove("examples/readme.vo")
-
-    # Run remaining file
-    coq_file.run()
-    print("Checked:", coq_file.checked)
-    # Get all terms defined until now
-    print("Number of terms:", len(coq_file.context.terms))
 ```
 
 Create a ProofFile object (a CoqFile instance) and interact with the proofs.
 
-<!-- embedme examples/readme.py#L36-L73 -->
+<!-- embedme examples/readme.py#L38-L75 -->
 ```py
-# Open Proof file
-with ProofFile(os.path.join(os.getcwd(), "examples/readme.v")) as proof_file:
-    # Enter proof
-    proof_file.exec(nsteps=4)
-    print("In proof:", proof_file.in_proof)
-    # Get current goals
-    print(proof_file.current_goals)
+```
 
-    # Run remaining file
-    proof_file.run()
-    # Number of proofs in the file
-    print("Number of proofs:", len(proof_file.proofs))
-    print("Proof:", proof_file.proofs[0].text)
+### Proof Modification
 
-    # Print steps of proof
-    for step in proof_file.proofs[0].steps:
-        print(step.text, end="")
-    print()
+Given an admitted proof:
 
-    # Get the context used in the third step
-    print(proof_file.proofs[0].steps[2].context)
-    # Print the goals in the third step
-    print(proof_file.proofs[0].steps[2].goals)
+<!-- embedme examples/readme.v#L13-L19 -->
+```coq
+```
 
-    # Print number of terms in context
-    print("Number of terms:", len(proof_file.context.terms))
-    # Filter for Notations only
-    print(
-        "Number of notations:",
-        len(
-            list(
-                filter(
-                    lambda term: term.type == TermType.NOTATION,
-                    proof_file.context.terms.values(),
-                )
-            )
-        ),
-    )
+Perform step-wise changes to the proof.
+
+<!-- embedme examples/readme.py#L87-L110 -->
+```py
+```
+
+Perform changes to the proof transactionally.
+
+<!-- embedme examples/readme.py#L113-L137 -->
+```py
 ```
 
 ## Tests
@@ -122,7 +77,7 @@ Please make sure to update tests as appropriate.
 
 ## Credits
 
-Special thanks to the developers of the [pylspclient](https://github.com/yeger00/pylspclient) project, which served as the initial template for CoqPyt. Additionally, we express our gratitude to Kyle Thompson (@rkthomps) for his precious feedback, which has greatly contributed to the refinement of CoqPyt.
+Special thanks to the developers of the [pylspclient](https://github.com/yeger00/pylspclient) project, which served as the initial template for CoqPyt. Additionally, we express our gratitude to [Kyle Thompson](https://github.com/rkthomps/) for his precious feedback, which has greatly contributed to the refinement of CoqPyt.
 
 ## License
 

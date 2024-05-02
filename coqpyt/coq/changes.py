@@ -6,13 +6,13 @@ class CoqChange:
 
 
 @dataclass
-class CoqAddStep(CoqChange):
+class CoqAdd(CoqChange):
     step_text: str
     previous_step_index: int
 
 
 @dataclass
-class CoqDeleteStep(CoqChange):
+class CoqDelete(CoqChange):
     step_index: int
 
 

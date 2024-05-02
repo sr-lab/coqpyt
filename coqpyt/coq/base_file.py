@@ -412,11 +412,11 @@ class CoqFile(object):
         steps_taken = self.steps_taken
 
         for change in changes:
-            if isinstance(change, CoqAddStep):
+            if isinstance(change, CoqAdd):
                 if change.previous_step_index + 1 < steps_taken:
                     offset += 1
                     steps_taken += 1
-            elif isinstance(change, CoqDeleteStep):
+            elif isinstance(change, CoqDelete):
                 if change.step_index < steps_taken:
                     offset -= 1
                     steps_taken -= 1
@@ -430,7 +430,7 @@ class CoqFile(object):
         CoqFile.exec(self, -self.steps_taken)
 
         for change in changes:
-            if isinstance(change, CoqAddStep):
+            if isinstance(change, CoqAdd):
                 self.__add_step_text(change.previous_step_index, change.step_text)
                 step = self.__add_update_ast(
                     change.previous_step_index, change.step_text
@@ -438,7 +438,7 @@ class CoqFile(object):
                 self.steps.insert(change.previous_step_index + 1, step)
                 self.__index_tracker.insert(change.previous_step_index + 1, None)
                 offset_steps += 1
-            elif isinstance(change, CoqDeleteStep):
+            elif isinstance(change, CoqDelete):
                 self.__delete_step_text(change.step_index)
                 self.__delete_update_ast(change.step_index)
                 self.steps.pop(change.step_index)
@@ -571,7 +571,7 @@ class CoqFile(object):
         Raises:
             InvalidFileException: If the file being changed is not valid.
             InvalidChangeException: If the file is invalid after applying the changes.
-            NotImplementedError: If the changes contain a CoqChange that is not a CoqAddStep or CoqDeleteStep.
+            NotImplementedError: If the changes contain a CoqChange that is not a CoqAdd or CoqDelete.
         """
         self._make_change(self.__change_steps, changes)
 

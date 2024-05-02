@@ -87,9 +87,9 @@ class TestProofValidFile(SetupProofFile):
         proof_file = self.proof_file
         proof_file.change_steps(
             [
-                CoqDeleteStep(6),
-                CoqAddStep("\n      intros n.", 5),
-                CoqAddStep("\n      Print minus.", 7),
+                CoqDelete(6),
+                CoqAdd("\n      intros n.", 5),
+                CoqAdd("\n      Print minus.", 7),
             ]
         )
 
@@ -118,19 +118,19 @@ class TestProofValidFile(SetupProofFile):
         check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
 
         # Add step in beginning of proof
-        proof_file.change_steps([CoqAddStep("\n    Print plus.", 26)])
+        proof_file.change_steps([CoqAdd("\n    Print plus.", 26)])
         assert proof_file.steps[27].text == "\n    Print plus."
 
         # Add step to end of proof
-        proof_file.change_steps([CoqAddStep("\n    Print plus.", 31)])
+        proof_file.change_steps([CoqAdd("\n    Print plus.", 31)])
         assert proof_file.steps[32].text == "\n    Print plus."
 
         # Delete step in beginning of proof
-        proof_file.change_steps([CoqDeleteStep(27)])
+        proof_file.change_steps([CoqDelete(27)])
         assert proof_file.steps[27].text == "\n      intros n."
 
         # Delete step in end of proof
-        proof_file.change_steps([CoqDeleteStep(41)])
+        proof_file.change_steps([CoqDelete(41)])
         assert proof_file.steps[41].text == "\n    Admitted."
 
     def test_change_steps_add_proof(self):
@@ -138,11 +138,11 @@ class TestProofValidFile(SetupProofFile):
         steps_taken = self.proof_file.steps_taken
         self.proof_file.change_steps(
             [
-                CoqAddStep("\nTheorem change_steps : forall n:nat, 0 + n = n.", 1),
-                CoqAddStep("\nProof.", 2),
-                CoqAddStep("\nintros n.", 3),
-                CoqAddStep("\nreduce_eq.", 4),
-                CoqAddStep("\nQed.", 5),
+                CoqAdd("\nTheorem change_steps : forall n:nat, 0 + n = n.", 1),
+                CoqAdd("\nProof.", 2),
+                CoqAdd("\nintros n.", 3),
+                CoqAdd("\nreduce_eq.", 4),
+                CoqAdd("\nQed.", 5),
             ]
         )
         assert self.proof_file.steps_taken == steps_taken + 5
@@ -151,7 +151,7 @@ class TestProofValidFile(SetupProofFile):
     def test_change_steps_delete_proof(self):
         proofs = len(self.proof_file.proofs)
         steps_taken = self.proof_file.steps_taken
-        self.proof_file.change_steps([CoqDeleteStep(14) for _ in range(7)])
+        self.proof_file.change_steps([CoqDelete(14) for _ in range(7)])
         assert self.proof_file.steps_taken == steps_taken - 7
         assert len(self.proof_file.proofs) == proofs - 1
 
@@ -178,9 +178,9 @@ class TestAddOpenProof(SetupProofFile):
 
         self.proof_file.change_steps(
             [
-                CoqAddStep("\nTheorem change_steps : forall n:nat, 0 + n = n.", 0),
-                CoqAddStep("\nProof.", 1),
-                CoqAddStep("\nintros n.", 2),
+                CoqAdd("\nTheorem change_steps : forall n:nat, 0 + n = n.", 0),
+                CoqAdd("\nProof.", 1),
+                CoqAdd("\nintros n.", 2),
             ]
         )
         assert self.proof_file.steps_taken == steps_taken + 3
@@ -264,13 +264,13 @@ class TestProofSimpleFileChanges(SetupProofFile):
         proof_file = self.proof_file
         proof_file.change_steps(
             [
-                CoqDeleteStep(1),
-                CoqDeleteStep(1),
-                CoqDeleteStep(2),
-                CoqDeleteStep(2),
-                CoqDeleteStep(2),
-                CoqAddStep("\nAdmitted.", 0),
-                CoqAddStep("\nAdmitted.", 2),
+                CoqDelete(1),
+                CoqDelete(1),
+                CoqDelete(2),
+                CoqDelete(2),
+                CoqDelete(2),
+                CoqAdd("\nAdmitted.", 0),
+                CoqAdd("\nAdmitted.", 2),
             ]
         )
         # The last step is added in the end of the file
@@ -423,7 +423,7 @@ class TestProofInvalidChanges(SetupProofFile):
     def test_invalid_changes(self):
         with pytest.raises(InvalidChangeException):
             # Delete proof body
-            self.proof_file.change_steps([CoqDeleteStep(6) for _ in range(2)])
+            self.proof_file.change_steps([CoqDelete(6) for _ in range(2)])
         self.__check_rollback()
 
 
@@ -466,7 +466,7 @@ class TestProofChangeEmptyProof(SetupProofFile):
         assert steps[2].ast.range.start.character == refl_end.character + 1
 
         # Add [Print plus.] and [Check plus.]
-        proof_file.change_steps([CoqAddStep(texts[2], 2), CoqAddStep(texts[0], 1)])
+        proof_file.change_steps([CoqAdd(texts[2], 2), CoqAdd(texts[0], 1)])
         assert len(proof_file.proofs) == 1
         steps = proof_file.proofs[0].steps
         assert len(steps) == 5
@@ -484,7 +484,7 @@ class TestProofChangeEmptyProof(SetupProofFile):
         assert steps[4].ast.range.start.character == print_end.character + 1
 
         # Delete [Proof.] and [Admitted.]
-        proof_file.change_steps([CoqDeleteStep(1), CoqDeleteStep(4)])
+        proof_file.change_steps([CoqDelete(1), CoqDelete(4)])
         assert len(proof_file.proofs) == 0
         assert len(proof_file.open_proofs) == 1
         steps = proof_file.open_proofs[0].steps
@@ -562,9 +562,9 @@ class TestProofChangeObligation(SetupProofFile):
         proof_file = self.proof_file
 
         # Delete unwanted steps
-        proof_file.change_steps([CoqDeleteStep(2) for _ in range(30)])
-        proof_file.change_steps([CoqDeleteStep(16), CoqDeleteStep(2)])
-        proof_file.change_steps([CoqDeleteStep(12) for _ in range(3)])
+        proof_file.change_steps([CoqDelete(2) for _ in range(30)])
+        proof_file.change_steps([CoqDelete(16), CoqDelete(2)])
+        proof_file.change_steps([CoqDelete(12) for _ in range(3)])
 
         # Add a Program definition in the middle of a proof
         program = (
@@ -654,8 +654,8 @@ class TestProofChangeGoals(SetupProofFile):
         # Replace [\ninduction n.] with equally sized step
         proof_file.change_steps(
             [
-                CoqAddStep("\nreflexivity.", 1),
-                CoqDeleteStep(3),
+                CoqAdd("\nreflexivity.", 1),
+                CoqDelete(3),
             ]
         )
 

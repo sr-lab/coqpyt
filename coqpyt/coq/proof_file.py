@@ -670,27 +670,27 @@ class ProofFile(CoqFile):
     def __get_changes_data(
         self, changes: List[CoqChange]
     ) -> Tuple[List[int], List[int], int]:
-        steps: List[Union[Step, CoqAddStep]] = self.steps[:]
+        steps: List[Union[Step, CoqAdd]] = self.steps[:]
         adds: List[int] = []  # For Adds, store the index of the new Step
         deletes: List[int] = []  # For Deletes, store the index of the deleted Step
         deleted_steps: List[Step] = []  # Keep the deleted Steps
         new_steps_taken: int = self.steps_taken
         for change in changes:
-            if isinstance(change, CoqAddStep):
+            if isinstance(change, CoqAdd):
                 steps.insert(change.previous_step_index + 1, change)
                 if change.previous_step_index + 1 < new_steps_taken:
                     new_steps_taken += 1
-            elif isinstance(change, CoqDeleteStep):
+            elif isinstance(change, CoqDelete):
                 step = steps.pop(change.step_index)
                 if change.step_index < new_steps_taken:
                     new_steps_taken -= 1
-                    # Ignore CoqAddStep, only need to delete original Steps
+                    # Ignore CoqAdd, only need to delete original Steps
                     if isinstance(step, Step):
                         deleted_steps.append(step)
         # Get Add indices in final steps
         # Ignore additions after the pointer
         for i, step in enumerate(steps[:new_steps_taken]):
-            if isinstance(step, CoqAddStep):
+            if isinstance(step, CoqAdd):
                 adds.append(i)
         # Get Delete indices in initial steps
         # Ignore deletions after the pointer
@@ -895,10 +895,10 @@ class ProofFile(CoqFile):
 
         for change in proof_changes:
             if isinstance(change, ProofPop):
-                changes.append(CoqDeleteStep(step_index + offset))
+                changes.append(CoqDelete(step_index + offset))
                 offset -= 1
             elif isinstance(change, ProofAppend):
-                changes.append(CoqAddStep(change.step_text, step_index + offset))
+                changes.append(CoqAdd(change.step_text, step_index + offset))
                 offset += 1
 
         self.change_steps(changes)

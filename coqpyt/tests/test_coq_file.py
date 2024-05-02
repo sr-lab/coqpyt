@@ -113,10 +113,10 @@ def test_change_steps(setup, teardown):
     assert coq_file.steps[8].ast.range.start.line == 12
 
     changes = [
-        CoqAddStep("\n      Print minus.", 7),
-        CoqAddStep("\n      Print minus.", 6),
-        CoqDeleteStep(9),  # Delete first print minus
-        CoqDeleteStep(19),  # Delete Compute True /\ True.
+        CoqAdd("\n      Print minus.", 7),
+        CoqAdd("\n      Print minus.", 6),
+        CoqDelete(9),  # Delete first print minus
+        CoqDelete(19),  # Delete Compute True /\ True.
     ]
     coq_file.change_steps(changes)
     steps = coq_file.exec(nsteps=8)
@@ -131,8 +131,8 @@ def test_change_steps(setup, teardown):
     with pytest.raises(InvalidChangeException):
         coq_file.change_steps(
             [
-                CoqAddStep("\n      Print minus.", 7),
-                CoqDeleteStep(11),  # delete reduce_eq
+                CoqAdd("\n      Print minus.", 7),
+                CoqDelete(11),  # delete reduce_eq
             ]
         )
 
@@ -145,15 +145,15 @@ def test_add_proof(setup, teardown):
 
     coq_file.change_steps(
         [
-            CoqAddStep(" Defined.", 12),
-            CoqAddStep("\n  reflexivity.", 12),
-            CoqAddStep("\n  rewrite -> (plus_O_n (S n * m)).", 12),
+            CoqAdd(" Defined.", 12),
+            CoqAdd("\n  reflexivity.", 12),
+            CoqAdd("\n  rewrite -> (plus_O_n (S n * m)).", 12),
             # Checks if there aren't problems with intermediate states
             # (e.g. the ranges of the AST are updated incorrectly)
-            CoqDeleteStep(13),
-            CoqAddStep("\n  intros n m.", 12),
-            CoqAddStep("\nProof.", 12),
-            CoqAddStep(
+            CoqDelete(13),
+            CoqAdd("\n  intros n m.", 12),
+            CoqAdd("\nProof.", 12),
+            CoqAdd(
                 "\nDefinition change_steps :  ∀ n m : nat,\n 0 + (S n * m) = S n * m.",
                 12,
             ),
@@ -171,7 +171,7 @@ def test_delete_proof(setup, teardown):
     coq_file.run()
     steps_taken = coq_file.steps_taken
     assert "mult_0_plus" in coq_file.context.terms
-    coq_file.change_steps([CoqDeleteStep(14) for _ in range(7)])
+    coq_file.change_steps([CoqDelete(14) for _ in range(7)])
     assert "mult_0_plus" not in coq_file.context.terms
     assert coq_file.steps_taken == steps_taken - 7
 

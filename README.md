@@ -1,4 +1,4 @@
-![Logo](https://github.com/sr-lab/coqpyt/blob/main/logo.png?raw=true)
+![Logo](https://github.com/sr-lab/coqpyt/blob/main/images/logo.png?raw=true)
 
 Interact with Coq files and navigate through your proofs using our Python client for [coq-lsp](https://github.com/ejgallego/coq-lsp).
 
@@ -17,6 +17,8 @@ python -m pip install -e .
 ```
 
 ## Usage
+
+![UML](https://github.com/sr-lab/coqpyt/blob/main/images/uml.png?raw=true)
 
 Import classes from the ``coqpyt`` package.
 

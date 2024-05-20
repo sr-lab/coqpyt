@@ -1,5 +1,14 @@
+from typing import List
+from coqpyt.coq.structs import Diagnostic
+
+
 class InvalidChangeException(Exception):
-    pass
+    def __init__(self):
+        self.diagnostics: List[Diagnostic] = []
+
+    @property
+    def errors(self) -> List[Diagnostic]:
+        return [d for d in self.diagnostics if d.severity == 1]
 
 
 class InvalidAddException(InvalidChangeException):

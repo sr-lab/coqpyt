@@ -222,12 +222,14 @@ class CoqFile(object):
         self.steps_taken += sign
 
     def _make_change(self, change_function, *args):
+        uri = f"file://{self._path}"
         if not self.is_valid:
             raise InvalidFileException(self.path)
 
         self.__set_backup_steps()
         old_steps_taken = self.steps_taken
-        old_diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics
+        old_diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics[uri]
+        self.coq_lsp_client.lsp_endpoint.diagnostics[uri] = []
         old_text = self.__read()
 
         try:
@@ -236,11 +238,12 @@ class CoqFile(object):
             # Rollback changes
             self.steps = self.__backup_steps
             self.steps_taken = old_steps_taken
-            self.coq_lsp_client.lsp_endpoint.diagnostics = old_diagnostics
             self.is_valid = True
             with open(self.path, "w") as f:
                 f.write(old_text)
+            e.diagnostics = self.coq_lsp_client.lsp_endpoint.diagnostics[uri]
             self.__refresh()
+            self.coq_lsp_client.lsp_endpoint.diagnostics[uri] = old_diagnostics
             raise e
 
     def __delete_step_text(self, step_index: int):
@@ -499,6 +502,15 @@ class CoqFile(object):
         """
         uri = f"file://{self._path}"
         return self.coq_lsp_client.lsp_endpoint.diagnostics[uri]
+
+    @property
+    def errors(self) -> List[Diagnostic]:
+        """
+        Returns:
+            List[Diagnostic]: The errors of the file.
+                Includes all messages given by Coq with severity 1.
+        """
+        return list(filter(lambda x: x.severity == 1, self.diagnostics))
 
     def exec(self, nsteps=1) -> List[Step]:
         """Execute steps in the file.

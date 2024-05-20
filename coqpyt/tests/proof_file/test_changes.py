@@ -282,7 +282,7 @@ class TestProofSimpleFileChanges(SetupProofFile):
         steps = [
             "Example test1: 1 + 1 = 2.",
             "\nAdmitted.",
-            "\n\nExample test2: 1 + 1 + 1= 3.",
+            "\n\nExample test2: 1 + 1 + 1 = 3.",
             "\nAdmitted.",
         ]
         for i, step in enumerate(steps):

@@ -1,5 +1,4 @@
 import os
-import copy
 import shutil
 import uuid
 import tempfile

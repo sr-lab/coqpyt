@@ -287,3 +287,28 @@ def test_space_in_path():
     # by coq-lsp.
     with CoqFile("tests/resources/test test/test_error.v") as coq_file:
         assert not coq_file.is_valid
+
+
+@pytest.mark.parametrize("setup", ["test_simple_file.v"], indirect=True)
+def test_diagnostics(setup, teardown):
+    coq_file.run()
+    assert len(coq_file.diagnostics) == 2
+    assert len(coq_file.errors) == 0
+
+    with pytest.raises(InvalidAddException) as e:
+        coq_file.add_step(0, "\n  Qed.")
+    assert len(e.value.errors) == 3
+
+    assert len(coq_file.diagnostics) == 2
+    assert len(coq_file.errors) == 0
+
+
+@pytest.mark.parametrize("setup", ["test_invalid_1.v"], indirect=True)
+def test_diagnostics_invalid(setup, teardown):
+    coq_file.run()
+    assert len(coq_file.diagnostics) == 7
+    assert len(coq_file.errors) == 1
+    assert (
+        coq_file.errors[0].message
+        == 'Found no subterm matching "0 + ?M152" in the current goal.'
+    )

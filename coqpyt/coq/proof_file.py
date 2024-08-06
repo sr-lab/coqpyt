@@ -1,5 +1,6 @@
 import os
 import hashlib
+import logging
 import tempfile
 import shutil
 import uuid
@@ -255,6 +256,7 @@ class ProofFile(CoqFile):
         workspace: Optional[str] = None,
         coq_lsp: str = "coq-lsp",
         coqtop: str = "coqtop",
+        error_mode: str = "strict"
     ):
         """Creates a ProofFile.
 
@@ -262,18 +264,25 @@ class ProofFile(CoqFile):
             file_path (str): Path of the Coq file.
             library (Optional[str], optional): The library of the file. Defaults to None.
             timeout (int, optional): Timeout used in coq-lsp. Defaults to 2.
-            workspace(Optional[str], optional): Absolute path for the workspace.
+            workspace (Optional[str], optional): Absolute path for the workspace.
                 If the workspace is not defined, the workspace is equal to the
                 path of the file.
-            coq_lsp(str, optional): Path to the coq-lsp binary. Defaults to "coq-lsp".
-            coqtop(str, optional): Path to the coqtop binary used to compile the Coq libraries
+            coq_lsp (str, optional): Path to the coq-lsp binary. Defaults to "coq-lsp".
+            coqtop (str, optional): Path to the coqtop binary used to compile the Coq libraries
                 imported by coq-lsp. This is NOT passed as a parameter to coq-lsp, it is
                 simply used to check the Coq version in use. Defaults to "coqtop".
+            error_mode (str, optional): How errors are handled. Can be "strict" or "warning".
+                Defaults to "strict".
         """
         if not os.path.isabs(file_path):
             file_path = os.path.abspath(file_path)
         super().__init__(file_path, library, timeout, workspace, coq_lsp, coqtop)
-        self.__aux_file = _AuxFile(file_path, timeout=self.timeout, workspace=workspace)
+        self.__aux_file = _AuxFile(
+            file_path,
+            timeout=self.timeout, 
+            workspace=workspace
+        )
+        self.__error_mode = error_mode
         self.__aux_file.didOpen()
 
         try:
@@ -330,9 +339,15 @@ class ProofFile(CoqFile):
                     scope = notation.split(":")[-1].strip()
 
                 if notation != "Unknown notation":
-                    term = self.context.get_notation(notation_name, scope)
-                    if term not in res:
-                        res.append(term)
+                    try:
+                        term = self.context.get_notation(notation_name, scope)
+                        if term not in res:
+                            res.append(term)
+                    except NotationNotFoundException as e:
+                        if self.__error_mode == "strict":
+                            raise e
+                        else:
+                            logging.warning(str(e))
 
                 stack.append(el[1:])
             elif isinstance(el, list):

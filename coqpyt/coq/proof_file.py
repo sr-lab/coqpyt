@@ -256,7 +256,7 @@ class ProofFile(CoqFile):
         workspace: Optional[str] = None,
         coq_lsp: str = "coq-lsp",
         coqtop: str = "coqtop",
-        error_mode: str = "strict"
+        error_mode: str = "strict",
     ):
         """Creates a ProofFile.
 
@@ -272,16 +272,14 @@ class ProofFile(CoqFile):
                 imported by coq-lsp. This is NOT passed as a parameter to coq-lsp, it is
                 simply used to check the Coq version in use. Defaults to "coqtop".
             error_mode (str, optional): How errors are handled. Can be "strict" or "warning".
+                If "strict", an exception will be raised when an unexpected behavior occurs.
+                If "warning", a warning will be logged instead (it only applies to recoverable errors).
                 Defaults to "strict".
         """
         if not os.path.isabs(file_path):
             file_path = os.path.abspath(file_path)
         super().__init__(file_path, library, timeout, workspace, coq_lsp, coqtop)
-        self.__aux_file = _AuxFile(
-            file_path,
-            timeout=self.timeout, 
-            workspace=workspace
-        )
+        self.__aux_file = _AuxFile(file_path, timeout=self.timeout, workspace=workspace)
         self.__error_mode = error_mode
         self.__aux_file.didOpen()
 

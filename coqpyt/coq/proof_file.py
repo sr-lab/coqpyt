@@ -3,6 +3,7 @@ import hashlib
 import logging
 import tempfile
 import shutil
+import pickle
 import uuid
 from functools import lru_cache
 from typing import Optional, Tuple, Union, List, Dict
@@ -25,6 +26,8 @@ from coqpyt.coq.base_file import CoqFile
 
 
 class _AuxFile(object):
+    CACHE_NAME = "coqpyt_cache"
+
     def __init__(
         self,
         file_path,
@@ -181,8 +184,40 @@ class _AuxFile(object):
             _AuxFile.__load_library.__wrapped__,
         )
 
-    @staticmethod
+    @classmethod
+    def get_coqpyt_disk_cache_loc(cls) -> Optional[str]:
+        if "HOME" in os.environ:
+            home_dir = os.environ["HOME"]
+        elif "USERPROFILE" in os.environ:
+            home_dir = os.environ["USERPROFILE"]
+        else:
+            return None
+        cache_loc = os.path.join(home_dir, ".cache", cls.CACHE_NAME)
+        return cache_loc
+
+    @classmethod
+    def get_from_disk_cache(cls, library_hash: str) -> Optional[Dict[str, Term]]:
+        coqpyt_cache_loc = cls.get_coqpyt_disk_cache_loc()
+        if coqpyt_cache_loc is None:
+            return None
+        library_cache_loc = os.path.join(coqpyt_cache_loc, library_hash)
+        if os.path.exists(library_cache_loc):
+            with open(library_cache_loc, "rb") as f:
+                return pickle.load(f)
+
+    @classmethod
+    def to_disk_cache(cls, library_hash: str, terms: Dict[str, Term]):
+        coqpyt_cache_loc = cls.get_coqpyt_disk_cache_loc()
+        if coqpyt_cache_loc is None:
+            return
+        library_cache_loc = os.path.join(coqpyt_cache_loc, library_hash)
+        os.makedirs(coqpyt_cache_loc, exist_ok=True)
+        with open(library_cache_loc, "wb") as f:
+            pickle.dump(terms, f)
+
+    @classmethod
     def get_library(
+        cls,
         library_name: str,
         library_file: str,
         timeout: int,
@@ -190,6 +225,9 @@ class _AuxFile(object):
     ) -> Dict[str, Term]:
         with open(library_file, "r") as f:
             library_hash = hashlib.md5(f.read().encode("utf-8")).hexdigest()
+        cached_library = cls.get_from_disk_cache(library_hash)
+        if cached_library is not None:
+            return cached_library
         aux_context = _AuxFile.__load_library(
             library_name, library_file, library_hash, timeout, workspace=workspace
         )
@@ -203,6 +241,7 @@ class _AuxFile(object):
         for term in aux_context.terms.keys():
             if terms[term].text.startswith("Local"):
                 terms.pop(term)
+        cls.to_disk_cache(library_hash, terms)
         return terms
 
     @staticmethod

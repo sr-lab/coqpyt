@@ -222,12 +222,14 @@ class _AuxFile(object):
         library_file: str,
         timeout: int,
         workspace: Optional[str] = None,
+        use_disk_cache: bool = False,
     ) -> Dict[str, Term]:
         with open(library_file, "r") as f:
             library_hash = hashlib.md5(f.read().encode("utf-8")).hexdigest()
-        cached_library = cls.get_from_disk_cache(library_hash)
-        if cached_library is not None:
-            return cached_library
+        if use_disk_cache:
+            cached_library = cls.get_from_disk_cache(library_hash)
+            if cached_library is not None:
+                return cached_library
         aux_context = _AuxFile.__load_library(
             library_name, library_file, library_hash, timeout, workspace=workspace
         )
@@ -241,7 +243,8 @@ class _AuxFile(object):
         for term in aux_context.terms.keys():
             if terms[term].text.startswith("Local"):
                 terms.pop(term)
-        cls.to_disk_cache(library_hash, terms)
+        if use_disk_cache:
+            cls.to_disk_cache(library_hash, terms)
         return terms
 
     @staticmethod
@@ -255,7 +258,9 @@ class _AuxFile(object):
         return list(map(lambda line: line.strip(), libraries.split("\n")[1:-1]))
 
     @staticmethod
-    def get_coq_context(timeout: int, workspace: Optional[str] = None) -> FileContext:
+    def get_coq_context(
+        timeout: int, workspace: Optional[str] = None, use_disk_cache: bool = False
+    ) -> FileContext:
         temp_path = os.path.join(
             tempfile.gettempdir(), "aux_" + str(uuid.uuid4()).replace("-", "") + ".v"
         )
@@ -273,7 +278,11 @@ class _AuxFile(object):
                     "Locate Library", library, i + 1
                 ).split()[-1][:-1]
                 terms = _AuxFile.get_library(
-                    library, v_file, timeout, workspace=workspace
+                    library,
+                    v_file,
+                    timeout,
+                    workspace=workspace,
+                    use_disk_cache=use_disk_cache,
                 )
                 context.add_library(library, terms)
 
@@ -296,6 +305,7 @@ class ProofFile(CoqFile):
         coq_lsp: str = "coq-lsp",
         coqtop: str = "coqtop",
         error_mode: str = "strict",
+        use_disk_cache: bool = False,
     ):
         """Creates a ProofFile.
 
@@ -314,18 +324,28 @@ class ProofFile(CoqFile):
                 If "strict", an exception will be raised when an unexpected behavior occurs.
                 If "warning", a warning will be logged instead (it only applies to recoverable errors).
                 Defaults to "strict".
+            use_disk_cache (bool, optional): If True, the terms from each loaded library are stored
+                in a cache on disk. Then, when creating or manipulating future proof files, terms are
+                loaded from the cache if their corresponing library (file) has the same text.
+                Note that caching only depends on the text of the file, so if the Coq version changes,
+                or the version of coqpyt changes, the cache should be deleted.
         """
         if not os.path.isabs(file_path):
             file_path = os.path.abspath(file_path)
         super().__init__(file_path, library, timeout, workspace, coq_lsp, coqtop)
         self.__aux_file = _AuxFile(file_path, timeout=self.timeout, workspace=workspace)
         self.__error_mode = error_mode
+        self.__use_disk_cache = use_disk_cache
         self.__aux_file.didOpen()
 
         try:
             # We need to update the context already defined in the CoqFile
             self.context.update(
-                _AuxFile.get_coq_context(self.timeout, workspace=self.workspace)
+                _AuxFile.get_coq_context(
+                    self.timeout,
+                    workspace=self.workspace,
+                    use_disk_cache=self.__use_disk_cache,
+                )
             )
         except Exception as e:
             self.close()
@@ -610,7 +630,11 @@ class ProofFile(CoqFile):
                 "Locate Library", library, last_line + i + 1
             ).split()[-1][:-1]
             library_terms = _AuxFile.get_library(
-                library, library_file, self.timeout, workspace=self.workspace
+                library,
+                library_file,
+                self.timeout,
+                workspace=self.workspace,
+                use_disk_cache=self.__use_disk_cache,
             )
             self.context.add_library(library, library_terms)
 

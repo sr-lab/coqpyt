@@ -15,7 +15,7 @@ from coqpyt.coq.lsp.structs import *
 
 
 class SetupProofFile(ABC):
-    def setup(self, file_path, workspace=None):
+    def setup(self, file_path, workspace=None, use_disk_cache: bool = False):
         if workspace is not None:
             self.workspace = os.path.join(
                 tempfile.gettempdir(), "test" + str(uuid.uuid4()).replace("-", "")
@@ -37,7 +37,10 @@ class SetupProofFile(ABC):
 
         uri = "file://" + self.file_path
         self.proof_file = ProofFile(
-            self.file_path, timeout=60, workspace=self.workspace
+            self.file_path,
+            timeout=60,
+            workspace=self.workspace,
+            use_disk_cache=use_disk_cache,
         )
         self.proof_file.run()
         self.versionId = VersionedTextDocumentIdentifier(uri, 1)

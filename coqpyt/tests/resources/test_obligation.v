@@ -52,6 +52,11 @@ Program Definition id (n : nat) : { x : nat | x = n } :=
   if dec (Nat.leb n 0) then 0%nat
   else S (pred n).
 
+Program Lemma id_lemma (n : nat) : id n = n.
+Proof. destruct n; try reflexivity. Qed.
+Program Theorem id_theorem (n : nat) : id n = n.
+Proof. destruct n; try reflexivity. Qed.
+
 Module In.
 #[program]
 Definition id (n : nat) : { x : nat | x = n } :=

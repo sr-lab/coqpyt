@@ -21,6 +21,7 @@ class CoqLspClient(LspClient):
 
     __DEFAULT_INIT_OPTIONS = {
         "max_errors": 120000000,
+        "goal_after_tactic": False,
         "show_coq_info_messages": True,
     }
 

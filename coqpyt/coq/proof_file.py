@@ -453,7 +453,7 @@ class ProofFile(CoqFile):
         text = self.context.last_term.text
         raise RuntimeError(f"Unknown obligation command with tag number {tag}: {text}")
 
-    def __handle_program(
+    def __handle_obligations(
         self,
         step: Step,
         undo: bool = False,
@@ -470,11 +470,16 @@ class ProofFile(CoqFile):
             last_added = list(self.__program_context.keys())[-1]
             del self.__program_context[last_added]
 
-    def __is_program(self, step: Step):
+    def __has_obligations(self, step: Step):
         for attr in self.context.attrs(step):
             # Program commands must have this attribute
             if attr["v"][0] == "program":
-                return True
+                # FIXME: We assume that Program commands are not defined in proofs
+                # Program Definition introduces obligations, while Program Lemma
+                # enters proof mode directly, so this is how we differentiate both
+                # kinds of Program commands
+                goals = self.__goals(step.ast.range.end)
+                return not self.__in_proof(goals)
         else:
             return False
 
@@ -548,9 +553,7 @@ class ProofFile(CoqFile):
         # Avoids Tactics, Notations, Inductive...
         if self.context.term_type(step) == TermType.OTHER:
             self.__handle_proof_step(step, undo=undo)
-        if self.__is_proof_term(step) and (
-            len(self.open_proofs) > 0 if undo else self.in_proof
-        ):
+        elif self.__is_proof_term(step):
             self.__handle_proof_term(step, undo=undo)
 
     def __is_segment_delimiter(self, step: Step):
@@ -570,9 +573,9 @@ class ProofFile(CoqFile):
         # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
         if self.__is_end_proof(step):
             self.__handle_end_proof(step, undo=undo)
-        # Found Program definition
-        elif self.__is_program(step):
-            self.__handle_program(step, undo=undo)
+        # New obligations were introduced
+        elif self.__has_obligations(step):
+            self.__handle_obligations(step, undo=undo)
         # Check if proof step
         elif len(self.open_proofs) > 0 if undo else self.in_proof:
             self.__check_proof_step(step, undo=undo)
@@ -673,8 +676,8 @@ class ProofFile(CoqFile):
             # For ProofFile, we only update AuxFile and the
             # Program context, leaving other proofs as is.
             change(step().text)
-            if self.__is_program(step()):
-                self.__handle_program(step(), undo=undo)
+            if self.__has_obligations(step()):
+                self.__handle_obligations(step(), undo=undo)
 
     def __add_step(self, index: int):
         step = self.steps[index]
@@ -690,9 +693,9 @@ class ProofFile(CoqFile):
             index = self.__find_proof_index(step)
             open_index = self.__find_open_proof_index(step) - 1
             self.__handle_end_proof(step, index=index, open_index=open_index)
-        # Check if Program definition
-        elif self.__is_program(step):
-            self.__handle_program(step)
+        # Check if new obligations were introduced
+        elif self.__has_obligations(step):
+            self.__handle_obligations(step)
         # Allows to add open proofs
         elif self.__is_proof_term(step):
             # This is not outside of the ifs for performance reasons
@@ -725,9 +728,9 @@ class ProofFile(CoqFile):
             index = self.__find_proof_index(step) - 1
             open_index = self.__find_open_proof_index(step)
             self.__handle_end_proof(step, index=index, open_index=open_index, undo=True)
-        # Check if Program definition
-        elif self.__is_program(step):
-            self.__handle_program(step, undo=True)
+        # Check if new obligations were introduced
+        elif self.__has_obligations(step):
+            self.__handle_obligations(step, undo=True)
         # Handle regular proof steps
         elif optional is not None:
             proof, proof_index, i = optional
@@ -987,7 +990,7 @@ class ProofFile(CoqFile):
         if processed:
             n_steps = self.steps_taken - previous_step_index - 2
             self.__local_exec(-n_steps)  # Backtrack until added step
-            self.steps_taken -= 1  # Ignore added step while backtracking
+            self._step(-1) # Ignore added step while backtracking
             self.__local_exec()  # Execute added step
             self.__add_step(previous_step_index + 1)
             self.__local_exec(n_steps)  # Execute until starting point

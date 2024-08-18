@@ -214,9 +214,11 @@ class TestProofObligation(SetupProofFile):
     def test_obligation(self):
         # Rollback whole file (except slow import)
         self.proof_file.exec(-self.proof_file.steps_taken + 1)
+        proofs = self.proof_file.proofs
+        assert len(proofs) == 0
         self.proof_file.run()
         proofs = self.proof_file.proofs
-        assert len(proofs) == 11
+        assert len(proofs) == 13
 
         statement_context = [
             (
@@ -265,7 +267,8 @@ class TestProofObligation(SetupProofFile):
             ("Program", "id", "S (pred n)"),
         ]
 
-        for i, proof in enumerate(proofs):
+        obligations = proofs[:8] + proofs[-3:]
+        for i, proof in enumerate(obligations):
             compare_context(statement_context, proof.context)
             assert proof.text == texts[i]
             assert proof.program is not None
@@ -280,6 +283,30 @@ class TestProofObligation(SetupProofFile):
             )
             assert len(proof.steps) == 2
             assert proof.steps[0].text == "\n  dummy_tactic n e."
+
+        statement_context = [
+            (
+                "Inductive nat : Set := | O : nat | S : nat -> nat.",
+                TermType.INDUCTIVE,
+                [],
+            ),
+            ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
+            (
+                "Program Definition id (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else S (pred n).",
+                TermType.DEFINITION,
+                ["Out"],
+            )
+        ]
+        texts = [
+            "Program Lemma id_lemma (n : nat) : id n = n.",
+            "Program Theorem id_theorem (n : nat) : id n = n.",
+        ]
+        for i, proof in enumerate(proofs[8:-3]):
+            compare_context(statement_context, proof.context)
+            assert proof.text == texts[i]
+            assert proof.program is None
+            assert len(proof.steps) == 3
+            assert proof.steps[1].text == " destruct n; try reflexivity."
 
 
 class TestProofModuleType(SetupProofFile):

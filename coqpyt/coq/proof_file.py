@@ -990,7 +990,7 @@ class ProofFile(CoqFile):
         if processed:
             n_steps = self.steps_taken - previous_step_index - 2
             self.__local_exec(-n_steps)  # Backtrack until added step
-            self._step(-1) # Ignore added step while backtracking
+            self._step(-1)  # Ignore added step while backtracking
             self.__local_exec()  # Execute added step
             self.__add_step(previous_step_index + 1)
             self.__local_exec(n_steps)  # Execute until starting point

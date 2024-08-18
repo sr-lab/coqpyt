@@ -295,7 +295,7 @@ class TestProofObligation(SetupProofFile):
                 "Program Definition id (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else S (pred n).",
                 TermType.DEFINITION,
                 ["Out"],
-            )
+            ),
         ]
         texts = [
             "Program Lemma id_lemma (n : nat) : id n = n.",

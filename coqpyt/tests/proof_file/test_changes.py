@@ -563,23 +563,30 @@ class TestProofChangeObligation(SetupProofFile):
 
         # Delete unwanted steps
         proof_file.change_steps([CoqDelete(2) for _ in range(30)])
+        proof_file.change_steps([CoqDelete(4) for _ in range(8)])
         proof_file.change_steps([CoqDelete(16), CoqDelete(2)])
         proof_file.change_steps([CoqDelete(12) for _ in range(3)])
 
-        # Add a Program definition in the middle of a proof
+        # Add a Program definition
         program = (
-            "\nProgram Definition idx (n : nat) : { x : nat | x = n } :="
+            "\n\nProgram Definition idx (n : nat) : { x : nat | x = n } :="
             + "\n  if dec (Nat.leb n 0) then 0%nat"
             + "\n  else pred (S n)."
         )
-        proof_file.add_step(9, program)
+        proof_file.add_step(8, program)
+
+        # Add a Program lemma and proof
+        lemma = "\nProgram Lemma id_lemma (n : nat) : id n = n."
+        lemma_proof = ["\nProof.", " destruct n; try reflexivity.", " Qed."]
+        proof_file.add_step(9, lemma)
+        proof_file.change_steps([CoqAdd(lemma_proof[i], 10 + i) for i in range(3)])
 
         # Add a proof for each obligation of the new Program
         proof = ["\nNext Obligation.", "\n  dummy_tactic n e.", "\nQed."]
         for i, step in enumerate(proof):
-            proof_file.add_step(12 + i, step)
+            proof_file.add_step(16 + i, step)
         for i, step in enumerate(proof):
-            proof_file.add_step(15 + i, step)
+            proof_file.add_step(19 + i, step)
 
         texts = [
             "Obligation 1 of id with reflexivity.",
@@ -598,9 +605,10 @@ class TestProofChangeObligation(SetupProofFile):
         proof_file.run()
 
         # Check the proofs
-        assert len(proof_file.proofs) == 4
+        assert len(proof_file.proofs) == 5
         assert len(proof_file.open_proofs) == 0
-        for i, proof in enumerate(proof_file.proofs):
+        proofs = proof_file.proofs[:1] + proof_file.proofs[2:]
+        for i, proof in enumerate(proofs):
             assert proof.text == texts[i]
             assert proof.program is not None
             assert (
@@ -614,11 +622,16 @@ class TestProofChangeObligation(SetupProofFile):
             )
             assert len(proof.steps) == 2
             assert proof.steps[0].text == "\n  dummy_tactic n e."
+        assert proof_file.proofs[1].text == lemma[1:]
+        assert proof_file.proofs[1].program is None
+        for i, step in enumerate(proof_file.proofs[1].steps):
+            assert lemma_proof[i] == step.text
 
-        # Delete new Program and last Next Obligation proof
+        # Delete last Next Obligation proof
         for i in range(3):
             proof_file.delete_step(proof_file.steps_taken - 1)
-        proof_file.delete_step(10)
+        # Delete new Program definition and new Program lemma and proof
+        proof_file.change_steps([CoqDelete(9) for _ in range(5)])
 
         # Check the proofs
         assert len(proof_file.proofs) == 3

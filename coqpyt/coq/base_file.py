@@ -259,8 +259,8 @@ class CoqFile(object):
         start_line = lines[prev_step_end.line]
         end_line = lines[step.ast.range.end.line]
 
-        start_line = start_line[: prev_step_end.character]
         end_line = end_line[step.ast.range.end.character :]
+        start_line = start_line[: prev_step_end.character]
 
         if prev_step_end.line == step.ast.range.end.line:
             lines[prev_step_end.line] = start_line + end_line
@@ -303,17 +303,20 @@ class CoqFile(object):
 
         deleted_lines = deleted_step.text.count("\n")
         last_line_chars = deleted_step.ast.range.end.character
+        last_line_offset = 0
         if deleted_step.ast.range.start.line == prev_step_end.line:
             last_line_chars -= prev_step_end.character
+        else:
+            last_line_offset = prev_step_end.character
 
         for step in self.steps[step_index:]:
             step.ast.range.start.line -= deleted_lines
             step.ast.range.end.line -= deleted_lines
 
             if step.ast.range.start.line == deleted_step.ast.range.end.line:
-                step.ast.range.start.character -= last_line_chars
+                step.ast.range.start.character -= last_line_chars - last_line_offset
             if step.ast.range.end.line == deleted_step.ast.range.end.line:
-                step.ast.range.end.character -= last_line_chars
+                step.ast.range.end.character -= last_line_chars - last_line_offset
 
     def __add_update_ast(self, previous_step_index: int, step_text: str) -> Step:
         prev_step_end = self.steps[previous_step_index].ast.range.end

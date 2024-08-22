@@ -225,7 +225,8 @@ class _AuxFile(object):
         use_disk_cache: bool = False,
     ) -> Dict[str, Term]:
         with open(library_file, "r") as f:
-            library_hash = hashlib.md5(f.read().encode("utf-8")).hexdigest()
+            contents_to_hash = library_name + library_file + str(workspace) + f.read()
+            library_hash = hashlib.md5(contents_to_hash.encode("utf-8")).hexdigest()
         if use_disk_cache:
             cached_library = cls.get_from_disk_cache(library_hash)
             if cached_library is not None:

@@ -59,9 +59,19 @@ class TestCache:
             cache3_terms = pf.context.terms.copy()
             cache3_libs = pf.context.libraries.copy()
 
+        with ProofFile(
+            "tests/resources/test_imports_copy/test_import.v",
+            workspace="tests/resources/test_import_copy/",
+            use_disk_cache=True,
+        ) as pf:
+            pf.run()
+            cache4_terms = pf.context.terms.copy()
+            cache4_libs = pf.context.libraries.copy()
+
         assert self.term_files_eq(no_cache_terms, cache1_terms)
         assert self.term_files_eq(cache1_terms, cache2_terms)
         assert not self.term_files_eq(cache2_terms, cache3_terms)
+        assert self.term_files_eq(cache3_terms, cache4_terms)
 
 
 if __name__ == "__main__":

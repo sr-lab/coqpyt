@@ -1,5 +1,4 @@
 from utility import *
-import ipdb
 
 from coqpyt.coq.structs import Term
 from coqpyt.coq.proof_file import ProofFile

@@ -5,7 +5,6 @@ from coqpyt.coq.proof_file import ProofFile
 
 
 class TestCache:
-
     @staticmethod
     def term_files_eq(terms1: dict[str, Term], terms2: dict[str, Term]) -> bool:
         if len(terms1) != len(terms2):

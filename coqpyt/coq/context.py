@@ -326,7 +326,7 @@ class FileContext:
                     return ids[0][1][1]
                 elif args[1] == "ident":
                     return ids[1]
-            elif args[0] == "ListArg":
+            elif args[0] == "ListArg" and len(ids) > 0:
                 # FIXME: This recursive case works when the list is of length 1,
                 # but it should be generalized to handle any length.
                 return handle_arg_type(args[1], ids[0])

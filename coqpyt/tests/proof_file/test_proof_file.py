@@ -120,6 +120,28 @@ class TestProofUnknownNotation(SetupProofFile):
             assert self.proof_file.context.get_notation("{ _ }", "")
 
 
+class TestProofNthLocate(SetupProofFile):
+    def setup_method(self, method):
+        self.setup("test_nth_locate.v")
+
+    def test_nth_locate(self):
+        """Checks if it is able to handle notations that are not the first result
+        returned by the Locate command.
+        """
+        proof_file = self.proof_file
+        assert len(proof_file.proofs) == 1
+        proof = proof_file.proofs[0]
+
+        theorem = "Lemma test : <> = <>."
+        assert proof.text == theorem
+
+        statement_context = [
+            ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
+            ('Notation "<>" := BAnon : binder_scope.', TermType.NOTATION, []),
+        ]
+        compare_context(statement_context, proof.context)
+
+
 class TestProofNestedProofs(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_nested_proofs.v")

@@ -320,16 +320,11 @@ class FileContext:
         # FIXME: This method should be made private once [__get_program_context]
         # is extracted from ProofFile to here.
         def handle_arg_type(args, ids):
-            # FIXME: Other options for arg[0] are "OptArg" and "PairArg".
             if args[0] == "ExtraArg":
                 if args[1] == "identref":
                     return ids[0][1][1]
                 elif args[1] == "ident":
                     return ids[1]
-            elif args[0] == "ListArg" and len(ids) > 0:
-                # FIXME: This recursive case works when the list is of length 1,
-                # but it should be generalized to handle any length.
-                return handle_arg_type(args[1], ids[0])
             return None
 
         if len(el) == 3 and el[0] == "GenArg" and el[1][0] == "Rawwit":

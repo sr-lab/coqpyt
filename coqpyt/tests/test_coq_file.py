@@ -280,6 +280,17 @@ def test_derive(setup, teardown):
         )
 
 
+@pytest.mark.parametrize("setup", ["test_equations.v"], indirect=True)
+def test_derive(setup, teardown):
+    coq_file.run()
+    assert len(coq_file.context.terms) == 0
+    assert coq_file.context.last_term is not None
+    assert (
+        coq_file.context.last_term.text
+        == "Equations? f (n : nat) : nat := f 0 := 42 ; f (S m) with f m := { f (S m) IH := _ }."
+    )
+
+
 def test_space_in_path():
     # This test exists because coq-lsp encodes spaces in paths as %20
     # This causes the diagnostics to be saved in a different path than the one

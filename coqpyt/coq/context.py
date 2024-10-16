@@ -111,7 +111,9 @@ class FileContext:
                 name = FileContext.get_ident(arg)
                 if name is not None:
                     self.__add_term(name, step, term_type)
-        elif term_type == TermType.OBLIGATION:
+        elif term_type in [TermType.OBLIGATION, TermType.EQUATION]:
+            # FIXME: For Equations, we are unable of getting terms from the AST
+            # but these commands do generate named terms
             self.__last_terms[-1].append(
                 ("", Term(step, term_type, self.__path, self.__segments.modules[:]))
             )

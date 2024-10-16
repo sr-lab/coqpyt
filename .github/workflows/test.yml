@@ -12,11 +12,11 @@ jobs:
     strategy:
       matrix:
         ocaml-compiler:
-          - "4.11"
+          - "5.2.0"
         coq-version:
           - "8.17.1"
           - "8.18.0"
-          - "8.19.1"
+          - "8.19.2"
 
     steps:
     - name: Checkout
@@ -40,8 +40,8 @@ jobs:
           /home/runner/work/coqpyt/coqpyt/_opam/
         key: ${{ matrix.ocaml-compiler }}-${{ matrix.coq-version }}-opam
 
-    - name: Set-up OCaml ${{ matrix.ocaml-compiler }}
-      uses: ocaml/setup-ocaml@v2
+    - name: Set-up OCaml
+      uses: ocaml/setup-ocaml@v3
       with:
         ocaml-compiler: ${{ matrix.ocaml-compiler }}
 

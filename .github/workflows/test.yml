@@ -51,6 +51,11 @@ jobs:
         opam pin add coq ${{ matrix.coq-version }}
         opam install coq-lsp
 
+    - name: Install coq-equations
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        opam install coq-equations
+
     - name: Install coqpyt
       run: |
         pip install -e .

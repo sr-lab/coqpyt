@@ -36,6 +36,7 @@ class TermType(Enum):
     SETOID = 22
     FUNCTION = 23
     DERIVE = 24
+    EQUATION = 25
     OTHER = 100
 
 

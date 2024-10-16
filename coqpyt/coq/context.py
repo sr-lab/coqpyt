@@ -107,12 +107,13 @@ class FileContext:
                 self.__anonymous_id += 1
             self.__add_term(name, step, term_type)
         elif term_type == TermType.DERIVE:
-            name = FileContext.get_ident(expr[2][0])
-            self.__add_term(name, step, term_type)
-            if self.__ext_entry(expr[1]) == "Derive":
-                prop = FileContext.get_ident(expr[2][2])
-                self.__add_term(prop, step, term_type)
-        elif term_type == TermType.OBLIGATION:
+            for arg in expr[2]:
+                name = FileContext.get_ident(arg)
+                if name is not None:
+                    self.__add_term(name, step, term_type)
+        elif term_type in [TermType.OBLIGATION, TermType.EQUATION]:
+            # FIXME: For Equations, we are unable of getting terms from the AST
+            # but these commands do generate named terms
             self.__last_terms[-1].append(
                 ("", Term(step, term_type, self.__path, self.__segments.modules[:]))
             )
@@ -241,12 +242,15 @@ class FileContext:
             return TermType.FIXPOINT
         if expr[0] == "VernacScheme":
             return TermType.SCHEME
+        # FIXME: These are plugins and should probably be handled differently
         if self.__is_extend(expr, "Obligations"):
             return TermType.OBLIGATION
         if self.__is_extend(expr, "VernacDeclareTacticDefinition"):
             return TermType.TACTIC
         if self.__is_extend(expr, "Function"):
             return TermType.FUNCTION
+        if self.__is_extend(expr, "Define_equations", exact=False):
+            return TermType.EQUATION
         if self.__is_extend(expr, "Derive", exact=False):
             return TermType.DERIVE
         if self.__is_extend(expr, "AddSetoid", exact=False):
@@ -294,6 +298,16 @@ class FileContext:
         return res
 
     @staticmethod
+    def is_id(el) -> bool:
+        return isinstance(el, list) and (len(el) == 3 and el[0] == "Ser_Qualid")
+
+    @staticmethod
+    def is_notation(el) -> bool:
+        return isinstance(el, list) and (
+            len(el) == 4 and el[0] == "CNotation" and el[2][1] != ""
+        )
+
+    @staticmethod
     def get_id(id: List) -> Optional[str]:
         # FIXME: This should be made private once [__step_context] is extracted
         # from ProofFile to here.
@@ -305,18 +319,18 @@ class FileContext:
 
     @staticmethod
     def get_ident(el: List) -> Optional[str]:
-        # FIXME: This should be made private once [__get_program_context] is extracted
-        # from ProofFile to here.
-        if (
-            len(el) == 3
-            and el[0] == "GenArg"
-            and el[1][0] == "Rawwit"
-            and el[1][1][0] == "ExtraArg"
-        ):
-            if el[1][1][1] == "identref":
-                return el[2][0][1][1]
-            elif el[1][1][1] == "ident":
-                return el[2][1]
+        # FIXME: This method should be made private once [__get_program_context]
+        # is extracted from ProofFile to here.
+        def handle_arg_type(args, ids):
+            if args[0] == "ExtraArg":
+                if args[1] == "identref":
+                    return ids[0][1][1]
+                elif args[1] == "ident":
+                    return ids[1]
+            return None
+
+        if len(el) == 3 and el[0] == "GenArg" and el[1][0] == "Rawwit":
+            return handle_arg_type(el[1][1], el[2])
         return None
 
     @staticmethod
@@ -545,6 +559,19 @@ class FileContext:
             if curr_name in self.__terms:
                 return self.__terms[curr_name][-1]
         return None
+
+    @staticmethod
+    def get_notation_scope(notation: str) -> str:
+        """Get the scope of a notation.
+        Args:
+            notation (str): Possibly scoped notation pattern. E.g. "_ + _ : nat_scope".
+
+        Returns:
+            str: The scope of the notation. E.g. "nat_scope".
+        """
+        if notation.split(":")[-1].endswith("_scope"):
+            return notation.split(":")[-1].strip()
+        return ""
 
     def get_notation(self, notation: str, scope: str) -> Term:
         """Get a notation from the context.

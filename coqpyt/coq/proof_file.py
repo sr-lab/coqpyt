@@ -313,7 +313,7 @@ class ProofFile(CoqFile):
         Args:
             file_path (str): Path of the Coq file.
             library (Optional[str], optional): The library of the file. Defaults to None.
-            timeout (int, optional): Timeout used in coq-lsp. Defaults to 2.
+            timeout (int, optional): Timeout used in coq-lsp. Defaults to 30.
             workspace (Optional[str], optional): Absolute path for the workspace.
                 If the workspace is not defined, the workspace is equal to the
                 path of the file.
@@ -372,42 +372,44 @@ class ProofFile(CoqFile):
             raise e
 
     def __locate(self, search, line):
-        nots = self.__aux_file.get_diagnostics("Locate", f'"{search}"', line).split(
-            "\n"
-        )
-        fun = lambda x: x.endswith("(default interpretation)")
-        return nots[0][:-25] if fun(nots[0]) else nots[0]
+        located = self.__aux_file.get_diagnostics("Locate", f'"{search}"', line)
+        trim = lambda x: x[:-25] if x.endswith("(default interpretation)") else x
+        return list(map(trim, located.split("\n")))
 
     def __step_context(self, step: Step) -> List[Term]:
         stack, res = self.context.expr(step)[:0:-1], []
         while len(stack) > 0:
             el = stack.pop()
-            if isinstance(el, list) and len(el) == 3 and el[0] == "Ser_Qualid":
+            if FileContext.is_id(el):
                 term = self.context.get_term(FileContext.get_id(el))
                 if term is not None and term not in res:
                     res.append(term)
-            elif isinstance(el, list) and len(el) == 4 and el[0] == "CNotation":
+            elif FileContext.is_notation(el):
+                stack.append(el[1:])
+
+                notation_name = el[2][1]
                 line = len(self.__aux_file.read().split("\n"))
-                self.__aux_file.append(f'\nLocate "{el[2][1]}".')
+                self.__aux_file.append(f'\nLocate "{notation_name}".')
                 self.__aux_file.didChange()
+                notations = self.__locate(notation_name, line)
+                if len(notations) == 1 and notations[0] == "Unknown notation":
+                    continue
 
-                notation_name, scope = el[2][1], ""
-                notation = self.__locate(notation_name, line)
-                if notation.split(":")[-1].endswith("_scope"):
-                    scope = notation.split(":")[-1].strip()
-
-                if notation != "Unknown notation":
+                for notation in notations:
+                    scope = FileContext.get_notation_scope(notation)
                     try:
                         term = self.context.get_notation(notation_name, scope)
                         if term not in res:
                             res.append(term)
-                    except NotationNotFoundException as e:
-                        if self.__error_mode == "strict":
-                            raise e
-                        else:
-                            logging.warning(str(e))
-
-                stack.append(el[1:])
+                        break
+                    except NotationNotFoundException:
+                        continue
+                else:
+                    e = NotationNotFoundException(notation_name)
+                    if self.__error_mode == "strict":
+                        raise e
+                    else:
+                        logging.warning(str(e))
             elif isinstance(el, list):
                 for v in reversed(el):
                     if isinstance(v, (dict, list)):

@@ -69,7 +69,7 @@ jobs:
       run: |
         eval $(opam env)
         cd coqpyt
-        pytest tests -s
+        pytest tests -s --runextra
 
     - name: Save opam
       id: cache-opam-save

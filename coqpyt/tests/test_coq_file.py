@@ -280,8 +280,9 @@ def test_derive(setup, teardown):
         )
 
 
+@pytest.mark.extra
 @pytest.mark.parametrize("setup", ["test_equations.v"], indirect=True)
-def test_derive(setup, teardown):
+def test_equations(setup, teardown):
     coq_file.run()
     assert len(coq_file.context.terms) == 0
     assert coq_file.context.last_term is not None

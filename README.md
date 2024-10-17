@@ -189,9 +189,17 @@ with ProofFile(os.path.join(os.getcwd(), "examples/readme.v")) as proof_file:
 
 ## Tests
 
-To run the tests for CoqPyt go to the folder ``coqpyt`` and run:
+To run the core tests for CoqPyt go to the folder ``coqpyt`` and run:
 ```bash
-pytest tests -s
+pytest tests -rs
+```
+
+Skipped tests require the following external Coq libraries to run successfully:
+- [Coq-Equations](https://github.com/mattam82/Coq-Equations)
+
+To run all tests go to the folder ``coqpyt`` and run:
+```bash
+pytest tests -rs --runextra
 ```
 
 ## Contributing

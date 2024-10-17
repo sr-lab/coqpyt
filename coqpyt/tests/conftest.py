@@ -3,7 +3,10 @@ import pytest
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--runextra", action="store_true", default=False, help="run extra tests from external libraries"
+        "--runextra",
+        action="store_true",
+        default=False,
+        help="run extra tests from external libraries",
     )
 
 
@@ -18,4 +21,3 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "extra" in item.keywords:
             item.add_marker(skip_extra)
-

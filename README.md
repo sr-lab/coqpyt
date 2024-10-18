@@ -4,6 +4,20 @@ Interact with Coq files and navigate through your proofs using our Python client
 
 Execute Coq files, retrieve the generated context and edit proofs through insertion and removal of steps.
 
+If you use CoqPyt in an article, please cite:
+
+[CoqPyt: Proof Navigation in Python in the Era of LLMs](https://doi.org/10.1145/3663529.3663814)
+
+```
+@inproceedings{carrott2024coqpyt,
+  title={CoqPyt: Proof Navigation in Python in the Era of LLMs},
+  author={Carrott, Pedro and Saavedra, Nuno and Thompson, Kyle and Lerner, Sorin and Ferreira, Jo{\~a}o F and First, Emily},
+  booktitle={Companion Proceedings of the 32nd ACM International Conference on the Foundations of Software Engineering},
+  pages={637--641},
+  year={2024}
+}
+```
+
 ## Installation
 
 [coq-lsp](https://github.com/ejgallego/coq-lsp) must be installed on version >= 0.1.7. Follow the installation instructions provided [here](https://github.com/ejgallego/coq-lsp#%EF%B8%8F-installation).

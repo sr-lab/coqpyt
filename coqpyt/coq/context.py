@@ -489,9 +489,60 @@ class FileContext:
             step (Step): The step to be processed.
 
         Returns:
-            List: The term type of the step.
+            TermType: The term type of the step.
         """
         return self.__term_type(self.expr(step))
+
+    def is_proof_term(self, step: Step) -> bool:
+        """
+        Args:
+            step (Step): The step to be processed.
+
+        Returns:
+            bool: Whether the step introduces a new proof term.
+        """
+        term_type = self.term_type(step)
+        # Assume that terms of the following types do not introduce new proofs
+        # FIXME: Should probably check if goals were changed
+        return term_type not in [
+            TermType.TACTIC,
+            TermType.NOTATION,
+            TermType.INDUCTIVE,
+            TermType.COINDUCTIVE,
+            TermType.RECORD,
+            TermType.CLASS,
+            TermType.SCHEME,
+            TermType.VARIANT,
+            TermType.OTHER,
+        ]
+
+    def is_end_proof(self, step: Step) -> bool:
+        """
+        Args:
+            step (Step): The step to be processed.
+
+        Returns:
+            bool: Whether the step closes an open proof term.
+        """
+        # FIXME: Refer to issue #55: https://github.com/sr-lab/coqpyt/issues/55
+        expr = self.expr(step)[0]
+        return expr in ["VernacEndProof", "VernacExactProof", "VernacAbort"]
+
+    def is_segment_delimiter(self, step: Step) -> bool:
+        """
+        Args:
+            step (Step): The step to be processed.
+
+        Returns:
+            bool: Whether the step delimits a segment (module or section).
+        """
+        expr = self.expr(step)[0]
+        return expr in [
+            "VernacEndSegment",
+            "VernacDefineModule",
+            "VernacDeclareModuleType",
+            "VernacBeginSection",
+        ]
 
     def update(self, context: Union["FileContext", Dict[str, Term]] = {}):
         """Updates the context with new terms.

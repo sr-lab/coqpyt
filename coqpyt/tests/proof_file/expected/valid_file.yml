@@ -185,7 +185,7 @@ proofs:
           end:
             line: 25
             character: 16
-      - text: "\n  Defined."
+      - text: "\n  Abort."
         goals:
           position:
             line: 26
@@ -196,7 +196,7 @@ proofs:
             character: 2
           end:
             line: 26
-            character: 10
+            character: 8
     context:
       - "8.19.x":
           text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 10, x binder, y binder, P at level 200, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
@@ -275,7 +275,7 @@ proofs:
         context:
           - text: "Ltac reduce_eq := simpl; reflexivity."
             type: TACTIC
-      - text: "\n    Qed."
+      - text: "\n    Defined."
         goals:
           position:
             line: 38

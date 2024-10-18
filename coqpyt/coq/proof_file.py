@@ -533,48 +533,21 @@ class ProofFile(CoqFile):
                 index, ProofTerm(proof_term, statement_context, [], program)
             )
 
-    def __is_proof_term(self, step: Step):
-        term_type = self.context.term_type(step)
-        # Assume that terms of the following types do not introduce new proofs
-        # FIXME: Should probably check if goals were changed
-        return term_type not in [
-            TermType.TACTIC,
-            TermType.NOTATION,
-            TermType.INDUCTIVE,
-            TermType.COINDUCTIVE,
-            TermType.RECORD,
-            TermType.CLASS,
-            TermType.SCHEME,
-            TermType.VARIANT,
-            TermType.OTHER,
-        ]
-
-    def __is_end_proof(self, step: Step):
-        return self.context.expr(step)[0] in ["VernacEndProof", "VernacExactProof"]
-
     def __check_proof_step(self, step: Step, undo: bool = False):
         # Avoids Tactics, Notations, Inductive...
         if self.context.term_type(step) == TermType.OTHER:
             self.__handle_proof_step(step, undo=undo)
-        elif self.__is_proof_term(step):
+        elif self.context.is_proof_term(step):
             self.__handle_proof_term(step, undo=undo)
-
-    def __is_segment_delimiter(self, step: Step):
-        return self.context.expr(step)[0] in [
-            "VernacEndSegment",
-            "VernacDefineModule",
-            "VernacDeclareModuleType",
-            "VernacBeginSection",
-        ]
 
     def __step(self, step: Step, undo: bool):
         file_change = self.__aux_file.truncate if undo else self.__aux_file.append
         file_change(step.text)
         # Ignore segment delimiters because it affects Program handling
-        if self.__is_segment_delimiter(step):
+        if self.context.is_segment_delimiter(step):
             return
         # Found [Qed]/[Defined]/[Admitted] or [Proof <exact>.]
-        if self.__is_end_proof(step):
+        if self.context.is_end_proof(step):
             self.__handle_end_proof(step, undo=undo)
         # New obligations were introduced
         elif self.__has_obligations(step):
@@ -685,12 +658,12 @@ class ProofFile(CoqFile):
     def __add_step(self, index: int):
         step = self.steps[index]
         # Ignore segment delimiters because it affects Program handling
-        if self.__is_segment_delimiter(step):
+        if self.context.is_segment_delimiter(step):
             pass
 
         optional = self.__find_step(self.steps[index - 1].ast.range)
         # Handles case where Qed is added
-        if self.__is_end_proof(step):
+        if self.context.is_end_proof(step):
             # This is not outside of the ifs for performance reasons
             goals = self.__goals(step.ast.range.end)
             index = self.__find_proof_index(step)
@@ -700,7 +673,7 @@ class ProofFile(CoqFile):
         elif self.__has_obligations(step):
             self.__handle_obligations(step)
         # Allows to add open proofs
-        elif self.__is_proof_term(step):
+        elif self.context.is_proof_term(step):
             # This is not outside of the ifs for performance reasons
             goals = self.__goals(step.ast.range.end)
             if self.__in_proof(goals):
@@ -722,12 +695,12 @@ class ProofFile(CoqFile):
 
     def __delete_step(self, step: Step):
         # Ignore segment delimiters because it affects Program handling
-        if self.__is_segment_delimiter(step):
+        if self.context.is_segment_delimiter(step):
             return
 
         optional = self.__find_step(step.ast.range)
         # Handles case where Qed is deleted
-        if self.__is_end_proof(step):
+        if self.context.is_end_proof(step):
             index = self.__find_proof_index(step) - 1
             open_index = self.__find_open_proof_index(step)
             self.__handle_end_proof(step, index=index, open_index=open_index, undo=True)
@@ -816,7 +789,7 @@ class ProofFile(CoqFile):
         if len(proof.steps) == 0:
             return False
         return (
-            self.__is_end_proof(proof.steps[-1].step)
+            self.context.is_end_proof(proof.steps[-1].step)
             and "Admitted" not in proof.steps[-1].step.short_text
         )
 

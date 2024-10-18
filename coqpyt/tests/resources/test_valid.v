@@ -24,7 +24,7 @@ Section Random.
     rewrite -> (plus_O_n (S n * m)).
     Compute True /\ True.
     reflexivity.
-  Defined.
+  Abort.
 End Random.
 
 Module Extra.
@@ -36,7 +36,7 @@ Module Extra.
       Compute mk_example n n.
       Compute Out.In.plus_O_n.
       reduce_eq.
-    Qed.
+    Defined.
   End Fst.
 
   Module Snd.

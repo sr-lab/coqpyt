@@ -3,7 +3,7 @@ import shutil
 import uuid
 import tempfile
 from copy import deepcopy
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from coqpyt.lsp.structs import (
     TextDocumentItem,
@@ -43,6 +43,7 @@ class CoqFile(object):
         timeout: int = 30,
         workspace: Optional[str] = None,
         coq_lsp: str = "coq-lsp",
+        coq_lsp_options: Tuple[str] = None,
         coqtop: str = "coqtop",
     ):
         """Creates a CoqFile.
@@ -67,7 +68,7 @@ class CoqFile(object):
             uri = f"file://{workspace}"
         else:
             uri = f"file://{self._path}"
-        self.coq_lsp_client = CoqLspClient(uri, timeout=timeout, coq_lsp=coq_lsp)
+        self.coq_lsp_client = CoqLspClient(uri, timeout=timeout, coq_lsp_options=coq_lsp_options, coq_lsp=coq_lsp)
         uri = f"file://{self._path}"
         text = self.__read()
 

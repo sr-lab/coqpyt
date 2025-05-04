@@ -72,7 +72,7 @@ class CoqLspClient(LspClient):
         else:
             hasDOption = False
             for option in coq_lsp_options:
-                if option.startswith('-D'):
+                if option.startswith("-D"):
                     hasDOption = True
                     break
             if not hasDOption:

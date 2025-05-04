@@ -68,7 +68,9 @@ class CoqFile(object):
             uri = f"file://{workspace}"
         else:
             uri = f"file://{self._path}"
-        self.coq_lsp_client = CoqLspClient(uri, timeout=timeout, coq_lsp_options=coq_lsp_options, coq_lsp=coq_lsp)
+        self.coq_lsp_client = CoqLspClient(
+            uri, timeout=timeout, coq_lsp_options=coq_lsp_options, coq_lsp=coq_lsp
+        )
         uri = f"file://{self._path}"
         text = self.__read()
 

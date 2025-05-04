@@ -42,7 +42,9 @@ class _AuxFile(object):
             uri = f"file://{workspace}"
         else:
             uri = f"file://{self.path}"
-        self.coq_lsp_client = CoqLspClient(uri, coq_lsp_options=coq_lsp_options, timeout=timeout)
+        self.coq_lsp_client = CoqLspClient(
+            uri, coq_lsp_options=coq_lsp_options, timeout=timeout
+        )
 
     def __enter__(self):
         return self
@@ -168,12 +170,16 @@ class _AuxFile(object):
         library_file: str,
         library_hash: str,
         timeout: int,
-        coq_lsp_options: Tuple[str]=None,
+        coq_lsp_options: Tuple[str] = None,
         workspace: Optional[str] = None,
     ):
         # NOTE: the library_hash attribute is only used for the LRU cache
         coq_file = CoqFile(
-            library_file, workspace=workspace, coq_lsp_options=coq_lsp_options, library=library_name, timeout=timeout
+            library_file,
+            workspace=workspace,
+            coq_lsp_options=coq_lsp_options,
+            library=library_name,
+            timeout=timeout,
         )
         coq_file.run()
         context = coq_file.context
@@ -223,7 +229,7 @@ class _AuxFile(object):
         library_name: str,
         library_file: str,
         timeout: int,
-        coq_lsp_options : Tuple[str],
+        coq_lsp_options: Tuple[str],
         workspace: Optional[str] = None,
         use_disk_cache: bool = False,
     ) -> Dict[str, Term]:
@@ -234,12 +240,14 @@ class _AuxFile(object):
             cached_library = cls.get_from_disk_cache(library_hash)
             if cached_library is not None:
                 return cached_library
-        aux_context = _AuxFile.__load_library(library_name,
-                                              library_file,
-                                              library_hash,
-                                              timeout,
-                                              coq_lsp_options,
-                                              workspace=workspace)
+        aux_context = _AuxFile.__load_library(
+            library_name,
+            library_file,
+            library_hash,
+            timeout,
+            coq_lsp_options,
+            workspace=workspace,
+        )
         # FIXME: we ignore the usage of "Local" from imported files to
         # simplify the implementation. However, they can be used:
         # https://coq.inria.fr/refman/language/core/modules.html?highlight=local#coq:attr.local
@@ -265,16 +273,19 @@ class _AuxFile(object):
         return list(map(lambda line: line.strip(), libraries.split("\n")[1:-1]))
 
     @staticmethod
-    def get_coq_context(timeout: int,
-                        workspace: Optional[str] = None,
-                        use_disk_cache: bool = False,
-                        coq_lsp_options: Tuple[str] = None
-                        ) -> FileContext:
+    def get_coq_context(
+        timeout: int,
+        workspace: Optional[str] = None,
+        use_disk_cache: bool = False,
+        coq_lsp_options: Tuple[str] = None,
+    ) -> FileContext:
         temp_path = os.path.join(
             tempfile.gettempdir(), "aux_" + str(uuid.uuid4()).replace("-", "") + ".v"
         )
 
-        with _AuxFile(file_path=temp_path, coq_lsp_options=coq_lsp_options, timeout=timeout) as aux_file:
+        with _AuxFile(
+            file_path=temp_path, coq_lsp_options=coq_lsp_options, timeout=timeout
+        ) as aux_file:
             aux_file.didOpen()
             libraries = _AuxFile.get_libraries(aux_file)
             for library in libraries:
@@ -283,13 +294,17 @@ class _AuxFile(object):
 
             context = FileContext(temp_path)
             for i, library in enumerate(libraries):
-                v_file = aux_file.get_diagnostics("Locate Library", library, i + 1).split()[-1][:-1]
-                terms = _AuxFile.get_library(library,
-                                             v_file,
-                                             timeout,
-                                             workspace=workspace,
-                                             use_disk_cache=use_disk_cache,
-                                             coq_lsp_options=coq_lsp_options)
+                v_file = aux_file.get_diagnostics(
+                    "Locate Library", library, i + 1
+                ).split()[-1][:-1]
+                terms = _AuxFile.get_library(
+                    library,
+                    v_file,
+                    timeout,
+                    workspace=workspace,
+                    use_disk_cache=use_disk_cache,
+                    coq_lsp_options=coq_lsp_options,
+                )
                 context.add_library(library, terms)
 
         return context
@@ -309,7 +324,7 @@ class ProofFile(CoqFile):
         timeout: int = 30,
         workspace: Optional[str] = None,
         coq_lsp: str = "coq-lsp",
-        coq_lsp_options : Tuple[str] = None,
+        coq_lsp_options: Tuple[str] = None,
         coqtop: str = "coqtop",
         error_mode: str = "strict",
         use_disk_cache: bool = False,
@@ -339,14 +354,21 @@ class ProofFile(CoqFile):
         """
         if not os.path.isabs(file_path):
             file_path = os.path.abspath(file_path)
-        super().__init__(file_path,
-                         library=library,
-                         timeout=timeout,
-                         workspace=workspace,
-                         coq_lsp=coq_lsp,
-                         coqtop=coqtop,
-                         coq_lsp_options=coq_lsp_options)
-        self.__aux_file = _AuxFile(file_path, timeout=self.timeout, coq_lsp_options=coq_lsp_options, workspace=workspace)
+        super().__init__(
+            file_path,
+            library=library,
+            timeout=timeout,
+            workspace=workspace,
+            coq_lsp=coq_lsp,
+            coqtop=coqtop,
+            coq_lsp_options=coq_lsp_options,
+        )
+        self.__aux_file = _AuxFile(
+            file_path,
+            timeout=self.timeout,
+            coq_lsp_options=coq_lsp_options,
+            workspace=workspace,
+        )
         self.__error_mode = error_mode
         self.__use_disk_cache = use_disk_cache
         self.__aux_file.didOpen()
@@ -626,7 +648,7 @@ class ProofFile(CoqFile):
                 library,
                 library_file,
                 self.timeout,
-                tuple(self.__coq_lsp_options),
+                self.__coq_lsp_options,
                 workspace=self.workspace,
                 use_disk_cache=self.__use_disk_cache,
             )

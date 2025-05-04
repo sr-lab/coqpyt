@@ -31,7 +31,7 @@ class CoqLspClient(LspClient):
         timeout: int = 30,
         memory_limit: int = 2097152,
         coq_lsp: str = "coq-lsp",
-        coq_lsp_options: str = "-D 0",
+        coq_lsp_options: Tuple[str] = None,
         init_options: Dict = __DEFAULT_INIT_OPTIONS,
     ):
         """Creates a CoqLspClient
@@ -63,9 +63,21 @@ class CoqLspClient(LspClient):
         self.file_progress: Dict[str, List[CoqFileProgressParams]] = {}
 
         if sys.platform.startswith("linux"):
-            command = f"ulimit -v {memory_limit}; {coq_lsp} {coq_lsp_options}"
+            command = f"ulimit -v {memory_limit}; {coq_lsp}"
         else:
-            command = f"{coq_lsp} {coq_lsp_options}"
+            command = f"{coq_lsp}"
+
+        if coq_lsp_options is None:
+            command += " -D 0"
+        else:
+            hasDOption = False
+            for option in coq_lsp_options:
+                if option.startswith("-D"):
+                    hasDOption = True
+                    break
+            if not hasDOption:
+                command += " -D 0"
+            command += " " + " ".join(coq_lsp_options)
 
         proc = subprocess.Popen(
             command,

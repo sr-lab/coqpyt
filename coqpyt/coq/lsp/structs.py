@@ -109,6 +109,7 @@ class GoalAnswer(object):
         goals: Optional[GoalConfig] = None,
         error: Any = None,
         program: List = [],
+        range: Range = None,
     ):
         self.textDocument = textDocument
         self.position = position
@@ -116,6 +117,7 @@ class GoalAnswer(object):
         self.goals = goals
         self.error = error
         self.program = program
+        self.range = range
 
     def __repr__(self):
         res = "\n"

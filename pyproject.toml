@@ -1,0 +1,15 @@
+[project]
+name = "coqpyt"
+version = "0.0.1"
+description = "CoqPyt: a Python client for coq-lsp"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "packaging>=25.0",
+    "pyyaml==6.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==7.3.1",
+]

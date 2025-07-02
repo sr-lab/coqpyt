@@ -20,14 +20,22 @@ If you use CoqPyt in an article, please cite:
 
 ## Installation
 
+[Python](https://www.python.org/) must be installed on version >= 3.11.
+
 [coq-lsp](https://github.com/ejgallego/coq-lsp) must be installed on version >= 0.1.7. Follow the installation instructions provided [here](https://github.com/ejgallego/coq-lsp#%EF%B8%8F-installation).
 
 ```bash
 pip install -r requirements.txt
+python -m pip install -e .
 ```
 
+### uv installation
+
+In alternative, use [uv](https://github.com/astral-sh/uv) to setup the project and create a virtual environment.
+
 ```bash
-python -m pip install -e .
+uv sync --dev
+uv pip install -e .
 ```
 
 ## Usage

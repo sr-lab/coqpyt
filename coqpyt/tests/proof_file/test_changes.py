@@ -23,12 +23,16 @@ class TestProofValidFile(SetupProofFile):
             if i != len(test_proofs["proofs"][0]["steps"]) - 1:
                 step["goals"]["goals"]["goals"][0]["hyps"] = []
                 step["goals"]["goals"]["goals"][0]["ty"] = "∀ n : nat, 0 + n = n"
-        check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
+        check_proof(
+            test_proofs["proofs"][0], proof_file.proofs[0], coq_version=self.coq_version
+        )
 
         proof_file.add_step(5, "\n      intros n.")
 
         test_proofs = get_test_proofs("tests/proof_file/expected/valid_file.yml")
-        check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
+        check_proof(
+            test_proofs["proofs"][0], proof_file.proofs[0], coq_version=self.coq_version
+        )
 
         # Check if context is changed correctly
         proof_file.add_step(7, "\n      Print minus.")
@@ -53,7 +57,9 @@ class TestProofValidFile(SetupProofFile):
         test_proofs["proofs"][0]["steps"].insert(3, step)
         for i, step in enumerate(test_proofs["proofs"][0]["steps"][4:]):
             step["goals"]["position"]["line"] += 1
-        check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
+        check_proof(
+            test_proofs["proofs"][0], proof_file.proofs[0], coq_version=self.coq_version
+        )
 
         # Add step in beginning of proof
         proof_file.add_step(26, "\n    Print plus.")
@@ -115,7 +121,9 @@ class TestProofValidFile(SetupProofFile):
         test_proofs["proofs"][0]["steps"].insert(3, step)
         for step in test_proofs["proofs"][0]["steps"][4:]:
             step["goals"]["position"]["line"] += 1
-        check_proof(test_proofs["proofs"][0], proof_file.proofs[0])
+        check_proof(
+            test_proofs["proofs"][0], proof_file.proofs[0], coq_version=self.coq_version
+        )
 
         # Add step in beginning of proof
         proof_file.change_steps([CoqAdd("\n    Print plus.", 26)])

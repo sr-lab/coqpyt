@@ -71,8 +71,28 @@ def compare_context(
         assert test_context[i][2] == context[i].module
 
 
-def check_context(test_context: List[Dict[str, Union[str, List]]], context: List[Term]):
+def get_context_by_version(context: List[Dict[str, Any]], coq_version: str):
+    res = []
+
+    for term in context:
+        for key in term:
+            if re.match(key.replace("x", "[0-9]+"), coq_version):
+                res.append(term[key])
+                break
+        else:
+            res.append(term["default"] if "default" in term else term)
+
+    return res
+
+
+def check_context(
+    test_context: List[Dict[str, Union[str, List]]],
+    context: List[Term],
+    coq_version: Optional[str],
+):
     assert len(test_context) == len(context)
+    if coq_version is not None:
+        test_context = get_context_by_version(test_context, coq_version)
     for i in range(len(context)):
         assert test_context[i]["text"] == context[i].text
         assert TermType[test_context[i]["type"]] == context[i].type
@@ -91,7 +111,7 @@ def check_goal(test_goal: Dict, goal: Goal):
             assert test_goal["hyps"][j]["names"][k] == goal.hyps[j].names[k]
 
 
-def check_step(test_step: Dict[str, Any], step: ProofStep):
+def check_step(test_step: Dict[str, Any], step: ProofStep, coq_version: Optional[str]):
     assert test_step["text"] == step.text
     goals = test_step["goals"]
 
@@ -130,7 +150,7 @@ def check_step(test_step: Dict[str, Any], step: ProofStep):
     for i in range(len(step.goals.goals.given_up)):
         check_goal(goals["goals"]["given_up"][i], step.goals.goals.given_up[i])
 
-    check_context(test_step["context"], step.context)
+    check_context(test_step["context"], step.context, coq_version)
 
     if "range" in test_step:
         test_range = test_step["range"]
@@ -141,23 +161,23 @@ def check_step(test_step: Dict[str, Any], step: ProofStep):
         assert test_range["end"]["character"] == step_range.end.character
 
 
-def check_proof(test_proof: Dict, proof: ProofTerm):
-    check_context(test_proof["context"], proof.context)
+def check_proof(test_proof: Dict, proof: ProofTerm, coq_version: Optional[str] = None):
+    check_context(test_proof["context"], proof.context, coq_version)
     assert len(test_proof["steps"]) == len(proof.steps)
     if "program" in test_proof:
         assert proof.program is not None
         assert test_proof["program"] == proof.program.text
     for j, step in enumerate(test_proof["steps"]):
-        check_step(step, proof.steps[j])
+        check_step(step, proof.steps[j], coq_version)
 
 
 def check_proofs(
     yaml_file: str, proofs: List[ProofTerm], coq_version: Optional[str] = None
 ):
-    test_proofs = get_test_proofs(yaml_file, coq_version)
+    test_proofs = get_test_proofs(yaml_file)
     assert len(proofs) == len(test_proofs["proofs"])
     for i, test_proof in enumerate(test_proofs["proofs"]):
-        check_proof(test_proof, proofs[i])
+        check_proof(test_proof, proofs[i], coq_version)
 
 
 def add_step_defaults(step):
@@ -179,30 +199,12 @@ def add_step_defaults(step):
         step["context"] = []
 
 
-def get_context_by_version(context: List[Dict[str, Any]], coq_version: str):
-    res = []
-
-    for term in context:
-        for key in term:
-            if re.match(key.replace("x", "[0-9]+"), coq_version):
-                res.append(term[key])
-                break
-        else:
-            res.append(term["default"] if "default" in term else term)
-
-    return res
-
-
-def get_test_proofs(yaml_file: str, coq_version: Optional[str] = None):
+def get_test_proofs(yaml_file: str):
     with open(yaml_file, "r") as f:
         test_proofs = yaml.safe_load(f)
     for test_proof in test_proofs["proofs"]:
         if "context" not in test_proof:
             test_proof["context"] = []
-        if coq_version is not None:
-            test_proof["context"] = get_context_by_version(
-                test_proof["context"], coq_version
-            )
         for step in test_proof["steps"]:
             add_step_defaults(step)
     return test_proofs

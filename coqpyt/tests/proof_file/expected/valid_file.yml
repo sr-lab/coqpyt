@@ -75,8 +75,12 @@ proofs:
         type: INDUCTIVE
       - text: 'Notation "x = y" := (eq x y) : type_scope.'
         type: NOTATION
-      - text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
-        type: NOTATION
+      - "9.0.x":
+          text: 'Infix "+" := Nat.add : nat_scope.'
+          type: NOTATION
+        default:
+          text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
+          type: NOTATION
 
   # 2nd proof
   - text: "Definition mult_0_plus : ∀ n m : nat, 0 + (S n * m) = S n * m."
@@ -136,8 +140,12 @@ proofs:
         context:
           - text: "Lemma plus_O_n : forall n:nat, 0 + n = n."
             type: LEMMA
-          - text: 'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.'
-            type: NOTATION
+          - "9.0.x":
+              text: 'Infix "*" := Nat.mul : nat_scope.'
+              type: NOTATION
+            default:
+              text: 'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.'
+              type: NOTATION
           - text: "Inductive nat : Set := | O : nat | S : nat -> nat."
             type: INDUCTIVE
       - text: "\n    Compute True /\\ True."
@@ -204,15 +212,26 @@ proofs:
         "8.20.x":
           text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 10, x binder, y binder, P at level 200, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
           type: NOTATION
+        "9.0.x":
+          text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 10, x binder, y binder, P at level 200, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
+          type: NOTATION
         default:
           text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
           type: NOTATION
       - text: 'Notation "x = y" := (eq x y) : type_scope.'
         type: NOTATION
-      - text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
-        type: NOTATION
-      - text: 'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.'
-        type: NOTATION
+      - "9.0.x":
+          text: 'Infix "+" := Nat.add : nat_scope.'
+          type: NOTATION
+        default:
+          text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
+          type: NOTATION
+      - "9.0.x":
+          text: 'Infix "*" := Nat.mul : nat_scope.'
+          type: NOTATION
+        default:
+          text: 'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.'
+          type: NOTATION
       - text: "Inductive nat : Set := | O : nat | S : nat -> nat."
         type: INDUCTIVE
 
@@ -285,8 +304,12 @@ proofs:
         type: INDUCTIVE
       - text: 'Notation "x = y" := (eq x y) : type_scope.'
         type: NOTATION
-      - text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
-        type: NOTATION
+      - "9.0.x":
+          text: 'Infix "+" := Nat.add : nat_scope.'
+          type: NOTATION
+        default:
+          text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
+          type: NOTATION
 
   # 4th proof
   - text: "Theorem mult_0_plus : ∀ n m : nat, S n * m = 0 + (S n * m)."
@@ -326,8 +349,12 @@ proofs:
           - text: "Theorem plus_O_n : forall n:nat, n = 0 + n."
             type: THEOREM
             module: ["Extra", "Fst"]
-          - text: 'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.'
-            type: NOTATION
+          - "9.0.x":
+              text: 'Infix "*" := Nat.mul : nat_scope.'
+              type: NOTATION
+            default:
+              text: 'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.'
+              type: NOTATION
           - text: 'Notation "| a |" := (S a) (at level 30, right associativity).'
             type: NOTATION
             module: ["Extra", "Snd"]
@@ -373,15 +400,26 @@ proofs:
         "8.20.x":
           text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 10, x binder, y binder, P at level 200, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
           type: NOTATION
+        "9.0.x":
+          text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 10, x binder, y binder, P at level 200, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
+          type: NOTATION
         default:
           text: "Notation \"∀ x .. y , P\" := (forall x, .. (forall y, P) ..) (at level 200, x binder, y binder, right associativity, format \"'[ ' '[ ' ∀ x .. y ']' , '/' P ']'\") : type_scope."
           type: NOTATION
       - text: 'Notation "x = y" := (eq x y) : type_scope.'
         type: NOTATION
-      - text: 'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.'
-        type: NOTATION
+      - "9.0.x":
+          text: 'Infix "*" := Nat.mul : nat_scope.'
+          type: NOTATION
+        default:
+          text: 'Fixpoint mul n m := match n with | 0 => 0 | S p => m + p * m end where "n * m" := (mul n m) : nat_scope.'
+          type: NOTATION
       - text: "Inductive nat : Set := | O : nat | S : nat -> nat."
         type: INDUCTIVE
-      - text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
-        type: NOTATION
+      - "9.0.x":
+          text: 'Infix "+" := Nat.add : nat_scope.'
+          type: NOTATION
+        default:
+          text: 'Fixpoint add n m := match n with | 0 => m | S p => S (p + m) end where "n + m" := (add n m) : nat_scope.'
+          type: NOTATION
 

@@ -22,7 +22,7 @@ class TestCache:
 
     def test_cache(self):
         ProofFile.clear_disk_cache()
-        
+
         with ProofFile(
             "tests/resources/test_imports/test_import.v",
             workspace="tests/resources/test_import",

@@ -174,9 +174,7 @@ def check_proof(test_proof: Dict, proof: ProofTerm):
         check_step(step, proof.steps[j])
 
 
-def check_proofs(
-    yaml_file: str, proofs: List[ProofTerm]
-):
+def check_proofs(yaml_file: str, proofs: List[ProofTerm]):
     test_proofs = get_test_proofs(yaml_file)
     assert len(proofs) == len(test_proofs["proofs"])
     for i, test_proof in enumerate(test_proofs["proofs"]):

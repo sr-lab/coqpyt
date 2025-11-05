@@ -17,10 +17,14 @@ jobs:
           - "8.17.1"
           - "8.18.0"
           - "8.19.2"
-          - "8.20.0"
+          - "8.20.1"
+          - "9.0.1"
+        coq-lsp-version:
+          - "0.2.3"
         python-version:
           - '3.11'
           - '3.12'
+          - '3.13'
 
     steps:
     - name: Checkout
@@ -53,7 +57,7 @@ jobs:
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
         opam pin add coq ${{ matrix.coq-version }}
-        opam install coq-lsp
+        opam pin add coq-lsp ${{ matrix.coq-lsp-version }}
 
     - name: Add coq-released
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'

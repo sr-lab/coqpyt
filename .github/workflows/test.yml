@@ -14,11 +14,16 @@ jobs:
         ocaml-compiler:
           - "5.3.0"
         coq-version:
-          - "8.17.1"
-          - "8.18.0"
-          - "8.19.2"
-          - "8.20.1"
-          - "9.0.1"
+          - main: "8.17"
+            patch: "1"
+          - main: "8.18"
+            patch: "0"
+          - main: "8.19"
+            patch: "2"
+          - main: "8.20"
+            patch: "1"
+          - main: "9.0"
+            patch: "1"
         coq-lsp-version:
           - "0.2.3"
         python-version:
@@ -45,7 +50,7 @@ jobs:
       with:
         path: |
           /home/runner/work/coqpyt/coqpyt/_opam/
-        key: ${{ matrix.ocaml-compiler }}-${{ matrix.coq-version }}-opam
+        key: ${{ matrix.ocaml-compiler }}-${{ matrix.coq-version.main }}.${{ matrix.coq-version.patch }}-opam
 
     - name: Set-up OCaml
       uses: ocaml/setup-ocaml@v3
@@ -55,8 +60,8 @@ jobs:
     - name: Install coq-lsp
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
-        opam pin add coq ${{ matrix.coq-version }}
-        opam pin add coq-lsp ${{ matrix.coq-lsp-version }}
+        opam pin add coq ${{ matrix.coq-version.main }}.${{ matrix.coq-version.patch }}
+        opam pin add coq-lsp ${{ matrix.coq-lsp-version }}+(${{ matrix.coq-version.main }})
 
     - name: Add coq-released
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'

@@ -15,6 +15,13 @@ from coqpyt.coq.lsp.structs import *
 
 
 class SetupProofFile(ABC):
+    COQ_VERSION = (
+        subprocess.check_output(f"coqtop -v", shell=True)
+        .decode("utf-8")
+        .split("\n")[0]
+        .split()[-1]
+    )
+
     def setup(self, file_path, workspace=None, use_disk_cache: bool = False):
         if workspace is not None:
             self.workspace = os.path.join(
@@ -44,9 +51,6 @@ class SetupProofFile(ABC):
         )
         self.proof_file.run()
         self.versionId = VersionedTextDocumentIdentifier(uri, 1)
-
-        output = subprocess.check_output(f"coqtop -v", shell=True)
-        self.coq_version = output.decode("utf-8").split("\n")[0].split()[-1]
 
     @abstractmethod
     def setup_method(self, method):

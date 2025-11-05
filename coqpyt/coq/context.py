@@ -40,7 +40,8 @@ class FileContext:
         # from ProofFile to here.
         self.ext_index = lambda e: e["ext_index"] if post18 else e[1]
 
-        # For versions 9.0+, the AST structure for fixpoints changed
+        # For versions 9.0+, the AST structure for fixpoints changed and obligation
+        # commands have less tags
         rocq = version.parse(coq_version) >= version.parse("9.0")
         self.__fixpoint_notations = lambda e: (
             []
@@ -69,6 +70,16 @@ class FileContext:
                 )
             )
         )
+        # FIXME: This should be made private once [__get_program_context] is extracted
+        # from ProofFile to here.
+        # Tags pre-Rocq:                    Tags post-Rocq:
+        # 0 - Obligation N of id : type
+        # 1 - Obligation N of id            0 - Obligation N of id
+        # 2 - Obligation N : type
+        # 3 - Obligation N                  1 - Obligation N
+        # 4 - Next Obligation of id         2 - Next Obligation of id
+        # 5 - Next Obligation               3 - Next Obligation
+        self.obligation_tag_with_id = lambda t: t in ([0, 2] if rocq else [0, 1, 4])
 
         # We only tested versions 8.17 to 9.0, so we provide no claims about
         # versions prior to that.

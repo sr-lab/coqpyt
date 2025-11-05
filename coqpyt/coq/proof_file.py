@@ -1047,3 +1047,9 @@ class ProofFile(CoqFile):
     def close(self):
         super().close()
         self.__aux_file.close()
+
+    @staticmethod
+    def clear_disk_cache():
+        cache_loc = _AuxFile.get_coqpyt_disk_cache_loc()
+        if cache_loc is not None and os.path.exists(cache_loc):
+            shutil.rmtree(cache_loc, ignore_errors=True)

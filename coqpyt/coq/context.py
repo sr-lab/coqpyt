@@ -40,7 +40,37 @@ class FileContext:
         # from ProofFile to here.
         self.ext_index = lambda e: e["ext_index"] if post18 else e[1]
 
-        # We only tested versions 8.17/8.18/8.19, so we provide no claims about
+        # For versions 9.0+, the AST structure for fixpoints changed
+        rocq = version.parse(coq_version) >= version.parse("9.0")
+        self.__fixpoint_notations = lambda e: (
+            []
+            if len(e) < 3 or not isinstance(e[2], list)
+            else (
+                e[2][1][0]["notations"]
+                if (
+                    rocq
+                    and len(e[2]) > 1
+                    and isinstance(e[2][1], list)
+                    and len(e[2][1]) > 0
+                    and isinstance(e[2][1][0], dict)
+                    and "notations" in e[2][1][0]
+                    and isinstance(e[2][1][0]["notations"], list)
+                )
+                else (
+                    e[2][0]["notations"]
+                    if (
+                        not rocq
+                        and len(e[2]) > 0
+                        and isinstance(e[2][0], dict)
+                        and "notations" in e[2][0]
+                        and isinstance(e[2][0]["notations"], list)
+                    )
+                    else []
+                )
+            )
+        )
+
+        # We only tested versions 8.17 to 9.0, so we provide no claims about
         # versions prior to that.
 
     def __init_context(self, terms: Optional[Dict[str, Term]] = None):
@@ -188,17 +218,8 @@ class FileContext:
             and len(expr[2][0][1]) > 0
         ):
             spans = expr[2][0][1]
-        elif (
-            term_type == TermType.FIXPOINT
-            and len(expr) > 2
-            and isinstance(expr[2], list)
-            and len(expr[2]) > 0
-            and isinstance(expr[2][0], dict)
-            and "notations" in expr[2][0]
-            and isinstance(expr[2][0]["notations"], list)
-            and len(expr[2][0]["notations"]) > 0
-        ):
-            spans = expr[2][0]["notations"]
+        elif term_type == TermType.FIXPOINT:
+            spans = self.__fixpoint_notations(expr)
 
         # handles when multiple notations are defined
         for span in spans:

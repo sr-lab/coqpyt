@@ -22,7 +22,6 @@ jobs:
         coq-lsp-version:
           - "0.2.3"
         python-version:
-          - '3.11'
           - '3.12'
           - '3.13'
 

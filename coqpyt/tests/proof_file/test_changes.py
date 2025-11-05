@@ -27,7 +27,6 @@ class TestProofValidFile(SetupProofFile):
         check_proof(
             test_proofs["proofs"][0],
             proof_file.proofs[0],
-            coq_version=SetupProofFile.COQ_VERSION,
         )
 
         proof_file.add_step(5, "\n      intros n.")
@@ -36,7 +35,6 @@ class TestProofValidFile(SetupProofFile):
         check_proof(
             test_proofs["proofs"][0],
             proof_file.proofs[0],
-            coq_version=SetupProofFile.COQ_VERSION,
         )
 
         # Check if context is changed correctly
@@ -65,7 +63,6 @@ class TestProofValidFile(SetupProofFile):
         check_proof(
             test_proofs["proofs"][0],
             proof_file.proofs[0],
-            coq_version=SetupProofFile.COQ_VERSION,
         )
 
         # Add step in beginning of proof
@@ -131,7 +128,6 @@ class TestProofValidFile(SetupProofFile):
         check_proof(
             test_proofs["proofs"][0],
             proof_file.proofs[0],
-            coq_version=SetupProofFile.COQ_VERSION,
         )
 
         # Add step in beginning of proof

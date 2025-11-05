@@ -75,12 +75,12 @@ def compare_context(
         assert test_context[i][2] == context[i].module
 
 
-def get_context_by_version(context: List[Dict[str, Any]], coq_version: str):
+def get_context_by_version(context: List[Dict[str, Any]]):
     res = []
 
     for term in context:
         for key in term:
-            if re.match(key.replace("x", "[0-9]+"), coq_version):
+            if re.match(key.replace("x", "[0-9]+"), SetupProofFile.COQ_VERSION):
                 res.append(term[key])
                 break
         else:
@@ -92,11 +92,10 @@ def get_context_by_version(context: List[Dict[str, Any]], coq_version: str):
 def check_context(
     test_context: List[Dict[str, Union[str, List]]],
     context: List[Term],
-    coq_version: Optional[str],
 ):
     assert len(test_context) == len(context)
-    if coq_version is not None:
-        test_context = get_context_by_version(test_context, coq_version)
+    if SetupProofFile.COQ_VERSION is not None:
+        test_context = get_context_by_version(test_context)
     for i in range(len(context)):
         assert test_context[i]["text"] == context[i].text
         assert TermType[test_context[i]["type"]] == context[i].type
@@ -115,7 +114,7 @@ def check_goal(test_goal: Dict, goal: Goal):
             assert test_goal["hyps"][j]["names"][k] == goal.hyps[j].names[k]
 
 
-def check_step(test_step: Dict[str, Any], step: ProofStep, coq_version: Optional[str]):
+def check_step(test_step: Dict[str, Any], step: ProofStep):
     assert test_step["text"] == step.text
     goals = test_step["goals"]
 
@@ -154,7 +153,7 @@ def check_step(test_step: Dict[str, Any], step: ProofStep, coq_version: Optional
     for i in range(len(step.goals.goals.given_up)):
         check_goal(goals["goals"]["given_up"][i], step.goals.goals.given_up[i])
 
-    check_context(test_step["context"], step.context, coq_version)
+    check_context(test_step["context"], step.context)
 
     if "range" in test_step:
         test_range = test_step["range"]
@@ -165,23 +164,23 @@ def check_step(test_step: Dict[str, Any], step: ProofStep, coq_version: Optional
         assert test_range["end"]["character"] == step_range.end.character
 
 
-def check_proof(test_proof: Dict, proof: ProofTerm, coq_version: Optional[str] = None):
-    check_context(test_proof["context"], proof.context, coq_version)
+def check_proof(test_proof: Dict, proof: ProofTerm):
+    check_context(test_proof["context"], proof.context)
     assert len(test_proof["steps"]) == len(proof.steps)
     if "program" in test_proof:
         assert proof.program is not None
         assert test_proof["program"] == proof.program.text
     for j, step in enumerate(test_proof["steps"]):
-        check_step(step, proof.steps[j], coq_version)
+        check_step(step, proof.steps[j])
 
 
 def check_proofs(
-    yaml_file: str, proofs: List[ProofTerm], coq_version: Optional[str] = None
+    yaml_file: str, proofs: List[ProofTerm]
 ):
     test_proofs = get_test_proofs(yaml_file)
     assert len(proofs) == len(test_proofs["proofs"])
     for i, test_proof in enumerate(test_proofs["proofs"]):
-        check_proof(test_proof, proofs[i], coq_version)
+        check_proof(test_proof, proofs[i])
 
 
 def add_step_defaults(step):

@@ -17,7 +17,6 @@ class TestProofValidFile(SetupProofFile):
         check_proofs(
             "tests/proof_file/expected/valid_file.yml",
             proofs,
-            coq_version=SetupProofFile.COQ_VERSION,
         )
 
     def test_exec(self):
@@ -48,7 +47,6 @@ class TestProofImports(SetupProofFile):
         check_proofs(
             "tests/proof_file/expected/imports.yml",
             self.proof_file.proofs,
-            coq_version=SetupProofFile.COQ_VERSION,
         )
 
     def test_exec(self):

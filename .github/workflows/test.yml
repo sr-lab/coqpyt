@@ -61,7 +61,7 @@ jobs:
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
         opam pin add coq ${{ matrix.coq-version.main }}.${{ matrix.coq-version.patch }}
-        opam pin add coq-lsp ${{ matrix.coq-lsp-version }}+(${{ matrix.coq-version.main }})
+        opam pin add coq-lsp ${{ matrix.coq-lsp-version }}+${{ matrix.coq-version.main }}
 
     - name: Add coq-released
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'

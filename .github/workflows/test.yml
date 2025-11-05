@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         ocaml-compiler:
-          - "5.2.0"
+          - "5.3.0"
         coq-version:
           - "8.17.1"
           - "8.18.0"

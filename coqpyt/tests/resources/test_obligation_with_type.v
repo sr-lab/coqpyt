@@ -25,7 +25,7 @@ Qed.
 Next Obligation of id2.
   dummy_tactic n e.
 Qed.
-Obligation 2 of id3 with reflexivity.
+Obligation 2 of id3 : type with reflexivity.
   dummy_tactic n e.
 Qed.
 Next Obligation of id3 with reflexivity.
@@ -40,7 +40,7 @@ Qed.
 Obligation 1.
   dummy_tactic n e.
 Qed.
-Obligation 2 with reflexivity.
+Obligation 2 : type with reflexivity.
   dummy_tactic n e.
 Qed.
 
@@ -67,10 +67,10 @@ Obligation 1 of id with reflexivity.
 Qed.
 End In.
 
-Obligation 1 of id.
+Obligation 1 of id : type.
   dummy_tactic n e.
 Qed.
-Obligation 2.
+Obligation 2 : type.
   dummy_tactic n e.
 Qed.
 

@@ -1,14 +1,23 @@
+import re
 import os
 import uuid
 import shutil
 import pytest
 import tempfile
+import subprocess
+from packaging import version
 
 from coqpyt.coq.exceptions import *
 from coqpyt.coq.changes import *
 from coqpyt.coq.base_file import CoqFile
 
 coq_file: CoqFile = None
+coq_version: str = (
+    subprocess.check_output(f"coqtop -v", shell=True)
+    .decode("utf-8")
+    .split("\n")[0]
+    .split()[-1]
+)
 
 
 @pytest.fixture
@@ -228,10 +237,8 @@ def test_is_invalid_1(setup, teardown):
     assert not coq_file.is_valid
     steps = coq_file.run()
     assert len(steps[11].diagnostics) == 1
-    assert (
-        steps[11].diagnostics[0].message
-        == 'Found no subterm matching "0 + ?M152" in the current goal.'
-    )
+    regex = r'Found no subterm matching "0 \+ \?M[0-9]+" in the current goal\.'
+    assert re.match(regex, steps[11].diagnostics[0].message) is not None
     assert steps[11].diagnostics[0].severity == 1
 
 
@@ -257,6 +264,10 @@ def test_module_type(setup, teardown):
 
 
 @pytest.mark.parametrize("setup", ["test_derive.v"], indirect=True)
+@pytest.mark.skipif(
+    version.parse(coq_version) >= version.parse("9.0"),
+    reason="Rocq 9.0+ does not capture all terms for Derive in AST",
+)
 def test_derive(setup, teardown):
     coq_file.run()
     for key in ["incr", "incr_correct"]:
@@ -318,9 +329,8 @@ def test_diagnostics(setup, teardown):
 @pytest.mark.parametrize("setup", ["test_invalid_1.v"], indirect=True)
 def test_diagnostics_invalid(setup, teardown):
     coq_file.run()
-    assert len(coq_file.diagnostics) == 7
+    n_diagnostics = 8 if version.parse(coq_version) >= version.parse("9.0") else 7
+    assert len(coq_file.diagnostics) == n_diagnostics
     assert len(coq_file.errors) == 1
-    assert (
-        coq_file.errors[0].message
-        == 'Found no subterm matching "0 + ?M152" in the current goal.'
-    )
+    regex = r'Found no subterm matching "0 \+ \?M[0-9]+" in the current goal\.'
+    assert re.match(regex, coq_file.errors[0].message) is not None

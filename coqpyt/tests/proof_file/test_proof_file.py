@@ -5,6 +5,7 @@ from coqpyt.coq.exceptions import *
 from coqpyt.coq.structs import TermType
 
 from utility import *
+from packaging import version
 
 
 class TestProofValidFile(SetupProofFile):
@@ -16,7 +17,6 @@ class TestProofValidFile(SetupProofFile):
         check_proofs(
             "tests/proof_file/expected/valid_file.yml",
             proofs,
-            coq_version=self.coq_version,
         )
 
     def test_exec(self):
@@ -47,7 +47,6 @@ class TestProofImports(SetupProofFile):
         check_proofs(
             "tests/proof_file/expected/imports.yml",
             self.proof_file.proofs,
-            coq_version=self.coq_version,
         )
 
     def test_exec(self):
@@ -233,6 +232,112 @@ class TestProofObligation(SetupProofFile):
     def setup_method(self, method):
         self.setup("test_obligation.v")
 
+    def test_obligation(self):
+        # Rollback whole file (except slow import)
+        self.proof_file.exec(-self.proof_file.steps_taken + 1)
+        proofs = self.proof_file.proofs
+        assert len(proofs) == 0
+        self.proof_file.run()
+        proofs = self.proof_file.proofs
+        assert len(proofs) == 13
+
+        statement_context = [
+            (
+                "Inductive nat : Set := | O : nat | S : nat -> nat.",
+                TermType.INDUCTIVE,
+                [],
+            ),
+            ("Notation dec := sumbool_of_bool.", TermType.NOTATION, []),
+            (
+                "Fixpoint leb n m : bool := match n, m with | 0, _ => true | _, 0 => false | S n', S m' => leb n' m' end.",
+                TermType.FIXPOINT,
+                [],
+            ),
+            ("Notation pred := Nat.pred (only parsing).", TermType.NOTATION, []),
+            (
+                'Notation "{ x : A | P }" := (sig (A:=A) (fun x => P)) : type_scope.',
+                TermType.NOTATION,
+                [],
+            ),
+            ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
+        ]
+        texts = [
+            "Obligation 2 of id2.",
+            "Next Obligation of id2.",
+            "Obligation 2 of id3 with reflexivity.",
+            "Next Obligation of id3 with reflexivity.",
+            "Next Obligation.",
+            "Next Obligation with reflexivity.",
+            "Obligation 1.",
+            "Obligation 2 with reflexivity.",
+            "Obligation 1 of id with reflexivity.",
+            "Obligation 1 of id.",
+            "Obligation 2.",
+        ]
+        programs = [
+            ("#[global, program]", "id2", "S (pred n)"),
+            ("#[global, program]", "id2", "S (pred n)"),
+            ("Local Program", "id3", "S (pred n)"),
+            ("Local Program", "id3", "S (pred n)"),
+            ("#[local, program]", "id1", "S (pred n)"),
+            ("#[local, program]", "id1", "S (pred n)"),
+            ("Global Program", "id4", "S (pred n)"),
+            ("Global Program", "id4", "S (pred n)"),
+            ("#[program]", "id", "pred (S n)"),
+            ("Program", "id", "S (pred n)"),
+            ("Program", "id", "S (pred n)"),
+        ]
+
+        obligations = proofs[:8] + proofs[-3:]
+        for i, proof in enumerate(obligations):
+            compare_context(statement_context, proof.context)
+            assert proof.text == texts[i]
+            assert proof.program is not None
+            assert (
+                proof.program.text
+                == programs[i][0]
+                + " Definition "
+                + programs[i][1]
+                + " (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else "
+                + programs[i][2]
+                + "."
+            )
+            assert len(proof.steps) == 2
+            assert proof.steps[0].text == "\n  dummy_tactic n e."
+
+        statement_context = [
+            (
+                "Inductive nat : Set := | O : nat | S : nat -> nat.",
+                TermType.INDUCTIVE,
+                [],
+            ),
+            ('Notation "x = y" := (eq x y) : type_scope.', TermType.NOTATION, []),
+            (
+                "Program Definition id (n : nat) : { x : nat | x = n } := if dec (Nat.leb n 0) then 0%nat else S (pred n).",
+                TermType.DEFINITION,
+                ["Out"],
+            ),
+        ]
+        texts = [
+            "Program Lemma id_lemma (n : nat) : id n = n.",
+            "Program Theorem id_theorem (n : nat) : id n = n.",
+        ]
+        for i, proof in enumerate(proofs[8:-3]):
+            compare_context(statement_context, proof.context)
+            assert proof.text == texts[i]
+            assert proof.program is None
+            assert len(proof.steps) == 3
+            assert proof.steps[1].text == " destruct n; try reflexivity."
+
+
+class TestProofObligationWithType(SetupProofFile):
+    def setup_method(self, method):
+        self.setup("test_obligation_with_type.v")
+
+    @pytest.mark.skipif(
+        version.parse(SetupProofFile.COQ_VERSION) >= version.parse("9.0"),
+        reason='Obligations with " : type" are not included in Rocq 9.0+',
+    )
     def test_obligation(self):
         # Rollback whole file (except slow import)
         self.proof_file.exec(-self.proof_file.steps_taken + 1)

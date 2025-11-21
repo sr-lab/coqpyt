@@ -41,6 +41,7 @@ class CoqFile(object):
         file_path: str,
         library: Optional[str] = None,
         timeout: int = 30,
+        memory_limit: int = 2097152,
         workspace: Optional[str] = None,
         coq_lsp: str = "coq-lsp",
         coq_lsp_options: Tuple[str] = None,
@@ -52,6 +53,8 @@ class CoqFile(object):
             file_path (str): Path of the Coq file.
             library (Optional[str], optional): The library of the file. Defaults to None.
             timeout (int, optional): Timeout used in coq-lsp. Defaults to 2.
+            memory_limit (int, optional): RAM limit for the coq-lsp process
+                in kbytes. It only works for Linux systems. Defaults to 2097152.
             workspace(Optional[str], optional): Absolute path for the workspace.
                 If the workspace is not defined, the workspace is equal to the
                 path of the file.
@@ -69,7 +72,11 @@ class CoqFile(object):
         else:
             uri = f"file://{self._path}"
         self.coq_lsp_client = CoqLspClient(
-            uri, timeout=timeout, coq_lsp_options=coq_lsp_options, coq_lsp=coq_lsp
+            uri,
+            timeout=timeout,
+            memory_limit=memory_limit,
+            coq_lsp_options=coq_lsp_options,
+            coq_lsp=coq_lsp,
         )
         uri = f"file://{self._path}"
         text = self.__read()

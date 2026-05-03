@@ -18,6 +18,18 @@ If you use CoqPyt in an article, please cite:
 }
 ```
 
+## Table of Contents
+- [Installation](#installation)
+    - [uv installation](#uv-installation)
+- [Documentation](#documentation)
+- [Usage](#usage)
+    - [Interaction with Coq](#interaction-with-coq)
+    - [Proof Modification](#proof-modification)
+- [Tests](#tests)
+- [Contributing](#contributing)
+- [Credits](#credits)
+- [License](#license)
+
 ## Installation
 
 [Python](https://www.python.org/) must be installed on version >= 3.12.
@@ -37,6 +49,10 @@ In alternative, use [uv](https://github.com/astral-sh/uv) to setup the project a
 uv sync --dev
 uv pip install -e .
 ```
+
+## Documentation
+
+For detailed documentation on all of CoqPyt's functions, including descriptions of all of CoqPyt's classes and interfaces and examples of how CoqPyt works under the hood, visit the [coqpyt-docs](https://github.com/sr-lab/coqpyt-docs) repository.
 
 ## Usage
 
